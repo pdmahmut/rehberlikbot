@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -14,17 +13,25 @@ import {
   User, 
   Calendar, 
   FileText,
-  AlertTriangle,
   X,
-  Clock,
   UserCheck,
   ChevronRight,
   History,
   Send,
   FileDown,
-  FileType
+  FileType,
+  Users,
+  BarChart3,
+  SortAsc,
+  SortDesc,
+  Star,
+  Sparkles,
+  Activity,
+  BookOpen,
+  CheckCircle2
 } from "lucide-react";
 import { toast } from "sonner";
+import { StudentSummaryCard, ReasonDistributionChart, TeacherDistributionChart, ReferralTimeline, MiniStatCard } from "@/components/charts/StudentCharts";
 
 interface Student {
   value: string;
@@ -57,6 +64,110 @@ interface StudentHistory {
   };
 }
 
+// Sınıf Seçim Kartı
+function ClassSelectCard({ 
+  classItem, 
+  isSelected, 
+  onClick
+}: { 
+  classItem: ClassOption; 
+  isSelected: boolean; 
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        relative p-3 rounded-xl border-2 text-left transition-all duration-300 w-full
+        ${isSelected 
+          ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-teal-50 shadow-lg shadow-emerald-500/10' 
+          : 'border-slate-200 bg-white hover:border-emerald-300 hover:shadow-md'
+        }
+      `}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className={`
+            p-2 rounded-lg
+            ${isSelected 
+              ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white' 
+              : 'bg-slate-100 text-slate-500'
+            }
+          `}>
+            <GraduationCap className="h-4 w-4" />
+          </div>
+          <span className={`font-medium text-sm ${isSelected ? 'text-emerald-700' : 'text-slate-700'}`}>
+            {classItem.text}
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// Öğrenci Listesi Kartı
+function StudentCard({
+  student,
+  index,
+  isSelected,
+  onClick,
+  referralCount
+}: {
+  student: Student;
+  index: number;
+  isSelected: boolean;
+  onClick: () => void;
+  referralCount?: number;
+}) {
+  const hasReferrals = referralCount && referralCount > 0;
+  
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200
+        ${isSelected 
+          ? 'bg-gradient-to-r from-violet-50 to-purple-50 border-2 border-violet-400 shadow-md' 
+          : 'bg-white hover:bg-slate-50 border border-slate-200 hover:border-violet-200'
+        }
+      `}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={`
+          w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold
+          ${isSelected 
+            ? 'bg-gradient-to-br from-violet-500 to-purple-600 text-white' 
+            : 'bg-slate-100 text-slate-500'
+          }
+        `}>
+          {index + 1}
+        </div>
+        <div className="text-left min-w-0">
+          <p className={`font-medium text-sm truncate ${isSelected ? 'text-violet-800' : 'text-slate-700'}`}>
+            {student.text}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        {hasReferrals && (
+          <span className={`
+            text-xs font-bold px-2 py-1 rounded-full
+            ${referralCount >= 5 
+              ? 'bg-red-100 text-red-600' 
+              : referralCount >= 3 
+                ? 'bg-amber-100 text-amber-600'
+                : 'bg-blue-100 text-blue-600'
+            }
+          `}>
+            {referralCount}
+          </span>
+        )}
+        <ChevronRight className={`h-4 w-4 ${isSelected ? 'text-violet-500' : 'text-slate-300'}`} />
+      </div>
+    </button>
+  );
+}
+
 export default function OgrenciListesiPage() {
   const searchParams = useSearchParams();
   const urlStudent = searchParams.get("student");
@@ -66,8 +177,10 @@ export default function OgrenciListesiPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [classSearchTerm, setClassSearchTerm] = useState("");
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loadingStudents, setLoadingStudents] = useState(false);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   // Öğrenci detay modal
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -105,7 +218,6 @@ export default function OgrenciListesiPage() {
   useEffect(() => {
     if (urlStudent && !urlProcessed && !loadingClasses) {
       setUrlProcessed(true);
-      // Direkt öğrenci geçmişini yükle
       loadStudentHistoryDirect(urlStudent, urlClass || undefined);
     }
   }, [urlStudent, urlClass, urlProcessed, loadingClasses]);
@@ -127,7 +239,7 @@ export default function OgrenciListesiPage() {
       if (res.ok) {
         const data = await res.json();
         setStudentHistory(data);
-        toast.success(`${studentName} geçmişi yüklendi`);
+        toast.success(`${studentName} geçmişi yüklendi`, { icon: '📚' });
       } else {
         toast.error("Öğrenci geçmişi yüklenemedi");
       }
@@ -166,8 +278,10 @@ export default function OgrenciListesiPage() {
   const handleClassChange = (value: string) => {
     setSelectedClass(value);
     setSearchTerm("");
+    setSelectedStudent(null);
+    setStudentHistory(null);
     const classText = classes.find(c => c.value === value)?.text || value;
-    toast.info(`${classText} sınıfı seçildi`);
+    toast.success(`${classText} seçildi`, { icon: '🎓' });
     loadStudents(value);
   };
 
@@ -178,7 +292,6 @@ export default function OgrenciListesiPage() {
     setStudentHistory(null);
 
     try {
-      // Öğrenci adını parse et (numara varsa kaldır)
       const studentName = student.text.replace(/^\d+\s+/, '').trim();
       const classDisplay = classes.find(c => c.value === selectedClass)?.text || '';
 
@@ -200,13 +313,36 @@ export default function OgrenciListesiPage() {
     }
   };
 
-  // Filtrelenmiş öğrenciler
-  const filteredStudents = students.filter(s => 
-    s.text.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filtrelenmiş sınıflar
+  const filteredClasses = useMemo(() => {
+    if (!classSearchTerm.trim()) return classes;
+    return classes.filter(c => c.text.toLowerCase().includes(classSearchTerm.toLowerCase()));
+  }, [classes, classSearchTerm]);
+
+  // Filtrelenmiş ve sıralı öğrenciler
+  const filteredStudents = useMemo(() => {
+    let result = students.filter(s => 
+      s.text.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    
+    if (sortOrder === "desc") {
+      result = [...result].reverse();
+    }
+    
+    return result;
+  }, [students, searchTerm, sortOrder]);
 
   // Tarih formatla
   const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('tr-TR', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  const formatDateTime = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('tr-TR', {
       day: '2-digit',
@@ -380,7 +516,6 @@ export default function OgrenciListesiPage() {
     try {
       const classDisplay = urlClass || classes.find(c => c.value === selectedClass)?.text || "";
       
-      // PDF için HTML içeriği oluştur ve yazdır
       const printWindow = window.open('', '_blank');
       if (!printWindow) {
         toast.error("Pop-up engelleyici aktif olabilir", { id: "pdf-export" });
@@ -457,7 +592,6 @@ export default function OgrenciListesiPage() {
       printWindow.document.write(htmlContent);
       printWindow.document.close();
       
-      // Yazdırma dialogunu aç
       setTimeout(() => {
         printWindow.print();
         toast.success("PDF olarak kaydetmek için 'PDF olarak kaydet' seçeneğini kullanın", { id: "pdf-export" });
@@ -471,114 +605,351 @@ export default function OgrenciListesiPage() {
     }
   };
 
+  const lastReferralDate = studentHistory?.referrals[0]?.date 
+    ? formatDate(studentHistory.referrals[0].date) 
+    : undefined;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Öğrenciler</h1>
-          <p className="text-sm text-slate-500">Sınıf seçin ve öğrenci geçmişlerini görüntüleyin</p>
+      {/* Modern Header */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-cyan-600 via-blue-600 to-indigo-700 p-6 text-white shadow-xl">
+        <div className="absolute inset-0 bg-grid-white/10 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.5))]" />
+        
+        {/* Animated Background Elements */}
+        <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-blue-300/20 blur-3xl animate-float-slow" />
+        <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-indigo-300/20 blur-3xl animate-float-reverse" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-96 w-96 rounded-full bg-cyan-400/10 blur-3xl animate-pulse-glow" />
+        
+        {/* Floating Particles */}
+        <div className="absolute top-10 right-20 h-2 w-2 rounded-full bg-blue-200/60 animate-float animation-delay-100" />
+        <div className="absolute top-20 right-40 h-1.5 w-1.5 rounded-full bg-cyan-200/60 animate-float animation-delay-300" />
+        <div className="absolute bottom-16 left-32 h-2 w-2 rounded-full bg-indigo-200/60 animate-float animation-delay-500" />
+        <div className="absolute top-1/3 left-1/4 h-1 w-1 rounded-full bg-white/40 animate-sparkle animation-delay-200" />
+        <div className="absolute bottom-1/3 right-1/4 h-1.5 w-1.5 rounded-full bg-blue-300/50 animate-sparkle animation-delay-700" />
+        
+        <div className="relative">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm shadow-lg">
+                <Users className="h-7 w-7" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">Öğrenci Listesi</h1>
+                <p className="text-cyan-100">Sınıf seçin ve öğrenci geçmişlerini görüntüleyin</p>
+              </div>
+            </div>
+            
+            {/* Hızlı İstatistikler */}
+            <div className="flex flex-wrap gap-2">
+              <div className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-3 py-2 border border-white/10 hover:bg-white/20 transition-all cursor-default">
+                <GraduationCap className="h-4 w-4 text-cyan-200" />
+                <div>
+                  <p className="text-[10px] text-cyan-200 uppercase tracking-wider">Sınıf</p>
+                  <p className="text-lg font-bold leading-none">{classes.length}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-3 py-2 border border-white/10 hover:bg-white/20 transition-all cursor-default">
+                <User className="h-4 w-4 text-indigo-200" />
+                <div>
+                  <p className="text-[10px] text-cyan-200 uppercase tracking-wider">Öğrenci</p>
+                  <p className="text-lg font-bold leading-none">{students.length}</p>
+                </div>
+              </div>
+              {studentHistory && (
+                <div className="flex items-center gap-2 rounded-lg bg-emerald-500/30 backdrop-blur-sm px-3 py-2 border border-emerald-400/30 hover:bg-emerald-500/40 transition-all cursor-default">
+                  <History className="h-4 w-4 text-emerald-200" />
+                  <div>
+                    <p className="text-[10px] text-emerald-200 uppercase tracking-wider">Yönlendirme</p>
+                    <p className="text-lg font-bold leading-none">{studentHistory.totalReferrals}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Alt bilgi çubuğu - Geliştirilmiş */}
+          <div className="mt-4 pt-4 border-t border-white/20 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              {/* Sıralama */}
+              <div className="flex items-center bg-white/10 rounded-lg p-1">
+                <button
+                  onClick={() => setSortOrder("asc")}
+                  className={`px-2 py-1 rounded text-xs font-medium transition-all flex items-center gap-1 ${
+                    sortOrder === "asc" 
+                      ? "bg-white text-blue-600 shadow-sm" 
+                      : "text-white/80 hover:text-white"
+                  }`}
+                >
+                  <SortAsc className="h-3 w-3" />
+                  A-Z
+                </button>
+                <button
+                  onClick={() => setSortOrder("desc")}
+                  className={`px-2 py-1 rounded text-xs font-medium transition-all flex items-center gap-1 ${
+                    sortOrder === "desc" 
+                      ? "bg-white text-blue-600 shadow-sm" 
+                      : "text-white/80 hover:text-white"
+                  }`}
+                >
+                  <SortDesc className="h-3 w-3" />
+                  Z-A
+                </button>
+              </div>
+              
+              {/* Seçili Öğrenci */}
+              {selectedStudent && (
+                <Badge className="bg-emerald-500/30 text-white border-emerald-400/30 hover:bg-emerald-500/40">
+                  <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-300" />
+                  {selectedStudent.text}
+                </Badge>
+              )}
+              
+              {/* Seçili Sınıf */}
+              {selectedClass && (
+                <Badge className="bg-white/20 text-white border-0 hover:bg-white/30">
+                  <BookOpen className="h-3 w-3 mr-1" />
+                  {classes.find(c => c.value === selectedClass)?.text}
+                </Badge>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {/* Excel Export */}
+              {students.length > 0 && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    const classText = classes.find(c => c.value === selectedClass)?.text || "sinif";
+                    const csvContent = "No,Öğrenci Adı\n" + 
+                      students.map((s, i) => `${i + 1},"${s.text}"`).join("\n");
+                    const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `ogrenci-listesi-${classText}-${new Date().toISOString().slice(0, 10)}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast.success("Öğrenci listesi indirildi");
+                  }}
+                  className="bg-white/10 hover:bg-white/20 text-white border-0"
+                >
+                  <FileDown className="h-4 w-4 mr-1" />
+                  Liste
+                </Button>
+              )}
+              
+              {/* Seçimi Temizle */}
+              {selectedStudent && (
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={() => {
+                    setSelectedStudent(null);
+                    setStudentHistory(null);
+                  }}
+                  className="bg-red-500/20 hover:bg-red-500/30 text-white border-0"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Temizle
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Sol Panel - Sınıf ve Öğrenci Listesi */}
-        <div className="lg:col-span-1 space-y-4">
-          {/* Sınıf Seçimi */}
-          <Card className="bg-white/80 backdrop-blur">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
-                <GraduationCap className="h-5 w-5 text-blue-600" />
-                Sınıf / Şube
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Select
-                disabled={loadingClasses}
-                value={selectedClass}
-                onValueChange={handleClassChange}
-              >
-                <SelectTrigger className="h-10">
-                  <SelectValue placeholder={loadingClasses ? "Yükleniyor..." : "Sınıf/Şube seçin"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {classes.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>
-                      {c.text}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
+      {/* Özet Kartları */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-0 shadow-xl">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-emerald-200 text-xs font-medium">Toplam Sınıf</p>
+                <p className="text-3xl font-bold mt-1">{classes.length}</p>
+              </div>
+              <div className="p-3 bg-white/20 rounded-xl">
+                <GraduationCap className="h-6 w-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Öğrenci Listesi */}
-          <Card className="bg-white/80 backdrop-blur">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold text-slate-800 flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <User className="h-5 w-5 text-emerald-600" />
-                  Öğrenciler
-                </span>
-                {selectedClass && !loadingStudents && (
-                  <Badge variant="secondary" className="text-xs">
-                    {filteredStudents.length} öğrenci
-                  </Badge>
+        <Card className="bg-gradient-to-br from-violet-500 to-purple-600 text-white border-0 shadow-xl">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-violet-200 text-xs font-medium">Seçili Sınıf</p>
+                <p className="text-lg font-bold mt-1 truncate">
+                  {selectedClass ? classes.find(c => c.value === selectedClass)?.text : "-"}
+                </p>
+              </div>
+              <div className="p-3 bg-white/20 rounded-xl">
+                <BookOpen className="h-6 w-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-cyan-500 to-blue-600 text-white border-0 shadow-xl">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-cyan-200 text-xs font-medium">Öğrenci Sayısı</p>
+                <p className="text-3xl font-bold mt-1">{filteredStudents.length}</p>
+              </div>
+              <div className="p-3 bg-white/20 rounded-xl">
+                <User className="h-6 w-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-amber-500 to-orange-600 text-white border-0 shadow-xl">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-amber-200 text-xs font-medium">Seçili Öğrenci</p>
+                <p className="text-lg font-bold mt-1 truncate">
+                  {selectedStudent?.text || "-"}
+                </p>
+              </div>
+              <div className="p-3 bg-white/20 rounded-xl">
+                <Star className="h-6 w-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Sınıf Seçimi */}
+      <Card className="bg-white/80 backdrop-blur border-0 shadow-lg overflow-hidden">
+        <CardHeader className="border-b bg-gradient-to-r from-emerald-50 to-teal-50 pb-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600">
+                <GraduationCap className="h-3.5 w-3.5 text-white" />
+              </div>
+              Sınıf Seçin
+              <span className="ml-2 px-2 py-0.5 rounded-full bg-emerald-100 text-xs font-medium text-emerald-600">
+                {filteredClasses.length} sınıf
+              </span>
+            </CardTitle>
+            
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Sınıf ara..."
+                value={classSearchTerm}
+                onChange={(e) => setClassSearchTerm(e.target.value)}
+                className="pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent w-full md:w-48 transition-all"
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-4">
+          {loadingClasses ? (
+            <div className="flex items-center justify-center py-8">
+              <RefreshCw className="h-6 w-6 animate-spin text-emerald-500" />
+            </div>
+          ) : (
+            <div className="grid gap-2 grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 max-h-[200px] overflow-y-auto">
+              {filteredClasses.map((classItem) => (
+                <ClassSelectCard
+                  key={classItem.value}
+                  classItem={classItem}
+                  isSelected={selectedClass === classItem.value}
+                  onClick={() => handleClassChange(selectedClass === classItem.value ? "" : classItem.value)}
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-5">
+        {/* Sol Panel - Öğrenci Listesi */}
+        <div className="lg:col-span-2 space-y-4">
+          <Card className="bg-white/80 backdrop-blur border-0 shadow-lg overflow-hidden">
+            <CardHeader className="border-b bg-gradient-to-r from-violet-50 to-purple-50 pb-4">
+              <div className="flex flex-col gap-3">
+                <CardTitle className="text-sm font-medium text-slate-700 flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600">
+                      <User className="h-3.5 w-3.5 text-white" />
+                    </div>
+                    Öğrenciler
+                  </span>
+                  {selectedClass && !loadingStudents && (
+                    <Badge className="bg-violet-100 text-violet-700 border-0">
+                      {filteredStudents.length} öğrenci
+                    </Badge>
+                  )}
+                </CardTitle>
+                
+                {selectedClass && (
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        placeholder="Öğrenci ara..."
+                        className="pl-9 h-9 bg-white"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9"
+                      onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                    >
+                      {sortOrder === "asc" ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 )}
-              </CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {selectedClass && (
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input
-                    placeholder="Öğrenci ara..."
-                    className="pl-9 h-9"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-              )}
-
-              <div className="h-[400px] rounded-lg border border-slate-200/80 bg-white overflow-y-auto">
+            <CardContent className="p-3">
+              <div className="h-[500px] overflow-y-auto space-y-2">
                 {!selectedClass ? (
                   <div className="h-full flex items-center justify-center text-slate-400 px-4">
                     <div className="text-center">
-                      <GraduationCap className="h-12 w-12 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm">Önce bir sınıf seçin</p>
+                      <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
+                        <GraduationCap className="h-10 w-10 text-slate-400" />
+                      </div>
+                      <p className="font-medium text-slate-600">Sınıf Seçin</p>
+                      <p className="text-xs mt-1">Yukarıdan bir sınıf seçerek<br/>öğrenci listesini görüntüleyin</p>
                     </div>
                   </div>
                 ) : loadingStudents ? (
                   <div className="h-full flex items-center justify-center text-slate-400">
-                    <RefreshCw className="h-5 w-5 animate-spin mr-2" />
-                    Yükleniyor...
+                    <RefreshCw className="h-6 w-6 animate-spin text-violet-500 mr-2" />
+                    Öğrenciler yükleniyor...
                   </div>
                 ) : filteredStudents.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-slate-400 px-4">
                     <div className="text-center">
-                      <User className="h-12 w-12 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm">Öğrenci bulunamadı</p>
+                      <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
+                        <User className="h-10 w-10 text-slate-400" />
+                      </div>
+                      <p className="font-medium text-slate-600">Öğrenci Bulunamadı</p>
+                      <p className="text-xs mt-1">
+                        {searchTerm ? `"${searchTerm}" ile eşleşen öğrenci yok` : "Bu sınıfta öğrenci bulunmuyor"}
+                      </p>
                     </div>
                   </div>
                 ) : (
-                  <ul className="divide-y divide-slate-100">
-                    {filteredStudents.map((student, idx) => (
-                      <li
-                        key={student.value}
-                        className={`flex items-center justify-between px-3 py-2.5 hover:bg-blue-50/50 cursor-pointer transition-colors ${
-                          selectedStudent?.value === student.value ? 'bg-blue-50 border-l-2 border-blue-500' : ''
-                        }`}
-                        onClick={() => loadStudentHistory(student)}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-xs text-slate-400 w-5 flex-shrink-0">{idx + 1}</span>
-                          <span className="text-sm font-medium text-slate-700 truncate">
-                            {student.text}
-                          </span>
-                        </div>
-                        <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
-                      </li>
-                    ))}
-                  </ul>
+                  filteredStudents.map((student, idx) => (
+                    <StudentCard
+                      key={student.value}
+                      student={student}
+                      index={idx}
+                      isSelected={selectedStudent?.value === student.value}
+                      onClick={() => loadStudentHistory(student)}
+                    />
+                  ))
                 )}
               </div>
             </CardContent>
@@ -586,142 +957,186 @@ export default function OgrenciListesiPage() {
         </div>
 
         {/* Sağ Panel - Öğrenci Detayı */}
-        <div className="lg:col-span-2">
-          <Card className="bg-white/80 backdrop-blur h-full">
-            <CardHeader className="pb-3 border-b border-slate-100">
-              <CardTitle className="text-base font-semibold text-slate-800 flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <History className="h-5 w-5 text-purple-600" />
-                  Öğrenci Geçmişi
-                </span>
-                {selectedStudent && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => {
-                      setSelectedStudent(null);
-                      setStudentHistory(null);
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {!selectedStudent ? (
-                <div className="h-[500px] flex items-center justify-center text-slate-400 px-4">
-                  <div className="text-center">
-                    <User className="h-16 w-16 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm font-medium">Öğrenci Seçin</p>
-                    <p className="text-xs mt-1">Listeden bir öğrenciye tıklayarak<br/>yönlendirme geçmişini görüntüleyin</p>
+        <div className="lg:col-span-3 space-y-4">
+          {!selectedStudent ? (
+            <Card className="bg-white/80 backdrop-blur border-0 shadow-lg h-full">
+              <CardContent className="h-[600px] flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center">
+                    <Sparkles className="h-12 w-12 text-violet-400" />
                   </div>
+                  <p className="font-semibold text-slate-700 text-lg">Öğrenci Seçin</p>
+                  <p className="text-sm text-slate-500 mt-2 max-w-xs mx-auto">
+                    Listeden bir öğrenciye tıklayarak yönlendirme geçmişini ve detaylı analizleri görüntüleyin
+                  </p>
                 </div>
-              ) : loadingHistory ? (
-                <div className="h-[500px] flex items-center justify-center text-slate-400">
-                  <RefreshCw className="h-6 w-6 animate-spin mr-2" />
-                  Geçmiş yükleniyor...
+              </CardContent>
+            </Card>
+          ) : loadingHistory ? (
+            <Card className="bg-white/80 backdrop-blur border-0 shadow-lg h-full">
+              <CardContent className="h-[600px] flex items-center justify-center">
+                <div className="text-center">
+                  <RefreshCw className="h-8 w-8 animate-spin text-violet-500 mx-auto mb-4" />
+                  <p className="text-slate-500">Öğrenci geçmişi yükleniyor...</p>
                 </div>
-              ) : studentHistory ? (
-                <div className="h-[500px] overflow-y-auto">
-                  {/* Öğrenci Başlık */}
-                  <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 border-b border-slate-100">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="text-lg font-bold text-slate-800">
-                          {selectedStudent.text}
-                        </h3>
-                        <p className="text-sm text-slate-500 mt-0.5">
-                          {classes.find(c => c.value === selectedClass)?.text}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-blue-600">
-                          {studentHistory.totalReferrals}
-                        </div>
-                        <p className="text-xs text-slate-500">Toplam Yönlendirme</p>
-                      </div>
-                    </div>
+              </CardContent>
+            </Card>
+          ) : studentHistory ? (
+            <div className="space-y-4">
+              {/* Özet Kart */}
+              <StudentSummaryCard
+                totalReferrals={studentHistory.totalReferrals}
+                topReason={studentHistory.stats.topReason}
+                teacherCount={Object.keys(studentHistory.stats.byTeacher).length}
+                lastReferralDate={lastReferralDate}
+              />
 
-                    {/* İstatistikler */}
-                    {studentHistory.totalReferrals > 0 && (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {studentHistory.stats.topReason && (
-                          <Badge className={`${getReasonColor(studentHistory.stats.topReason.name)} border`}>
-                            <AlertTriangle className="h-3 w-3 mr-1" />
-                            En sık: {studentHistory.stats.topReason.name} ({studentHistory.stats.topReason.count})
-                          </Badge>
-                        )}
-                        {Object.keys(studentHistory.stats.byTeacher).length > 0 && (
-                          <Badge variant="outline" className="bg-white">
-                            <UserCheck className="h-3 w-3 mr-1" />
-                            {Object.keys(studentHistory.stats.byTeacher).length} farklı öğretmen
-                          </Badge>
-                        )}
-                      </div>
-                    )}
+              {/* Mini İstatistikler */}
+              <div className="grid gap-3 md:grid-cols-2">
+                <MiniStatCard
+                  title="Farklı Neden"
+                  value={Object.keys(studentHistory.stats.byReason).length}
+                  icon={<FileText className="h-4 w-4 text-white" />}
+                  color="bg-gradient-to-br from-amber-500 to-orange-600"
+                  bgColor="bg-amber-50"
+                />
+                <MiniStatCard
+                  title="Farklı Öğretmen"
+                  value={Object.keys(studentHistory.stats.byTeacher).length}
+                  icon={<UserCheck className="h-4 w-4 text-white" />}
+                  color="bg-gradient-to-br from-cyan-500 to-blue-600"
+                  bgColor="bg-cyan-50"
+                />
+              </div>
 
-                    {/* Export Butonları */}
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50"
-                        onClick={sendToTelegram}
-                        disabled={sendingTelegram}
-                      >
-                        {sendingTelegram ? (
-                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Send className="h-3.5 w-3.5" />
-                        )}
-                        Telegram
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5 text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-                        onClick={downloadAsWord}
-                        disabled={exportingWord}
-                      >
-                        {exportingWord ? (
-                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <FileType className="h-3.5 w-3.5" />
-                        )}
-                        Word
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
-                        onClick={downloadAsPdf}
-                        disabled={exportingPdf}
-                      >
-                        {exportingPdf ? (
-                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <FileDown className="h-3.5 w-3.5" />
-                        )}
-                        PDF
-                      </Button>
-                    </div>
+              {/* Export Butonları */}
+              <Card className="bg-white/80 backdrop-blur border-0 shadow-lg">
+                <CardContent className="p-4">
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50"
+                      onClick={sendToTelegram}
+                      disabled={sendingTelegram}
+                    >
+                      {sendingTelegram ? (
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Send className="h-3.5 w-3.5" />
+                      )}
+                      Telegram'a Gönder
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                      onClick={downloadAsWord}
+                      disabled={exportingWord}
+                    >
+                      {exportingWord ? (
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <FileType className="h-3.5 w-3.5" />
+                      )}
+                      Word İndir
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
+                      onClick={downloadAsPdf}
+                      disabled={exportingPdf}
+                    >
+                      {exportingPdf ? (
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <FileDown className="h-3.5 w-3.5" />
+                      )}
+                      PDF İndir
+                    </Button>
                   </div>
+                </CardContent>
+              </Card>
 
-                  {/* Yönlendirme Listesi */}
+              {/* Grafikler */}
+              {studentHistory.totalReferrals > 0 && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Card className="bg-white/80 backdrop-blur border-0 shadow-lg">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                        <BarChart3 className="h-4 w-4 text-violet-500" />
+                        Neden Dağılımı
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ReasonDistributionChart data={studentHistory.stats.byReason} />
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-white/80 backdrop-blur border-0 shadow-lg">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                        <UserCheck className="h-4 w-4 text-cyan-500" />
+                        Öğretmen Dağılımı
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <TeacherDistributionChart data={studentHistory.stats.byTeacher} />
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {/* Zaman Çizelgesi */}
+              {studentHistory.totalReferrals > 0 && (
+                <Card className="bg-white/80 backdrop-blur border-0 shadow-lg">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                      <Activity className="h-4 w-4 text-emerald-500" />
+                      Son 30 Gün Aktivitesi
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ReferralTimeline referrals={studentHistory.referrals} />
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Yönlendirme Listesi */}
+              <Card className="bg-white/80 backdrop-blur border-0 shadow-lg">
+                <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-slate-100 pb-4">
+                  <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-gradient-to-br from-slate-600 to-slate-800">
+                      <History className="h-3.5 w-3.5 text-white" />
+                    </div>
+                    Yönlendirme Geçmişi
+                    <span className="ml-2 px-2 py-0.5 rounded-full bg-slate-200 text-xs font-medium text-slate-600">
+                      {studentHistory.totalReferrals} kayıt
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
                   {studentHistory.totalReferrals === 0 ? (
                     <div className="p-8 text-center text-slate-400">
-                      <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                      <p className="font-medium">Yönlendirme Kaydı Yok</p>
+                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-emerald-100 to-green-100 flex items-center justify-center">
+                        <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                      </div>
+                      <p className="font-medium text-slate-600">Yönlendirme Kaydı Yok</p>
                       <p className="text-xs mt-1">Bu öğrenci için henüz yönlendirme yapılmamış</p>
                     </div>
                   ) : (
-                    <div className="divide-y divide-slate-100">
+                    <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
                       {studentHistory.referrals.map((referral, idx) => (
-                        <div key={referral.id} className="p-4 hover:bg-slate-50/50">
+                        <div key={referral.id} className="p-4 hover:bg-slate-50/50 transition-colors">
                           <div className="flex items-start gap-3">
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-sm font-medium text-slate-500">
+                            <div className={`
+                              flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold
+                              ${idx === 0 
+                                ? 'bg-gradient-to-br from-violet-500 to-purple-600 text-white' 
+                                : 'bg-slate-100 text-slate-500'
+                              }
+                            `}>
                               {studentHistory.totalReferrals - idx}
                             </div>
                             <div className="flex-1 min-w-0">
@@ -729,6 +1144,11 @@ export default function OgrenciListesiPage() {
                                 <Badge className={`${getReasonColor(referral.reason)} border text-xs`}>
                                   {referral.reason}
                                 </Badge>
+                                {idx === 0 && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-violet-500 text-white">
+                                    SON
+                                  </span>
+                                )}
                               </div>
                               <div className="mt-2 flex items-center gap-4 text-xs text-slate-500">
                                 <span className="flex items-center gap-1">
@@ -737,12 +1157,12 @@ export default function OgrenciListesiPage() {
                                 </span>
                                 <span className="flex items-center gap-1">
                                   <Calendar className="h-3.5 w-3.5" />
-                                  {formatDate(referral.date)}
+                                  {formatDateTime(referral.date)}
                                 </span>
                               </div>
                               {referral.notes && (
-                                <p className="mt-2 text-sm text-slate-600 bg-slate-50 p-2 rounded">
-                                  {referral.notes}
+                                <p className="mt-2 text-sm text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                  📝 {referral.notes}
                                 </p>
                               )}
                             </div>
@@ -751,32 +1171,10 @@ export default function OgrenciListesiPage() {
                       ))}
                     </div>
                   )}
-
-                  {/* Neden Dağılımı */}
-                  {studentHistory.totalReferrals > 0 && Object.keys(studentHistory.stats.byReason).length > 1 && (
-                    <div className="p-4 border-t border-slate-100 bg-slate-50/50">
-                      <h4 className="text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">
-                        Neden Dağılımı
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {Object.entries(studentHistory.stats.byReason)
-                          .sort((a, b) => b[1] - a[1])
-                          .map(([reason, count]) => (
-                            <Badge 
-                              key={reason} 
-                              variant="outline" 
-                              className={`${getReasonColor(reason)} border`}
-                            >
-                              {reason}: {count}
-                            </Badge>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

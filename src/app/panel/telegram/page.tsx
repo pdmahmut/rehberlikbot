@@ -180,10 +180,63 @@ export default function TelegramPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Telegram</h1>
-          <p className="text-sm text-slate-500">Telegram bot ayarları ve test</p>
+      {/* Modern Header */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-700 p-6 text-white shadow-xl">
+        <div className="absolute inset-0 bg-grid-white/10 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.5))]" />
+        
+        {/* Animated Background Elements */}
+        <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-sky-300/20 blur-3xl animate-float-slow" />
+        <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-blue-300/20 blur-3xl animate-float-reverse" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-96 w-96 rounded-full bg-indigo-400/10 blur-3xl animate-pulse-glow" />
+        
+        {/* Floating Particles */}
+        <div className="absolute top-10 right-20 h-2 w-2 rounded-full bg-sky-200/60 animate-float animation-delay-100" />
+        <div className="absolute top-20 right-40 h-1.5 w-1.5 rounded-full bg-blue-200/60 animate-float animation-delay-300" />
+        <div className="absolute bottom-16 left-32 h-2 w-2 rounded-full bg-cyan-200/60 animate-float animation-delay-500" />
+        <div className="absolute top-1/3 left-1/4 h-1 w-1 rounded-full bg-white/40 animate-sparkle animation-delay-200" />
+        <div className="absolute bottom-1/3 right-1/4 h-1.5 w-1.5 rounded-full bg-sky-300/50 animate-sparkle animation-delay-700" />
+        
+        <div className="relative">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
+                <Send className="h-7 w-7" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">Telegram Bildirimleri</h1>
+                <p className="text-sky-100">Bot ayarları, test ve özet gönderimi</p>
+              </div>
+            </div>
+            
+            {/* Bağlantı Durumu */}
+            <div className="flex items-center gap-3">
+              <div className={`flex items-center gap-2 rounded-lg backdrop-blur-sm px-4 py-2 ${
+                connectionStatus === "connected" 
+                  ? "bg-emerald-500/20 border border-emerald-400/30" 
+                  : connectionStatus === "error" 
+                    ? "bg-red-500/20 border border-red-400/30"
+                    : "bg-white/10"
+              }`}>
+                {connectionStatus === "connected" ? (
+                  <CheckCircle className="h-5 w-5 text-emerald-300" />
+                ) : connectionStatus === "error" ? (
+                  <XCircle className="h-5 w-5 text-red-300" />
+                ) : (
+                  <MessageCircle className="h-5 w-5 text-sky-200" />
+                )}
+                <div>
+                  <p className="text-xs text-sky-200">Bot Durumu</p>
+                  <p className="text-sm font-semibold">
+                    {connectionStatus === "connected" 
+                      ? "Bağlı" 
+                      : connectionStatus === "error" 
+                        ? "Hata" 
+                        : "Bilinmiyor"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

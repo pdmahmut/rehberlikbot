@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { 
   FileText, 
   GraduationCap, 
@@ -26,12 +28,22 @@ import {
   Trash2,
   Gavel,
   MessageCircle,
-  Share2
+  Copy,
+  Printer,
+  History,
+  Sparkles,
+  TrendingUp,
+  FileCheck,
+  ClipboardCheck,
+  Eye,
+  Download,
+  Share2,
+  ChevronRight,
+  Star,
+  Zap
 } from "lucide-react";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 // RichTextEditor'u dinamik olarak yükle (SSR sorunlarını önlemek için)
 const RichTextEditor = dynamic(
@@ -47,6 +59,7 @@ const RichTextEditor = dynamic(
   }
 );
 
+// ==================== INTERFACES ====================
 interface Student {
   value: string;
   text: string;
@@ -62,20 +75,75 @@ type DocumentType = "veli-mektubu" | "veli-cagrisi" | "ogretmen-mektubu" | "ogre
 interface DocumentTemplate {
   id: DocumentType;
   label: string;
+  description: string;
   icon: React.ElementType;
   color: string;
+  bgGradient: string;
 }
 
+interface DocumentHistory {
+  id: string;
+  type: DocumentType;
+  studentName: string;
+  className: string;
+  createdAt: Date;
+}
+
+// ==================== CONSTANTS ====================
 const documentTemplates: DocumentTemplate[] = [
-  { id: "veli-mektubu", label: "Veli Mektubu", icon: Mail, color: "text-blue-600 bg-blue-50 border-blue-200" },
-  { id: "veli-cagrisi", label: "Veli Çağrısı", icon: Phone, color: "text-emerald-600 bg-emerald-50 border-emerald-200" },
-  { id: "ogretmen-mektubu", label: "Öğretmen Mektubu", icon: BookOpen, color: "text-purple-600 bg-purple-50 border-purple-200" },
-  { id: "ogretmen-tavsiyesi", label: "Öğretmen Tavsiyesi", icon: UserCircle, color: "text-amber-600 bg-amber-50 border-amber-200" },
-  { id: "idare-mektubu", label: "İdare Mektubu", icon: Building2, color: "text-red-600 bg-red-50 border-red-200" },
-  { id: "disiplin-kurulu", label: "Disiplin Kurulu Çağrısı", icon: Gavel, color: "text-rose-600 bg-rose-50 border-rose-200" },
+  { 
+    id: "veli-mektubu", 
+    label: "Veli Mektubu", 
+    description: "Veli bilgilendirme yazısı",
+    icon: Mail, 
+    color: "text-blue-600",
+    bgGradient: "from-blue-500 to-blue-600"
+  },
+  { 
+    id: "veli-cagrisi", 
+    label: "Veli Çağrısı", 
+    description: "Görüşme daveti belgesi",
+    icon: Phone, 
+    color: "text-emerald-600",
+    bgGradient: "from-emerald-500 to-emerald-600"
+  },
+  { 
+    id: "ogretmen-mektubu", 
+    label: "Öğretmen Mektubu", 
+    description: "Öğretmen bilgi talebi",
+    icon: BookOpen, 
+    color: "text-purple-600",
+    bgGradient: "from-purple-500 to-purple-600"
+  },
+  { 
+    id: "ogretmen-tavsiyesi", 
+    label: "Öğretmen Tavsiyesi", 
+    description: "Değerlendirme formu",
+    icon: UserCircle, 
+    color: "text-amber-600",
+    bgGradient: "from-amber-500 to-amber-600"
+  },
+  { 
+    id: "idare-mektubu", 
+    label: "İdare Mektubu", 
+    description: "Yönetim bilgilendirme",
+    icon: Building2, 
+    color: "text-red-600",
+    bgGradient: "from-red-500 to-red-600"
+  },
+  { 
+    id: "disiplin-kurulu", 
+    label: "Disiplin Kurulu", 
+    description: "Toplantı çağrısı",
+    icon: Gavel, 
+    color: "text-rose-600",
+    bgGradient: "from-rose-500 to-rose-600"
+  },
 ];
 
+// ==================== MAIN COMPONENT ====================
 export default function BelgePage() {
+  // Temel state'ler
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>("");
@@ -94,9 +162,18 @@ export default function BelgePage() {
   const [meetingDate, setMeetingDate] = useState<string>("");
   const [meetingTime, setMeetingTime] = useState<string>("");
   
-  // Kaydedilen içerik
+  // Kaydedilen içerik ve geçmiş
   const [savedContent, setSavedContent] = useState<string>("");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [documentHistory, setDocumentHistory] = useState<DocumentHistory[]>([]);
+  
+  // İstatistikler
+  const [stats, setStats] = useState({
+    totalDocuments: 0,
+    todayDocuments: 0,
+    mostUsedTemplate: "veli-mektubu" as DocumentType,
+    lastCreated: null as Date | null
+  });
 
   // Tarih formatı
   const today = new Date();
@@ -106,6 +183,7 @@ export default function BelgePage() {
     year: 'numeric'
   });
 
+  // ==================== DATA LOADING ====================
   // Sınıfları yükle
   useEffect(() => {
     const loadClasses = async () => {
@@ -123,6 +201,39 @@ export default function BelgePage() {
       }
     };
     loadClasses();
+    
+    // LocalStorage'dan geçmişi yükle
+    const savedHistory = localStorage.getItem("documentHistory");
+    if (savedHistory) {
+      try {
+        const history = JSON.parse(savedHistory);
+        setDocumentHistory(history.map((h: DocumentHistory) => ({
+          ...h,
+          createdAt: new Date(h.createdAt)
+        })));
+        
+        // İstatistikleri hesapla
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayDocs = history.filter((h: DocumentHistory) => new Date(h.createdAt) >= todayStart);
+        
+        // En çok kullanılan şablonu bul
+        const templateCounts: Record<string, number> = {};
+        history.forEach((h: DocumentHistory) => {
+          templateCounts[h.type] = (templateCounts[h.type] || 0) + 1;
+        });
+        const mostUsed = Object.entries(templateCounts).sort((a, b) => b[1] - a[1])[0];
+        
+        setStats({
+          totalDocuments: history.length,
+          todayDocuments: todayDocs.length,
+          mostUsedTemplate: (mostUsed?.[0] || "veli-mektubu") as DocumentType,
+          lastCreated: history.length > 0 ? new Date(history[0].createdAt) : null
+        });
+      } catch (e) {
+        console.error("History parse error:", e);
+      }
+    }
   }, []);
 
   // Öğrencileri yükle
@@ -146,6 +257,7 @@ export default function BelgePage() {
     }
   };
 
+  // ==================== HANDLERS ====================
   // Sınıf seçimi
   const handleClassChange = (value: string) => {
     setSelectedClass(value);
@@ -162,12 +274,11 @@ export default function BelgePage() {
     if (student) {
       setSelectedStudent(student);
       toast.success(`${student.text} seçildi`);
-      // Belge içeriğini güncelle
       updateDocumentContent(selectedDocument, student.text, selectedClassText, meetingDate, meetingTime);
     }
   };
 
-  // Belge şablonlarını oluştur (HTML formatında TipTap için)
+  // ==================== DOCUMENT TEMPLATES ====================
   const generateDocumentContent = (type: DocumentType, studentName: string, className: string, date?: string, time?: string): string => {
     const header = `<p style="text-align: center"><strong>T.C.</strong></p>
 <p style="text-align: center"><strong>BİRECİK KAYMAKAMLIĞI</strong></p>
@@ -183,7 +294,6 @@ export default function BelgePage() {
 <p style="text-align: right"><strong>MEHMET DALĞIN</strong></p>
 <p style="text-align: right">Rehber Öğretmen ve Psikolojik Danışman</p>`;
 
-    // Tarih ve saat formatla
     const formattedMeetingDate = date 
       ? new Date(date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
       : "____/____/________";
@@ -379,6 +489,29 @@ ${signature}`,
   const handleSaveContent = () => {
     setSavedContent(documentContent);
     setHasUnsavedChanges(false);
+    
+    // Geçmişe ekle
+    if (selectedStudent) {
+      const newHistory: DocumentHistory = {
+        id: Date.now().toString(),
+        type: selectedDocument,
+        studentName: selectedStudent.text,
+        className: selectedClassText,
+        createdAt: new Date()
+      };
+      const updatedHistory = [newHistory, ...documentHistory].slice(0, 20); // Son 20 belge
+      setDocumentHistory(updatedHistory);
+      localStorage.setItem("documentHistory", JSON.stringify(updatedHistory));
+      
+      // İstatistikleri güncelle
+      setStats(prev => ({
+        ...prev,
+        totalDocuments: prev.totalDocuments + 1,
+        todayDocuments: prev.todayDocuments + 1,
+        lastCreated: new Date()
+      }));
+    }
+    
     toast.success("Belge içeriği kaydedildi!");
   };
 
@@ -396,56 +529,118 @@ ${signature}`,
     toast.info("Belge içeriği temizlendi");
   };
 
-  // İçerik değiştiğinde unsaved flag'i güncelle
+  // İçerik değiştiğinde
   const handleContentChange = (content: string) => {
     setDocumentContent(content);
     setHasUnsavedChanges(savedContent !== content);
   };
 
-  // HTML'den düz metin çıkar (WhatsApp/Telegram için)
+  // ==================== EXPORT FUNCTIONS ====================
+  // HTML'den düz metin çıkar
   const htmlToPlainText = (html: string): string => {
-    // HTML etiketlerini temizle
     let text = html
-      .replace(/<p><\/p>/g, '\n') // Boş paragraflar
-      .replace(/<p[^>]*>/g, '') // Açılış p etiketi
-      .replace(/<\/p>/g, '\n') // Kapanış p etiketi
-      .replace(/<br\s*\/?>/g, '\n') // br etiketleri
-      .replace(/<li>/g, '\u2022 ') // Liste öğeleri
+      .replace(/<p><\/p>/g, '\n')
+      .replace(/<p[^>]*>/g, '')
+      .replace(/<\/p>/g, '\n')
+      .replace(/<br\s*\/?>/g, '\n')
+      .replace(/<li>/g, '\u2022 ')
       .replace(/<\/li>/g, '\n')
-      .replace(/<ul>|<\/ul>|<ol>|<\/ol>/g, '') // Liste etiketleri
-      .replace(/<strong>|<\/strong>|<b>|<\/b>/g, '*') // Kalın
-      .replace(/<em>|<\/em>|<i>|<\/i>/g, '_') // İtalik
-      .replace(/<[^>]+>/g, '') // Diğer tüm HTML etiketleri
-      .replace(/&nbsp;/g, ' ') // Non-breaking space
+      .replace(/<ul>|<\/ul>|<ol>|<\/ol>/g, '')
+      .replace(/<strong>|<\/strong>|<b>|<\/b>/g, '*')
+      .replace(/<em>|<\/em>|<i>|<\/i>/g, '_')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
-      .replace(/\n{3,}/g, '\n\n') // Çoklu boş satırları azalt
+      .replace(/\n{3,}/g, '\n\n')
       .trim();
     return text;
+  };
+
+  // Panoya kopyala
+  const copyToClipboard = async () => {
+    if (!documentContent) return;
+    
+    try {
+      const plainText = htmlToPlainText(documentContent);
+      await navigator.clipboard.writeText(plainText);
+      toast.success("Belge panoya kopyalandı!");
+    } catch (error) {
+      console.error("Clipboard error:", error);
+      toast.error("Kopyalama başarısız");
+    }
+  };
+
+  // Yazdır
+  const printDocument = () => {
+    if (!documentContent) return;
+    
+    const selectedTemplate = documentTemplates.find(t => t.id === selectedDocument);
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error("Pop-up engelleyici aktif olabilir");
+      return;
+    }
+    
+    const processedContent = documentContent
+      .replace(/<p><\/p>/g, '<p>&nbsp;</p>')
+      .replace(/<p>\s*<br\s*\/?>\s*<\/p>/g, '<p>&nbsp;</p>');
+    
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>${selectedTemplate?.label} - ${selectedStudent?.text || 'Öğrenci'}</title>
+        <style>
+          body { 
+            font-family: 'Times New Roman', Times, serif; 
+            font-size: 12pt; 
+            line-height: 1.8; 
+            padding: 40px;
+            color: #333;
+          }
+          p { margin: 0; padding: 0; min-height: 1.2em; }
+          p:empty::before { content: "\\00a0"; }
+          h1 { font-size: 18pt; font-weight: bold; margin: 0.5em 0; }
+          h2 { font-size: 16pt; font-weight: bold; margin: 0.5em 0; }
+          h3 { font-size: 14pt; font-weight: bold; margin: 0.5em 0; }
+          strong, b { font-weight: bold; }
+          em, i { font-style: italic; }
+          u { text-decoration: underline; }
+          ul, ol { margin: 0.5em 0; padding-left: 1.5em; }
+          @media print { body { padding: 20px; } }
+        </style>
+      </head>
+      <body>${processedContent}</body>
+      </html>
+    `;
+    
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+      printWindow.print();
+      toast.success("Yazdırma penceresi açıldı");
+    }, 500);
   };
 
   // WhatsApp'ta paylaş
   const shareOnWhatsApp = () => {
     if (!documentContent) return;
-    
     const plainText = htmlToPlainText(documentContent);
     const encodedText = encodeURIComponent(plainText);
-    const whatsappUrl = `https://wa.me/?text=${encodedText}`;
-    
-    window.open(whatsappUrl, '_blank');
+    window.open(`https://wa.me/?text=${encodedText}`, '_blank');
     toast.success("WhatsApp açılıyor...");
   };
 
   // Telegram'da paylaş
   const shareOnTelegram = () => {
     if (!documentContent) return;
-    
     const plainText = htmlToPlainText(documentContent);
     const encodedText = encodeURIComponent(plainText);
-    const telegramUrl = `https://t.me/share/url?text=${encodedText}`;
-    
-    window.open(telegramUrl, '_blank');
+    window.open(`https://t.me/share/url?text=${encodedText}`, '_blank');
     toast.success("Telegram açılıyor...");
   };
 
@@ -459,48 +654,24 @@ ${signature}`,
       const selectedTemplate = documentTemplates.find(t => t.id === selectedDocument);
       const fileName = `${selectedTemplate?.label || 'Belge'}_${selectedStudent?.text || 'Öğrenci'}.doc`.replace(/\s+/g, '_');
       
-      // Boş paragrafları görünür yap (non-breaking space ekle)
       const processedContent = documentContent
         .replace(/<p><\/p>/g, '<p>&nbsp;</p>')
         .replace(/<p>\s*<br\s*\/?>\s*<\/p>/g, '<p>&nbsp;</p>');
       
-      // TipTap HTML içeriğini direkt kullan (zaten HTML formatında)
       const htmlContent = `
         <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
         <head>
           <meta charset="utf-8">
           <title>${selectedTemplate?.label}</title>
           <style>
-            body { 
-              font-family: 'Times New Roman', Times, serif; 
-              font-size: 12pt; 
-              line-height: 1.8; 
-              padding: 40px; 
-            }
-            p { 
-              margin: 0; 
-              padding: 0;
-              min-height: 1.2em;
-            }
-            p:empty::before {
-              content: "\\00a0";
-            }
-            h1 { font-size: 18pt; font-weight: bold; margin: 0.5em 0; }
-            h2 { font-size: 16pt; font-weight: bold; margin: 0.5em 0; }
-            h3 { font-size: 14pt; font-weight: bold; margin: 0.5em 0; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.8; padding: 40px; }
+            p { margin: 0; padding: 0; min-height: 1.2em; }
             strong, b { font-weight: bold; }
             em, i { font-style: italic; }
-            u { text-decoration: underline; }
-            s { text-decoration: line-through; }
-            mark { background-color: #fef08a; }
-            blockquote { border-left: 3px solid #ccc; margin-left: 0; padding-left: 1em; color: #666; }
             ul, ol { margin: 0.5em 0; padding-left: 1.5em; }
-            hr { border: none; border-top: 1px solid #ccc; margin: 1em 0; }
           </style>
         </head>
-        <body>
-          ${processedContent}
-        </body>
+        <body>${processedContent}</body>
         </html>
       `;
       
@@ -531,7 +702,6 @@ ${signature}`,
     
     try {
       const selectedTemplate = documentTemplates.find(t => t.id === selectedDocument);
-      
       const printWindow = window.open('', '_blank');
       if (!printWindow) {
         toast.error("Pop-up engelleyici aktif olabilir");
@@ -539,12 +709,10 @@ ${signature}`,
         return;
       }
       
-      // Boş paragrafları görünür yap (non-breaking space ekle)
       const processedContent = documentContent
         .replace(/<p><\/p>/g, '<p>&nbsp;</p>')
         .replace(/<p>\s*<br\s*\/?>\s*<\/p>/g, '<p>&nbsp;</p>');
       
-      // TipTap HTML içeriğini direkt kullan
       const htmlContent = `
         <!DOCTYPE html>
         <html>
@@ -552,45 +720,16 @@ ${signature}`,
           <meta charset="utf-8">
           <title>${selectedTemplate?.label} - ${selectedStudent?.text || 'Öğrenci'}</title>
           <style>
-            body { 
-              font-family: 'Times New Roman', Times, serif; 
-              font-size: 12pt; 
-              line-height: 1.8; 
-              padding: 40px;
-              color: #333;
-            }
-            p { 
-              margin: 0; 
-              padding: 0;
-              min-height: 1.2em;
-            }
-            p:empty::before {
-              content: "\\00a0";
-            }
-            h1 { font-size: 18pt; font-weight: bold; margin: 0.5em 0; }
-            h2 { font-size: 16pt; font-weight: bold; margin: 0.5em 0; }
-            h3 { font-size: 14pt; font-weight: bold; margin: 0.5em 0; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.8; padding: 40px; color: #333; }
+            p { margin: 0; padding: 0; min-height: 1.2em; }
+            p:empty::before { content: "\\00a0"; }
             strong, b { font-weight: bold; }
             em, i { font-style: italic; }
-            u { text-decoration: underline; }
-            s { text-decoration: line-through; }
-            mark { background-color: #fef08a; padding: 0 2px; }
-            blockquote { 
-              border-left: 3px solid #ccc; 
-              margin: 0.5em 0; 
-              padding-left: 1em; 
-              color: #666; 
-            }
             ul, ol { margin: 0.5em 0; padding-left: 1.5em; }
-            hr { border: none; border-top: 1px solid #ccc; margin: 1em 0; }
-            @media print { 
-              body { padding: 20px; }
-            }
+            @media print { body { padding: 20px; } }
           </style>
         </head>
-        <body>
-          ${processedContent}
-        </body>
+        <body>${processedContent}</body>
         </html>
       `;
       
@@ -601,7 +740,6 @@ ${signature}`,
         printWindow.print();
         toast.success("PDF olarak kaydetmek için 'PDF olarak kaydet' seçin");
       }, 500);
-      
     } catch (error) {
       console.error("PDF export error:", error);
       toast.error("PDF dosyası oluşturulamadı");
@@ -617,23 +755,109 @@ ${signature}`,
     }
   }, []);
 
+  // ==================== RENDER ====================
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Belge Oluştur</h1>
-          <p className="text-sm text-slate-500">Öğrenci seçin ve belge şablonu oluşturun</p>
+      {/* Modern Header */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700 p-6 text-white shadow-xl">
+        <div className="absolute inset-0 bg-grid-white/10 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.5))]" />
+        
+        {/* Animated Background Elements */}
+        <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-purple-400/20 blur-3xl animate-float-slow" />
+        <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-indigo-400/20 blur-3xl animate-float-reverse" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-96 w-96 rounded-full bg-violet-400/10 blur-3xl animate-pulse-glow" />
+        
+        {/* Floating Particles */}
+        <div className="absolute top-10 right-20 h-2 w-2 rounded-full bg-purple-300/60 animate-float animation-delay-100" />
+        <div className="absolute top-20 right-40 h-1.5 w-1.5 rounded-full bg-pink-300/60 animate-float animation-delay-300" />
+        <div className="absolute bottom-16 left-32 h-2 w-2 rounded-full bg-indigo-300/60 animate-float animation-delay-500" />
+        <div className="absolute top-1/3 left-1/4 h-1 w-1 rounded-full bg-white/40 animate-sparkle animation-delay-200" />
+        <div className="absolute bottom-1/3 right-1/4 h-1.5 w-1.5 rounded-full bg-violet-300/50 animate-sparkle animation-delay-700" />
+        
+        <div className="relative">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
+                <FileText className="h-7 w-7" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">Belge Oluşturucu</h1>
+                <p className="text-violet-200">Profesyonel belgeler oluşturun ve paylaşın</p>
+              </div>
+            </div>
+            
+            {/* Hızlı İstatistikler */}
+            <div className="flex flex-wrap gap-3">
+              <div className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-4 py-2">
+                <FileCheck className="h-5 w-5 text-violet-200" />
+                <div>
+                  <p className="text-xs text-violet-200">Toplam Belge</p>
+                  <p className="text-lg font-bold">{stats.totalDocuments}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-4 py-2">
+                <TrendingUp className="h-5 w-5 text-emerald-300" />
+                <div>
+                  <p className="text-xs text-violet-200">Bugün</p>
+                  <p className="text-lg font-bold">{stats.todayDocuments}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-4 py-2">
+                <Star className="h-5 w-5 text-amber-300" />
+                <div>
+                  <p className="text-xs text-violet-200">En Çok Kullanılan</p>
+                  <p className="text-sm font-semibold">
+                    {documentTemplates.find(t => t.id === stats.mostUsedTemplate)?.label || "Veli Mektubu"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
+      {/* Belge Türleri - Kartlar */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {documentTemplates.map((template) => {
+          const Icon = template.icon;
+          const isSelected = selectedDocument === template.id;
+          
+          return (
+            <button
+              key={template.id}
+              onClick={() => handleDocumentChange(template.id)}
+              className={`relative group flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all duration-300 ${
+                isSelected
+                  ? `bg-gradient-to-br ${template.bgGradient} text-white border-transparent shadow-lg scale-105`
+                  : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-md"
+              }`}
+            >
+              <div className={`p-2 rounded-lg ${isSelected ? "bg-white/20" : "bg-slate-100"}`}>
+                <Icon className={`h-5 w-5 ${isSelected ? "text-white" : template.color}`} />
+              </div>
+              <span className={`text-xs font-medium text-center ${isSelected ? "text-white" : "text-slate-700"}`}>
+                {template.label}
+              </span>
+              {isSelected && (
+                <div className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-white flex items-center justify-center">
+                  <Check className="h-3 w-3 text-violet-600" />
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Sol Panel - Öğrenci Seçimi */}
+        {/* Sol Panel - Öğrenci Seçimi ve Ayarlar */}
         <div className="lg:col-span-1 space-y-4">
           {/* Sınıf Seçimi */}
-          <Card className="bg-white/80 backdrop-blur">
+          <Card className="bg-white/80 backdrop-blur border-slate-200/50 shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
-                <GraduationCap className="h-5 w-5 text-blue-600" />
+              <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-blue-100">
+                  <GraduationCap className="h-4 w-4 text-blue-600" />
+                </div>
                 Sınıf / Şube
               </CardTitle>
             </CardHeader>
@@ -643,7 +867,7 @@ ${signature}`,
                 value={selectedClass}
                 onValueChange={handleClassChange}
               >
-                <SelectTrigger className="h-10">
+                <SelectTrigger className="h-11 bg-white">
                   <SelectValue placeholder={loadingClasses ? "Yükleniyor..." : "Sınıf/Şube seçin"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -658,20 +882,22 @@ ${signature}`,
           </Card>
 
           {/* Öğrenci Seçimi */}
-          <Card className="bg-white/80 backdrop-blur">
+          <Card className="bg-white/80 backdrop-blur border-slate-200/50 shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
-                <User className="h-5 w-5 text-emerald-600" />
+              <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-emerald-100">
+                  <User className="h-4 w-4 text-emerald-600" />
+                </div>
                 Öğrenci
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <Select
                 disabled={!selectedClass || loadingStudents}
                 value={selectedStudent?.value || ""}
                 onValueChange={handleStudentChange}
               >
-                <SelectTrigger className="h-10">
+                <SelectTrigger className="h-11 bg-white">
                   <SelectValue placeholder={
                     loadingStudents ? "Yükleniyor..." : 
                     !selectedClass ? "Önce sınıf seçin" : 
@@ -688,162 +914,229 @@ ${signature}`,
               </Select>
 
               {selectedStudent && (
-                <div className="mt-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                <div className="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200">
                   <div className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-emerald-600" />
-                    <span className="text-sm font-medium text-emerald-800">
+                    <div className="p-1 rounded-full bg-emerald-100">
+                      <Check className="h-3 w-3 text-emerald-600" />
+                    </div>
+                    <span className="text-sm font-semibold text-emerald-800">
                       {selectedStudent.text}
                     </span>
                   </div>
-                  <p className="text-xs text-emerald-600 mt-1">{selectedClassText}</p>
+                  <p className="text-xs text-emerald-600 mt-1 ml-6">{selectedClassText}</p>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Belge Türleri */}
-          <Card className="bg-white/80 backdrop-blur">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
-                <FileText className="h-5 w-5 text-purple-600" />
-                Belge Türü
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {documentTemplates.map((template) => {
-                const Icon = template.icon;
-                const isSelected = selectedDocument === template.id;
-                
-                return (
-                  <button
-                    key={template.id}
-                    onClick={() => handleDocumentChange(template.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left border ${
-                      isSelected
-                        ? template.color + " border-current"
-                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {template.label}
-                    {isSelected && <Check className="h-4 w-4 ml-auto" />}
-                  </button>
-                );
-              })}
-            </CardContent>
-          </Card>
-
-          {/* Veli Çağrısı veya Disiplin Kurulu için Tarih ve Saat Seçimi */}
+          {/* Tarih ve Saat - Sadece ilgili belgeler için */}
           {(selectedDocument === "veli-cagrisi" || selectedDocument === "disiplin-kurulu") && (
-            <Card className={`bg-white/80 backdrop-blur ${selectedDocument === "disiplin-kurulu" ? "border-rose-200" : "border-emerald-200"}`}>
+            <Card className={`bg-white/80 backdrop-blur border-slate-200/50 shadow-sm ${
+              selectedDocument === "disiplin-kurulu" ? "ring-2 ring-rose-200" : "ring-2 ring-emerald-200"
+            }`}>
               <CardHeader className="pb-3">
-                <CardTitle className={`text-base font-semibold flex items-center gap-2 ${selectedDocument === "disiplin-kurulu" ? "text-rose-800" : "text-emerald-800"}`}>
-                  <Calendar className={`h-5 w-5 ${selectedDocument === "disiplin-kurulu" ? "text-rose-600" : "text-emerald-600"}`} />
+                <CardTitle className={`text-sm font-semibold flex items-center gap-2 ${
+                  selectedDocument === "disiplin-kurulu" ? "text-rose-800" : "text-emerald-800"
+                }`}>
+                  <div className={`p-1.5 rounded-lg ${
+                    selectedDocument === "disiplin-kurulu" ? "bg-rose-100" : "bg-emerald-100"
+                  }`}>
+                    <Calendar className={`h-4 w-4 ${
+                      selectedDocument === "disiplin-kurulu" ? "text-rose-600" : "text-emerald-600"
+                    }`} />
+                  </div>
                   {selectedDocument === "disiplin-kurulu" ? "Toplantı Zamanı" : "Görüşme Zamanı"}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="meetingDate" className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                    <Calendar className={`h-4 w-4 ${selectedDocument === "disiplin-kurulu" ? "text-rose-500" : "text-emerald-500"}`} />
-                    {selectedDocument === "disiplin-kurulu" ? "Toplantı Tarihi" : "Görüşme Tarihi"}
+                  <Label htmlFor="meetingDate" className="text-xs font-medium text-slate-600">
+                    Tarih
                   </Label>
                   <Input
                     id="meetingDate"
                     type="date"
                     value={meetingDate}
                     onChange={(e) => handleMeetingDateChange(e.target.value)}
-                    className={`h-10 ${selectedDocument === "disiplin-kurulu" ? "border-rose-200 focus:border-rose-400 focus:ring-rose-400" : "border-emerald-200 focus:border-emerald-400 focus:ring-emerald-400"}`}
+                    className="h-10 bg-white"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="meetingTime" className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                    <Clock className={`h-4 w-4 ${selectedDocument === "disiplin-kurulu" ? "text-rose-500" : "text-emerald-500"}`} />
-                    {selectedDocument === "disiplin-kurulu" ? "Toplantı Saati" : "Görüşme Saati"}
+                  <Label htmlFor="meetingTime" className="text-xs font-medium text-slate-600">
+                    Saat
                   </Label>
                   <Input
                     id="meetingTime"
                     type="time"
                     value={meetingTime}
                     onChange={(e) => handleMeetingTimeChange(e.target.value)}
-                    className={`h-10 ${selectedDocument === "disiplin-kurulu" ? "border-rose-200 focus:border-rose-400 focus:ring-rose-400" : "border-emerald-200 focus:border-emerald-400 focus:ring-emerald-400"}`}
+                    className="h-10 bg-white"
                   />
                 </div>
                 {(meetingDate || meetingTime) && (
-                  <div className={`p-3 rounded-lg border ${selectedDocument === "disiplin-kurulu" ? "bg-rose-50 border-rose-200" : "bg-emerald-50 border-emerald-200"}`}>
-                    <p className={`text-xs font-medium ${selectedDocument === "disiplin-kurulu" ? "text-rose-700" : "text-emerald-700"}`}>
+                  <div className={`p-3 rounded-lg ${
+                    selectedDocument === "disiplin-kurulu" 
+                      ? "bg-rose-50 border border-rose-200" 
+                      : "bg-emerald-50 border border-emerald-200"
+                  }`}>
+                    <p className={`text-xs font-medium ${
+                      selectedDocument === "disiplin-kurulu" ? "text-rose-600" : "text-emerald-600"
+                    }`}>
                       Seçilen Zaman:
                     </p>
-                    <p className={`text-sm mt-1 ${selectedDocument === "disiplin-kurulu" ? "text-rose-800" : "text-emerald-800"}`}>
+                    <p className={`text-sm mt-1 font-semibold ${
+                      selectedDocument === "disiplin-kurulu" ? "text-rose-800" : "text-emerald-800"
+                    }`}>
                       {meetingDate 
-                        ? new Date(meetingDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })
+                        ? new Date(meetingDate).toLocaleDateString('tr-TR', { 
+                            day: 'numeric', 
+                            month: 'long', 
+                            year: 'numeric', 
+                            weekday: 'long' 
+                          })
                         : "Tarih seçilmedi"
                       }
-                      {meetingTime && ` - Saat ${meetingTime}`}
+                      {meetingTime && ` - ${meetingTime}`}
                     </p>
                   </div>
                 )}
               </CardContent>
             </Card>
           )}
+
+          {/* Son Belgeler */}
+          {documentHistory.length > 0 && (
+            <Card className="bg-white/80 backdrop-blur border-slate-200/50 shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-amber-100">
+                    <History className="h-4 w-4 text-amber-600" />
+                  </div>
+                  Son Belgeler
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {documentHistory.slice(0, 5).map((doc) => {
+                    const template = documentTemplates.find(t => t.id === doc.type);
+                    const Icon = template?.icon || FileText;
+                    return (
+                      <div
+                        key={doc.id}
+                        className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer text-xs"
+                        onClick={() => {
+                          handleDocumentChange(doc.type);
+                          toast.info(`${template?.label} şablonu yüklendi`);
+                        }}
+                      >
+                        <Icon className={`h-3.5 w-3.5 ${template?.color || "text-slate-500"}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-slate-700 truncate">{doc.studentName}</p>
+                          <p className="text-slate-500 truncate">{doc.className}</p>
+                        </div>
+                        <ChevronRight className="h-3 w-3 text-slate-400" />
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        {/* Sağ Panel - Belge Önizleme ve Düzenleme */}
+        {/* Sağ Panel - Belge Editörü */}
         <div className="lg:col-span-2">
-          <Card className="bg-white/80 backdrop-blur h-full">
+          <Card className="bg-white/80 backdrop-blur border-slate-200/50 shadow-sm h-full">
             <CardHeader className="pb-3 border-b border-slate-100">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-blue-600" />
-                  {documentTemplates.find(t => t.id === selectedDocument)?.label || "Belge"} Önizleme
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg bg-gradient-to-br ${
+                    documentTemplates.find(t => t.id === selectedDocument)?.bgGradient || "from-violet-500 to-purple-600"
+                  }`}>
+                    {(() => {
+                      const Icon = documentTemplates.find(t => t.id === selectedDocument)?.icon || FileText;
+                      return <Icon className="h-5 w-5 text-white" />;
+                    })()}
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-semibold text-slate-800">
+                      {documentTemplates.find(t => t.id === selectedDocument)?.label || "Belge"} Önizleme
+                    </CardTitle>
+                    {selectedStudent && (
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {selectedStudent.text} - {selectedClassText}
+                      </p>
+                    )}
+                  </div>
                   {hasUnsavedChanges && (
-                    <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 text-xs">
+                    <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-xs">
+                      <Sparkles className="h-3 w-3 mr-1" />
                       Kaydedilmemiş
                     </Badge>
                   )}
-                </CardTitle>
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Kaydet, Sıfırla, Temizle Butonları */}
+                </div>
+                
+                {/* Eylem Butonları */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {/* Düzenleme */}
                   <Button
                     size="sm"
                     variant="outline"
-                    className="gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+                    className="h-8 gap-1 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
                     onClick={handleSaveContent}
                     disabled={!documentContent}
-                    title="İçeriği kaydet"
                   >
                     <Save className="h-3.5 w-3.5" />
-                    Kaydet
+                    <span className="hidden sm:inline">Kaydet</span>
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="gap-1.5 text-amber-600 border-amber-200 hover:bg-amber-50"
+                    className="h-8 gap-1 text-amber-600 border-amber-200 hover:bg-amber-50"
                     onClick={handleResetContent}
-                    title="Şablona sıfırla"
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
-                    Sıfırla
+                    <span className="hidden sm:inline">Sıfırla</span>
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="gap-1.5 text-slate-600 border-slate-200 hover:bg-slate-50"
+                    className="h-8 gap-1 text-slate-600 border-slate-200 hover:bg-slate-50"
                     onClick={handleClearContent}
                     disabled={!documentContent}
-                    title="İçeriği temizle"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                    Temizle
                   </Button>
                   
-                  <div className="w-px h-6 bg-slate-300 mx-1" />
+                  <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block" />
                   
-                  {/* Word ve PDF İndirme */}
+                  {/* Kopyala & Yazdır */}
                   <Button
                     size="sm"
                     variant="outline"
-                    className="gap-1.5 text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                    className="h-8 gap-1 text-slate-600 border-slate-200 hover:bg-slate-50"
+                    onClick={copyToClipboard}
+                    disabled={!documentContent}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1 text-slate-600 border-slate-200 hover:bg-slate-50"
+                    onClick={printDocument}
+                    disabled={!documentContent}
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                  </Button>
+                  
+                  <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block" />
+                  
+                  {/* Export */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1 text-indigo-600 border-indigo-200 hover:bg-indigo-50"
                     onClick={downloadAsWord}
                     disabled={exportingWord || !documentContent}
                   >
@@ -852,12 +1145,12 @@ ${signature}`,
                     ) : (
                       <FileType className="h-3.5 w-3.5" />
                     )}
-                    Word
+                    <span className="hidden sm:inline">Word</span>
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
+                    className="h-8 gap-1 text-red-600 border-red-200 hover:bg-red-50"
                     onClick={downloadAsPdf}
                     disabled={exportingPdf || !documentContent}
                   >
@@ -866,51 +1159,34 @@ ${signature}`,
                     ) : (
                       <FileDown className="h-3.5 w-3.5" />
                     )}
-                    PDF
+                    <span className="hidden sm:inline">PDF</span>
                   </Button>
                   
-                  <div className="w-px h-6 bg-slate-300 mx-1" />
+                  <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block" />
                   
-                  {/* WhatsApp ve Telegram Paylaşım */}
+                  {/* Paylaşım */}
                   <Button
                     size="sm"
                     variant="outline"
-                    className="gap-1.5 text-green-600 border-green-200 hover:bg-green-50"
+                    className="h-8 gap-1 text-green-600 border-green-200 hover:bg-green-50"
                     onClick={shareOnWhatsApp}
                     disabled={!documentContent}
-                    title="WhatsApp'ta paylaş"
                   >
                     <MessageCircle className="h-3.5 w-3.5" />
-                    WhatsApp
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="gap-1.5 text-sky-600 border-sky-200 hover:bg-sky-50"
+                    className="h-8 gap-1 text-sky-600 border-sky-200 hover:bg-sky-50"
                     onClick={shareOnTelegram}
                     disabled={!documentContent}
-                    title="Telegram'da paylaş"
                   >
                     <Send className="h-3.5 w-3.5" />
-                    Telegram
                   </Button>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="p-4">
-              {/* Seçili öğrenci bilgisi */}
-              {selectedStudent && (
-                <div className="mb-4 flex items-center gap-2 text-sm">
-                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                    <User className="h-3 w-3 mr-1" />
-                    {selectedStudent.text}
-                  </Badge>
-                  <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
-                    {selectedClassText}
-                  </Badge>
-                </div>
-              )}
-
               {/* Zengin Metin Editörü */}
               <RichTextEditor
                 content={documentContent}
@@ -919,13 +1195,18 @@ ${signature}`,
               />
 
               {/* Bilgilendirme */}
-              <div className="mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
-                <p className="text-xs text-amber-700 flex items-start gap-2">
-                  <FileText className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                  <span>
-                    Belge içeriğini editörde düzenleyebilirsiniz. <strong>Kalın</strong>, <em>italik</em>, altı çizili, hizalama ve daha fazla özellik kullanabilirsiniz.
-                  </span>
-                </p>
+              <div className="mt-4 p-3 bg-gradient-to-r from-violet-50 to-purple-50 rounded-lg border border-violet-200">
+                <div className="flex items-start gap-2">
+                  <Zap className="h-4 w-4 text-violet-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-xs text-violet-700">
+                    <p className="font-medium">İpuçları</p>
+                    <ul className="mt-1 space-y-0.5 text-violet-600">
+                      <li>• Editörde <strong>kalın</strong>, <em>italik</em>, altı çizili metin kullanabilirsiniz</li>
+                      <li>• Word veya PDF olarak indirebilir, WhatsApp/Telegram ile paylaşabilirsiniz</li>
+                      <li>• Belge değişikliklerinizi kaydetmeyi unutmayın</li>
+                    </ul>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

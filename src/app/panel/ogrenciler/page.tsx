@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Users, Plus, Trash2, RefreshCw } from "lucide-react";
+import { Users, Plus, Trash2, RefreshCw, GraduationCap } from "lucide-react";
 import { toast } from "sonner";
 import { usePanelData, useClassStudents } from "../hooks";
 
@@ -81,10 +81,54 @@ export default function OgrencilerPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Öğrenci Yönetimi</h1>
-          <p className="text-sm text-slate-500">Sınıflara öğrenci ekleyin veya çıkarın</p>
+      {/* Modern Header */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-700 via-slate-800 to-zinc-900 p-6 text-white shadow-xl">
+        <div className="absolute inset-0 bg-grid-white/5 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.3))]" />
+        
+        {/* Animated Background Elements */}
+        <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-slate-500/20 blur-3xl animate-float-slow" />
+        <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-zinc-500/20 blur-3xl animate-float-reverse" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-96 w-96 rounded-full bg-slate-400/10 blur-3xl animate-pulse-glow" />
+        
+        {/* Floating Particles */}
+        <div className="absolute top-10 right-20 h-2 w-2 rounded-full bg-slate-300/40 animate-float animation-delay-100" />
+        <div className="absolute top-20 right-40 h-1.5 w-1.5 rounded-full bg-zinc-300/40 animate-float animation-delay-300" />
+        <div className="absolute bottom-16 left-32 h-2 w-2 rounded-full bg-slate-400/40 animate-float animation-delay-500" />
+        <div className="absolute top-1/3 left-1/4 h-1 w-1 rounded-full bg-white/30 animate-sparkle animation-delay-200" />
+        <div className="absolute bottom-1/3 right-1/4 h-1.5 w-1.5 rounded-full bg-slate-300/30 animate-sparkle animation-delay-700" />
+        
+        <div className="relative">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/10 backdrop-blur-sm">
+                <Users className="h-7 w-7" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">Öğrenci Yönetimi</h1>
+                <p className="text-slate-400">Sınıflara öğrenci ekleyin veya çıkarın</p>
+              </div>
+            </div>
+            
+            {/* Hızlı İstatistikler */}
+            <div className="flex flex-wrap gap-3">
+              <div className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-4 py-2">
+                <Plus className="h-5 w-5 text-emerald-400" />
+                <div>
+                  <p className="text-xs text-slate-400">Sınıflar</p>
+                  <p className="text-lg font-bold">{classes.length}</p>
+                </div>
+              </div>
+              {selectedClass && (
+                <div className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-4 py-2">
+                  <Users className="h-5 w-5 text-blue-400" />
+                  <div>
+                    <p className="text-xs text-slate-400">Öğrenci</p>
+                    <p className="text-lg font-bold">{classStudents.length}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
