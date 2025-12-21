@@ -529,7 +529,7 @@ export default function OgrenciGecmisiPage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={handleExport}
+                  onClick={handleExportExcel}
                   className="bg-white/10 hover:bg-white/20 text-white border-0"
                 >
                   <Download className="h-4 w-4 mr-1" />
