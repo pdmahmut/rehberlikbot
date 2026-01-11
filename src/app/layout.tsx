@@ -74,6 +74,20 @@ export default function RootLayout({
                 </div>
               </Link>
 
+              {/* Center Logo */}
+              <a 
+                href="https://mehmetdalgin.com" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center transition-all hover:scale-105"
+              >
+                <img 
+                  src="https://mehmetdalginbucket.s3.amazonaws.com/wp-content/uploads/2024/08/18191257/logo.png" 
+                  alt="Mehmet Dalgın" 
+                  className="h-12 sm:h-16 md:h-20 lg:h-24 w-auto"
+                />
+              </a>
+
               {/* Navigation */}
               <nav className="flex items-center gap-2">
                 {/* Status Indicator */}

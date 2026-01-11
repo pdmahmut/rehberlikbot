@@ -174,15 +174,36 @@ export default function MebbisPage() {
                   <p className="text-sm text-gray-600">Daha hızlı ve güvenilir otomasyon deneyimi için masaüstü uygulamasını indirin</p>
                 </div>
               </div>
-              <a
-                href="/MEBBIS_RPD.exe"
-                download="MEBBIS_RPD.exe"
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium rounded-xl shadow-lg hover:shadow-xl hover:from-emerald-600 hover:to-teal-700 transition-all duration-300 transform hover:scale-105"
-              >
-                <Download className="h-4 w-4" />
-                Windows için İndir
-                <span className="text-xs opacity-75">(.exe)</span>
-              </a>
+              <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
+                <a
+                  href="/MEBBIS_RPD.exe"
+                  download="MEBBIS_RPD.exe"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium rounded-xl shadow-lg hover:shadow-xl hover:from-emerald-600 hover:to-teal-700 transition-all duration-300 transform hover:scale-105"
+                >
+                  <Download className="h-4 w-4" />
+                  Windows için İndir
+                  <span className="text-xs opacity-75">(.exe)</span>
+                </a>
+                <a
+                  href="/SeleniumBasic-2.0.9.0.zip"
+                  download="SeleniumBasic-2.0.9.0.zip"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium rounded-xl shadow-lg hover:shadow-xl hover:from-amber-600 hover:to-orange-600 transition-all duration-300 transform hover:scale-105"
+                >
+                  <Shield className="h-4 w-4" />
+                  SeleniumBasic İndir
+                  <span className="text-xs opacity-75">(.zip)</span>
+                </a>
+                <a
+                  href="https://googlechromelabs.github.io/chrome-for-testing/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium rounded-xl shadow-lg hover:shadow-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 transform hover:scale-105"
+                >
+                  <Bot className="h-4 w-4" />
+                  ChromeDriver İndir
+                  <span className="text-xs opacity-75">(Web)</span>
+                </a>
+              </div>
             </div>
           </div>
         </div>

@@ -1,0 +1,2909 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPD App - Kurulum Rehberi</title>
+    <meta name="description" content="RPD Öğrenci Yönlendirme Sistemi için adım adım kurulum rehberi">
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Prism.js for Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    
+    <style>
+        /* ==========================================
+           CSS Variables & Reset
+        ========================================== */
+        :root {
+            --primary: #7c3aed;
+            --primary-dark: #5b21b6;
+            --primary-light: #a78bfa;
+            --secondary: #06b6d4;
+            --secondary-dark: #0891b2;
+            --accent: #f59e0b;
+            --accent-light: #fbbf24;
+            --success: #10b981;
+            --success-light: #34d399;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --info: #3b82f6;
+            
+            --dark: #1e1b4b;
+            --darker: #0f0a2e;
+            --darkest: #050211;
+            --light: #f8fafc;
+            --gray-100: #f1f5f9;
+            --gray-200: #e2e8f0;
+            --gray-300: #cbd5e1;
+            --gray-400: #94a3b8;
+            --gray-500: #64748b;
+            --gray-600: #475569;
+            --gray-700: #334155;
+            --gray-800: #1e293b;
+            
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-bg-hover: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --glass-border-hover: rgba(255, 255, 255, 0.2);
+            
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            --shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            --shadow-glow: 0 0 40px rgba(124, 58, 237, 0.3);
+            
+            --radius-sm: 0.375rem;
+            --radius: 0.5rem;
+            --radius-md: 0.75rem;
+            --radius-lg: 1rem;
+            --radius-xl: 1.5rem;
+            --radius-2xl: 2rem;
+            
+            --transition-fast: 150ms ease;
+            --transition: 200ms ease;
+            --transition-slow: 300ms ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            scroll-padding-top: 100px;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, var(--darkest) 0%, var(--darker) 50%, var(--dark) 100%);
+            color: var(--light);
+            min-height: 100vh;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* ==========================================
+           Animated Background
+        ========================================== */
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .bg-animation .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(120px);
+            animation: float 25s infinite ease-in-out;
+            opacity: 0.6;
+        }
+
+        .bg-animation .orb:nth-child(1) {
+            width: 700px;
+            height: 700px;
+            background: radial-gradient(circle, rgba(124, 58, 237, 0.4) 0%, transparent 70%);
+            top: -250px;
+            left: -150px;
+            animation-delay: 0s;
+        }
+
+        .bg-animation .orb:nth-child(2) {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(6, 182, 212, 0.3) 0%, transparent 70%);
+            top: 40%;
+            right: -150px;
+            animation-delay: -8s;
+        }
+
+        .bg-animation .orb:nth-child(3) {
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(16, 185, 129, 0.25) 0%, transparent 70%);
+            bottom: -200px;
+            left: 20%;
+            animation-delay: -15s;
+        }
+
+        .bg-animation .orb:nth-child(4) {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(245, 158, 11, 0.2) 0%, transparent 70%);
+            top: 60%;
+            left: -100px;
+            animation-delay: -20s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(60px, 40px) scale(1.05); }
+            50% { transform: translate(20px, 80px) scale(0.95); }
+            75% { transform: translate(-40px, 40px) scale(1.02); }
+        }
+
+        /* Grid Pattern Overlay */
+        .grid-pattern {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background-image: 
+                linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+        }
+
+        /* ==========================================
+           Typography
+        ========================================== */
+        h1, h2, h3, h4, h5, h6 {
+            font-weight: 700;
+            line-height: 1.2;
+            letter-spacing: -0.02em;
+        }
+
+        h1 { font-size: clamp(2.5rem, 5vw, 4rem); }
+        h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); }
+        h3 { font-size: clamp(1.25rem, 2vw, 1.75rem); }
+        h4 { font-size: clamp(1.1rem, 1.5vw, 1.25rem); }
+
+        p {
+            color: var(--gray-300);
+            font-size: 1rem;
+            line-height: 1.7;
+        }
+
+        a {
+            color: var(--primary-light);
+            text-decoration: none;
+            transition: color var(--transition);
+        }
+
+        a:hover {
+            color: var(--secondary);
+        }
+
+        /* ==========================================
+           Utility Classes
+        ========================================== */
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+
+        .section {
+            padding: 5rem 0;
+        }
+
+        .text-gradient {
+            background: linear-gradient(135deg, var(--primary-light) 0%, var(--secondary) 50%, var(--success) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .text-center { text-align: center; }
+        .text-left { text-align: left; }
+
+        .mt-1 { margin-top: 0.5rem; }
+        .mt-2 { margin-top: 1rem; }
+        .mt-3 { margin-top: 1.5rem; }
+        .mt-4 { margin-top: 2rem; }
+        .mb-1 { margin-bottom: 0.5rem; }
+        .mb-2 { margin-bottom: 1rem; }
+        .mb-3 { margin-bottom: 1.5rem; }
+        .mb-4 { margin-bottom: 2rem; }
+
+        /* ==========================================
+           Glass Card Component
+        ========================================== */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-xl);
+            padding: 2rem;
+            transition: all var(--transition-slow);
+        }
+
+        .glass-card:hover {
+            background: var(--glass-bg-hover);
+            border-color: var(--glass-border-hover);
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-glow);
+        }
+
+        /* ==========================================
+           Button Components
+        ========================================== */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.875rem 1.75rem;
+            font-size: 0.95rem;
+            font-weight: 600;
+            border-radius: var(--radius-lg);
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition);
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(124, 58, 237, 0.5);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: var(--glass-bg);
+            color: var(--light);
+            border: 1px solid var(--glass-border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--glass-bg-hover);
+            border-color: var(--primary-light);
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        .btn-icon {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            border-radius: var(--radius);
+        }
+
+        /* ==========================================
+           Badge Component
+        ========================================== */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.375rem 0.875rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 9999px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .badge-primary {
+            background: rgba(124, 58, 237, 0.2);
+            color: var(--primary-light);
+            border: 1px solid rgba(124, 58, 237, 0.3);
+        }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success-light);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--accent-light);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .badge-info {
+            background: rgba(59, 130, 246, 0.2);
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        /* ==========================================
+           Navigation
+        ========================================== */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            padding: 1rem 0;
+            transition: all var(--transition-slow);
+        }
+
+        nav.scrolled {
+            background: rgba(15, 10, 46, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--glass-border);
+            padding: 0.75rem 0;
+        }
+
+        .nav-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--light);
+            text-decoration: none;
+        }
+
+        .nav-logo .logo-icon {
+            width: 42px;
+            height: 42px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.4);
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-link {
+            padding: 0.625rem 1rem;
+            color: var(--gray-300);
+            font-size: 0.9rem;
+            font-weight: 500;
+            border-radius: var(--radius);
+            transition: all var(--transition);
+        }
+
+        .nav-link:hover {
+            color: var(--light);
+            background: var(--glass-bg);
+        }
+
+        .nav-link.active {
+            color: var(--primary-light);
+            background: rgba(124, 58, 237, 0.15);
+        }
+
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            width: 44px;
+            height: 44px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            color: var(--light);
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: all var(--transition);
+        }
+
+        .mobile-menu-btn:hover {
+            background: var(--glass-bg-hover);
+        }
+
+        /* Mobile Navigation */
+        .mobile-nav {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(5, 2, 17, 0.98);
+            backdrop-filter: blur(20px);
+            z-index: 999;
+            padding: 6rem 1.5rem 2rem;
+            flex-direction: column;
+            gap: 0.5rem;
+            overflow-y: auto;
+        }
+
+        .mobile-nav.open {
+            display: flex;
+        }
+
+        .mobile-nav .nav-link {
+            padding: 1rem 1.25rem;
+            font-size: 1.1rem;
+            border-radius: var(--radius-md);
+        }
+
+        .mobile-nav-close {
+            position: absolute;
+            top: 1.25rem;
+            right: 1.25rem;
+            width: 44px;
+            height: 44px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            color: var(--light);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        @media (max-width: 1024px) {
+            .nav-links {
+                display: none;
+            }
+
+            .mobile-menu-btn {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+        }
+
+        /* ==========================================
+           Hero Section
+        ========================================== */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding: 8rem 0 4rem;
+            position: relative;
+        }
+
+        .hero-content {
+            text-align: center;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.2) 0%, rgba(6, 182, 212, 0.2) 100%);
+            border: 1px solid rgba(124, 58, 237, 0.3);
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--primary-light);
+            margin-bottom: 1.5rem;
+        }
+
+        .hero-badge i {
+            font-size: 1rem;
+        }
+
+        .hero-title {
+            margin-bottom: 1.5rem;
+        }
+
+        .hero-description {
+            font-size: 1.25rem;
+            color: var(--gray-300);
+            max-width: 700px;
+            margin: 0 auto 2.5rem;
+            line-height: 1.8;
+        }
+
+        .hero-stats {
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin-top: 3rem;
+            padding-top: 2.5rem;
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .hero-stat {
+            text-align: center;
+        }
+
+        .hero-stat-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary-light) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-stat-label {
+            font-size: 0.9rem;
+            color: var(--gray-400);
+            margin-top: 0.25rem;
+        }
+
+        .hero-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--gray-400);
+            font-size: 0.85rem;
+            animation: bounce 2s infinite;
+        }
+
+        .scroll-indicator i {
+            font-size: 1.5rem;
+        }
+
+        /* ==========================================
+           Progress Tracker
+        ========================================== */
+        .progress-section {
+            padding: 3rem 0;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .progress-tracker {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            max-width: 1000px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .progress-tracker::before {
+            content: '';
+            position: absolute;
+            top: 24px;
+            left: 50px;
+            right: 50px;
+            height: 3px;
+            background: var(--glass-border);
+            z-index: 0;
+        }
+
+        .progress-line {
+            position: absolute;
+            top: 24px;
+            left: 50px;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+            z-index: 1;
+            transition: width 0.5s ease;
+            width: 0%;
+        }
+
+        .progress-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.75rem;
+            position: relative;
+            z-index: 2;
+            cursor: pointer;
+            transition: all var(--transition);
+        }
+
+        .progress-step:hover .step-number {
+            transform: scale(1.1);
+        }
+
+        .step-number {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--darker);
+            border: 3px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--gray-400);
+            transition: all var(--transition);
+        }
+
+        .progress-step.active .step-number {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-color: var(--primary);
+            color: white;
+            box-shadow: 0 0 20px rgba(124, 58, 237, 0.5);
+        }
+
+        .progress-step.completed .step-number {
+            background: var(--success);
+            border-color: var(--success);
+            color: white;
+        }
+
+        .progress-step.completed .step-number::after {
+            content: '\f00c';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+        }
+
+        .progress-step.completed .step-number span {
+            display: none;
+        }
+
+        .step-label {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--gray-400);
+            text-align: center;
+            max-width: 80px;
+            transition: color var(--transition);
+        }
+
+        .progress-step.active .step-label,
+        .progress-step.completed .step-label {
+            color: var(--light);
+        }
+
+        @media (max-width: 768px) {
+            .progress-tracker {
+                flex-wrap: wrap;
+                gap: 1.5rem;
+                justify-content: center;
+            }
+
+            .progress-tracker::before,
+            .progress-line {
+                display: none;
+            }
+
+            .step-number {
+                width: 44px;
+                height: 44px;
+                font-size: 0.9rem;
+            }
+
+            .hero-stats {
+                flex-direction: column;
+                gap: 1.5rem;
+            }
+
+            .hero-stat-value {
+                font-size: 2rem;
+            }
+        }
+
+        /* ==========================================
+           Step Cards
+        ========================================== */
+        .step-section {
+            padding: 5rem 0;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .step-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .step-icon {
+            width: 70px;
+            height: 70px;
+            min-width: 70px;
+            border-radius: var(--radius-xl);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            color: white;
+        }
+
+        .step-icon.purple { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); }
+        .step-icon.cyan { background: linear-gradient(135deg, var(--secondary) 0%, var(--secondary-dark) 100%); }
+        .step-icon.green { background: linear-gradient(135deg, var(--success) 0%, #059669 100%); }
+        .step-icon.orange { background: linear-gradient(135deg, var(--accent) 0%, #d97706 100%); }
+        .step-icon.blue { background: linear-gradient(135deg, var(--info) 0%, #2563eb 100%); }
+        .step-icon.pink { background: linear-gradient(135deg, #ec4899 0%, #be185d 100%); }
+
+        .step-info h2 {
+            margin-bottom: 0.5rem;
+        }
+
+        .step-info p {
+            font-size: 1.1rem;
+        }
+
+        .step-number-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            background: rgba(124, 58, 237, 0.15);
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--primary-light);
+            margin-bottom: 0.75rem;
+        }
+
+        /* Requirement Cards */
+        .requirement-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .requirement-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-xl);
+            padding: 1.75rem;
+            transition: all var(--transition-slow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .requirement-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+            opacity: 0;
+            transition: opacity var(--transition);
+        }
+
+        .requirement-card:hover {
+            background: var(--glass-bg-hover);
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .requirement-card:hover::before {
+            opacity: 1;
+        }
+
+        .requirement-card-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .requirement-card-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .requirement-card-icon.nodejs { background: rgba(104, 160, 99, 0.2); color: #68a063; }
+        .requirement-card-icon.npm { background: rgba(203, 56, 55, 0.2); color: #cb3837; }
+        .requirement-card-icon.git { background: rgba(240, 80, 50, 0.2); color: #f05032; }
+        .requirement-card-icon.vscode { background: rgba(0, 122, 204, 0.2); color: #007acc; }
+
+        .requirement-card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--light);
+        }
+
+        .requirement-card-version {
+            font-size: 0.85rem;
+            color: var(--gray-400);
+        }
+
+        .requirement-card-description {
+            color: var(--gray-300);
+            font-size: 0.95rem;
+            margin-bottom: 1.25rem;
+            line-height: 1.6;
+        }
+
+        .requirement-card-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.625rem 1rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            color: var(--light);
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all var(--transition);
+        }
+
+        .requirement-card-link:hover {
+            background: var(--glass-bg-hover);
+            border-color: var(--primary-light);
+            color: var(--primary-light);
+        }
+
+        /* Info Box */
+        .info-box {
+            display: flex;
+            gap: 1rem;
+            padding: 1.25rem 1.5rem;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: var(--radius-lg);
+            margin-top: 2rem;
+        }
+
+        .info-box.warning {
+            background: rgba(245, 158, 11, 0.1);
+            border-color: rgba(245, 158, 11, 0.2);
+        }
+
+        .info-box.success {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+
+        .info-box.danger {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.2);
+        }
+
+        .info-box-icon {
+            width: 24px;
+            height: 24px;
+            min-width: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .info-box-icon.info { color: var(--info); }
+        .info-box-icon.warning { color: var(--warning); }
+        .info-box-icon.success { color: var(--success); }
+        .info-box-icon.danger { color: var(--danger); }
+
+        .info-box-content {
+            flex: 1;
+        }
+
+        .info-box-title {
+            font-weight: 600;
+            color: var(--light);
+            margin-bottom: 0.25rem;
+        }
+
+        .info-box-text {
+            color: var(--gray-300);
+            font-size: 0.95rem;
+        }
+
+        /* ==========================================
+           Code Blocks
+        ========================================== */
+        .code-block {
+            position: relative;
+            margin: 1.5rem 0;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            background: #1a1a2e;
+            border: 1px solid var(--glass-border);
+        }
+
+        .code-block-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .code-block-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--gray-400);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .code-block-title i {
+            font-size: 1rem;
+        }
+
+        .code-block-title .terminal { color: var(--success); }
+        .code-block-title .file { color: var(--accent); }
+        .code-block-title .env { color: var(--secondary); }
+
+        .code-copy-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.375rem 0.75rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            color: var(--gray-300);
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all var(--transition);
+        }
+
+        .code-copy-btn:hover {
+            background: var(--glass-bg-hover);
+            color: var(--light);
+            border-color: var(--primary-light);
+        }
+
+        .code-copy-btn.copied {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: var(--success);
+            color: var(--success);
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 1.25rem 1.5rem;
+            overflow-x: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            line-height: 1.7;
+        }
+
+        .code-block pre code {
+            background: none;
+            padding: 0;
+            font-family: inherit;
+        }
+
+        /* Inline code */
+        code:not(pre code) {
+            background: rgba(124, 58, 237, 0.15);
+            padding: 0.2em 0.4em;
+            border-radius: var(--radius-sm);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+            color: var(--primary-light);
+        }
+
+        /* Custom Prism Theme Overrides */
+        .code-block pre[class*="language-"] {
+            background: transparent;
+        }
+
+        .token.comment { color: #6b7280; }
+        .token.string { color: #10b981; }
+        .token.keyword { color: #a78bfa; }
+        .token.function { color: #60a5fa; }
+        .token.number { color: #f59e0b; }
+        .token.operator { color: #06b6d4; }
+        .token.class-name { color: #fbbf24; }
+        .token.property { color: #34d399; }
+
+        /* ==========================================
+           Accordion
+        ========================================== */
+        .accordion {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .accordion-item {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            transition: all var(--transition);
+        }
+
+        .accordion-item:hover {
+            border-color: var(--glass-border-hover);
+        }
+
+        .accordion-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding: 1.25rem 1.5rem;
+            background: transparent;
+            border: none;
+            color: var(--light);
+            font-size: 1rem;
+            font-weight: 500;
+            text-align: left;
+            cursor: pointer;
+            transition: all var(--transition);
+        }
+
+        .accordion-header:hover {
+            background: var(--glass-bg-hover);
+        }
+
+        .accordion-header span {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .accordion-header span i {
+            color: var(--warning);
+        }
+
+        .accordion-icon {
+            transition: transform var(--transition);
+            color: var(--gray-400);
+        }
+
+        .accordion-item.open .accordion-icon {
+            transform: rotate(180deg);
+        }
+
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .accordion-item.open .accordion-content {
+            max-height: 500px;
+        }
+
+        .accordion-content > * {
+            padding: 0 1.5rem;
+        }
+
+        .accordion-content > *:first-child {
+            padding-top: 0;
+        }
+
+        .accordion-content > *:last-child {
+            padding-bottom: 1.5rem;
+        }
+
+        .accordion-content p {
+            margin-bottom: 0.5rem;
+        }
+
+        .accordion-content ul {
+            margin: 0.5rem 0;
+            padding-left: 1.5rem;
+            color: var(--gray-300);
+        }
+
+        .accordion-content li {
+            margin-bottom: 0.25rem;
+        }
+
+        .accordion-content code {
+            display: inline-block;
+            margin: 0.25rem 0;
+        }
+
+        /* ==========================================
+           Footer
+        ========================================== */
+        footer {
+            padding: 4rem 0 2rem;
+            border-top: 1px solid var(--glass-border);
+            text-align: center;
+        }
+
+        .footer-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--light);
+            margin-bottom: 1.5rem;
+        }
+
+        .footer-logo .logo-icon {
+            width: 42px;
+            height: 42px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .footer-link {
+            color: var(--gray-400);
+            font-size: 0.95rem;
+            transition: color var(--transition);
+        }
+
+        .footer-link:hover {
+            color: var(--primary-light);
+        }
+
+        .footer-social {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .social-btn {
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            color: var(--gray-400);
+            font-size: 1.25rem;
+            transition: all var(--transition);
+        }
+
+        .social-btn:hover {
+            background: var(--glass-bg-hover);
+            color: var(--light);
+            border-color: var(--primary-light);
+            transform: translateY(-2px);
+        }
+
+        .footer-copyright {
+            color: var(--gray-500);
+            font-size: 0.9rem;
+        }
+
+        .footer-copyright a {
+            color: var(--primary-light);
+        }
+
+        /* ==========================================
+           Animations
+        ========================================== */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .animate-fade-in-up {
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        .animate-slide-in-left {
+            animation: slideInLeft 0.5s ease forwards;
+        }
+
+        [data-animate] {
+            opacity: 0;
+        }
+
+        [data-animate].animated {
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        /* Stagger delays */
+        [data-animate-delay="1"] { animation-delay: 0.1s; }
+        [data-animate-delay="2"] { animation-delay: 0.2s; }
+        [data-animate-delay="3"] { animation-delay: 0.3s; }
+        [data-animate-delay="4"] { animation-delay: 0.4s; }
+        [data-animate-delay="5"] { animation-delay: 0.5s; }
+
+        /* ==========================================
+           Responsive
+        ========================================== */
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 1rem;
+            }
+
+            .section {
+                padding: 3rem 0;
+            }
+
+            .glass-card {
+                padding: 1.5rem;
+            }
+
+            .btn {
+                padding: 0.75rem 1.25rem;
+                font-size: 0.9rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .glass-card {
+                padding: 1.25rem;
+                border-radius: var(--radius-lg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Animated Background -->
+    <div class="bg-animation">
+        <div class="orb"></div>
+        <div class="orb"></div>
+        <div class="orb"></div>
+        <div class="orb"></div>
+    </div>
+    <div class="grid-pattern"></div>
+
+    <!-- Navigation -->
+    <nav id="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">
+                <span class="logo-icon"><i class="fas fa-graduation-cap"></i></span>
+                <span>RPD App</span>
+            </a>
+            
+            <div class="nav-links">
+                <a href="#requirements" class="nav-link">Gereksinimler</a>
+                <a href="#installation" class="nav-link">Kurulum</a>
+                <a href="#environment" class="nav-link">Environment</a>
+                <a href="#supabase" class="nav-link">Supabase</a>
+                <a href="#google-sheets" class="nav-link">Google Sheets</a>
+                <a href="#telegram" class="nav-link">Telegram</a>
+                <a href="#deployment" class="nav-link">Deployment</a>
+            </div>
+            
+            <div class="nav-actions">
+                <a href="https://github.com/mervedalgin/rpd-app" target="_blank" class="btn btn-secondary btn-sm">
+                    <i class="fab fa-github"></i>
+                    <span>GitHub</span>
+                </a>
+                <button class="mobile-menu-btn" id="mobileMenuBtn">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Mobile Navigation -->
+    <div class="mobile-nav" id="mobileNav">
+        <button class="mobile-nav-close" id="mobileNavClose">
+            <i class="fas fa-times"></i>
+        </button>
+        <a href="#requirements" class="nav-link">Gereksinimler</a>
+        <a href="#installation" class="nav-link">Kurulum</a>
+        <a href="#environment" class="nav-link">Environment</a>
+        <a href="#supabase" class="nav-link">Supabase</a>
+        <a href="#google-sheets" class="nav-link">Google Sheets</a>
+        <a href="#telegram" class="nav-link">Telegram</a>
+        <a href="#deployment" class="nav-link">Deployment</a>
+        <a href="#troubleshooting" class="nav-link">Sorun Giderme</a>
+    </div>
+
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-badge" data-animate>
+                    <i class="fas fa-book-open"></i>
+                    <span>Detaylı Kurulum Rehberi</span>
+                </div>
+                
+                <h1 class="hero-title" data-animate data-animate-delay="1">
+                    <span class="text-gradient">RPD App</span> Kurulum Rehberi
+                </h1>
+                
+                <p class="hero-description" data-animate data-animate-delay="2">
+                    Bu rehber, RPD Öğrenci Yönlendirme Sistemi'ni sıfırdan kurmak için gereken 
+                    tüm adımları detaylı olarak açıklamaktadır. Her adımı takip ederek 
+                    sistemi kolayca çalışır hale getirebilirsiniz.
+                </p>
+                
+                <div class="hero-buttons" data-animate data-animate-delay="3">
+                    <a href="#requirements" class="btn btn-primary">
+                        <i class="fas fa-rocket"></i>
+                        Kuruluma Başla
+                    </a>
+                    <a href="https://github.com/mervedalgin/rpd-app" target="_blank" class="btn btn-secondary">
+                        <i class="fab fa-github"></i>
+                        GitHub'da İncele
+                    </a>
+                </div>
+                
+                <div class="hero-stats" data-animate data-animate-delay="4">
+                    <div class="hero-stat">
+                        <div class="hero-stat-value">~15</div>
+                        <div class="hero-stat-label">Dakika Kurulum</div>
+                    </div>
+                    <div class="hero-stat">
+                        <div class="hero-stat-value">8</div>
+                        <div class="hero-stat-label">Kolay Adım</div>
+                    </div>
+                    <div class="hero-stat">
+                        <div class="hero-stat-value">3</div>
+                        <div class="hero-stat-label">Entegrasyon</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="scroll-indicator">
+            <span>Aşağı Kaydır</span>
+            <i class="fas fa-chevron-down"></i>
+        </div>
+    </header>
+
+    <!-- Progress Tracker -->
+    <section class="progress-section">
+        <div class="container">
+            <div class="progress-tracker" id="progressTracker">
+                <div class="progress-line" id="progressLine"></div>
+                
+                <a href="#requirements" class="progress-step active" data-step="1">
+                    <div class="step-number"><span>1</span></div>
+                    <div class="step-label">Gereksinimler</div>
+                </a>
+                
+                <a href="#installation" class="progress-step" data-step="2">
+                    <div class="step-number"><span>2</span></div>
+                    <div class="step-label">Kurulum</div>
+                </a>
+                
+                <a href="#environment" class="progress-step" data-step="3">
+                    <div class="step-number"><span>3</span></div>
+                    <div class="step-label">Environment</div>
+                </a>
+                
+                <a href="#supabase" class="progress-step" data-step="4">
+                    <div class="step-number"><span>4</span></div>
+                    <div class="step-label">Supabase</div>
+                </a>
+                
+                <a href="#google-sheets" class="progress-step" data-step="5">
+                    <div class="step-number"><span>5</span></div>
+                    <div class="step-label">Google Sheets</div>
+                </a>
+                
+                <a href="#telegram" class="progress-step" data-step="6">
+                    <div class="step-number"><span>6</span></div>
+                    <div class="step-label">Telegram</div>
+                </a>
+                
+                <a href="#deployment" class="progress-step" data-step="7">
+                    <div class="step-number"><span>7</span></div>
+                    <div class="step-label">Deployment</div>
+                </a>
+                
+                <a href="#run" class="progress-step" data-step="8">
+                    <div class="step-number"><span>8</span></div>
+                    <div class="step-label">Çalıştır</div>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- CONTENT SECTIONS -->
+    <main>
+        <!-- Step 1: Requirements -->
+        <section id="requirements" class="step-section">
+            <div class="container">
+                <div class="step-header" data-animate>
+                    <div class="step-icon purple">
+                        <i class="fas fa-clipboard-check"></i>
+                    </div>
+                    <div class="step-info">
+                        <div class="step-number-badge">
+                            <i class="fas fa-circle"></i>
+                            Adım 1
+                        </div>
+                        <h2>Sistem Gereksinimleri</h2>
+                        <p>RPD App'i çalıştırmak için aşağıdaki araçların sisteminizde kurulu olması gerekmektedir.</p>
+                    </div>
+                </div>
+
+                <div class="requirement-grid">
+                    <div class="requirement-card" data-animate data-animate-delay="1">
+                        <div class="requirement-card-header">
+                            <div class="requirement-card-icon nodejs">
+                                <i class="fab fa-node-js"></i>
+                            </div>
+                            <div>
+                                <div class="requirement-card-title">Node.js</div>
+                                <div class="requirement-card-version">v20.0.0 veya üzeri</div>
+                            </div>
+                        </div>
+                        <p class="requirement-card-description">
+                            JavaScript runtime ortamı. Next.js ve tüm bağımlılıkları çalıştırmak için gereklidir.
+                            LTS (Long Term Support) sürümünü tercih edin.
+                        </p>
+                        <a href="https://nodejs.org/en/download/" target="_blank" class="requirement-card-link">
+                            <i class="fas fa-download"></i>
+                            Node.js İndir
+                        </a>
+                    </div>
+
+                    <div class="requirement-card" data-animate data-animate-delay="2">
+                        <div class="requirement-card-header">
+                            <div class="requirement-card-icon npm">
+                                <i class="fab fa-npm"></i>
+                            </div>
+                            <div>
+                                <div class="requirement-card-title">npm / yarn / pnpm</div>
+                                <div class="requirement-card-version">npm v10+ önerilir</div>
+                            </div>
+                        </div>
+                        <p class="requirement-card-description">
+                            Paket yöneticisi. Node.js ile birlikte npm otomatik kurulur. 
+                            Alternatif olarak yarn veya pnpm kullanabilirsiniz.
+                        </p>
+                        <a href="https://docs.npmjs.com/downloading-and-installing-node-js-and-npm" target="_blank" class="requirement-card-link">
+                            <i class="fas fa-book"></i>
+                            npm Dokümantasyon
+                        </a>
+                    </div>
+
+                    <div class="requirement-card" data-animate data-animate-delay="3">
+                        <div class="requirement-card-header">
+                            <div class="requirement-card-icon git">
+                                <i class="fab fa-git-alt"></i>
+                            </div>
+                            <div>
+                                <div class="requirement-card-title">Git</div>
+                                <div class="requirement-card-version">v2.40+ önerilir</div>
+                            </div>
+                        </div>
+                        <p class="requirement-card-description">
+                            Versiyon kontrol sistemi. Projeyi GitHub'dan klonlamak ve
+                            güncellemeleri almak için gereklidir.
+                        </p>
+                        <a href="https://git-scm.com/downloads" target="_blank" class="requirement-card-link">
+                            <i class="fas fa-download"></i>
+                            Git İndir
+                        </a>
+                    </div>
+
+                    <div class="requirement-card" data-animate data-animate-delay="4">
+                        <div class="requirement-card-header">
+                            <div class="requirement-card-icon vscode">
+                                <i class="fas fa-code"></i>
+                            </div>
+                            <div>
+                                <div class="requirement-card-title">VS Code (Önerilen)</div>
+                                <div class="requirement-card-version">Son sürüm</div>
+                            </div>
+                        </div>
+                        <p class="requirement-card-description">
+                            Kod editörü. TypeScript, Tailwind CSS ve Next.js için mükemmel
+                            destek sağlar. Önerilen eklentiler: ESLint, Prettier, Tailwind CSS IntelliSense.
+                        </p>
+                        <a href="https://code.visualstudio.com/download" target="_blank" class="requirement-card-link">
+                            <i class="fas fa-download"></i>
+                            VS Code İndir
+                        </a>
+                    </div>
+                </div>
+
+                <div class="info-box" data-animate>
+                    <div class="info-box-icon info">
+                        <i class="fas fa-info-circle"></i>
+                    </div>
+                    <div class="info-box-content">
+                        <div class="info-box-title">Sürümleri Kontrol Edin</div>
+                        <div class="info-box-text">
+                            Kurulumlarınızı doğrulamak için terminalde aşağıdaki komutları çalıştırın:
+                        </div>
+                    </div>
+                </div>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-terminal terminal"></i>
+                            <span>Terminal</span>
+                        </div>
+                        <button class="code-copy-btn" onclick="copyCode(this)">
+                            <i class="fas fa-copy"></i>
+                            <span>Kopyala</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-bash"># Node.js sürümünü kontrol et
+node --version
+# Beklenen: v20.x.x veya üzeri
+
+# npm sürümünü kontrol et
+npm --version
+# Beklenen: 10.x.x veya üzeri
+
+# Git sürümünü kontrol et
+git --version
+# Beklenen: git version 2.40.x veya üzeri</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 2: Installation -->
+        <section id="installation" class="step-section">
+            <div class="container">
+                <div class="step-header" data-animate>
+                    <div class="step-icon cyan">
+                        <i class="fas fa-download"></i>
+                    </div>
+                    <div class="step-info">
+                        <div class="step-number-badge">
+                            <i class="fas fa-circle"></i>
+                            Adım 2
+                        </div>
+                        <h2>Proje Kurulumu</h2>
+                        <p>Projeyi GitHub'dan klonlayın ve bağımlılıkları yükleyin.</p>
+                    </div>
+                </div>
+
+                <h4 class="mb-2" data-animate>2.1 Projeyi Klonlayın</h4>
+                <p class="mb-2" data-animate>Terminal veya komut satırını açın ve aşağıdaki komutu çalıştırın:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-terminal terminal"></i>
+                            <span>Terminal</span>
+                        </div>
+                        <button class="code-copy-btn" onclick="copyCode(this)">
+                            <i class="fas fa-copy"></i>
+                            <span>Kopyala</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-bash"># Projeyi klonla
+git clone https://github.com/mervedalgin/rpd-app.git
+
+# Proje dizinine gir
+cd rpd-app</code></pre>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>2.2 Bağımlılıkları Yükleyin</h4>
+                <p class="mb-2" data-animate>Proje dizininde aşağıdaki komutlardan birini çalıştırın:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-terminal terminal"></i>
+                            <span>Terminal - npm ile</span>
+                        </div>
+                        <button class="code-copy-btn" onclick="copyCode(this)">
+                            <i class="fas fa-copy"></i>
+                            <span>Kopyala</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-bash"># npm ile bağımlılıkları yükle
+npm install
+
+# veya yarn ile
+yarn install
+
+# veya pnpm ile
+pnpm install</code></pre>
+                </div>
+
+                <div class="info-box success mt-4" data-animate>
+                    <div class="info-box-icon success">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="info-box-content">
+                        <div class="info-box-title">Kurulum Tamamlandı!</div>
+                        <div class="info-box-text">
+                            Bağımlılıklar başarıyla yüklendiyse, <code>node_modules</code> klasörü oluşmuş olmalıdır.
+                            Şimdi environment değişkenlerini yapılandırmaya geçebilirsiniz.
+                        </div>
+                    </div>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>2.3 Proje Yapısı</h4>
+                <p class="mb-2" data-animate>Projenin temel dosya yapısı aşağıdaki gibidir:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-folder-tree file"></i>
+                            <span>Proje Yapısı</span>
+                        </div>
+                    </div>
+                    <pre><code class="language-bash">rpd-app/
+├── src/
+│   ├── app/                 # Next.js App Router
+│   │   ├── api/            # API endpoints
+│   │   ├── panel/          # Panel sayfaları
+│   │   ├── globals.css     # Global stiller
+│   │   ├── layout.tsx      # Ana layout
+│   │   └── page.tsx        # Ana sayfa
+│   ├── components/         # React componentleri
+│   │   ├── ui/            # shadcn/ui bileşenleri
+│   │   ├── mebbis/        # MEBBİS bileşenleri
+│   │   └── charts/        # Grafik bileşenleri
+│   ├── lib/               # Utility fonksiyonları
+│   └── types/             # TypeScript tip tanımları
+├── public/                # Statik dosyalar
+├── supabase/
+│   └── migrations/        # Veritabanı migration dosyaları
+├── var/                   # Veri dosyaları (teachers.json)
+├── .env.local             # Environment değişkenleri (oluşturulacak)
+├── package.json           # Proje bağımlılıkları
+└── next.config.ts         # Next.js yapılandırması</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 3: Environment Setup -->
+        <section id="environment" class="step-section">
+            <div class="container">
+                <div class="step-header" data-animate>
+                    <div class="step-icon green">
+                        <i class="fas fa-cog"></i>
+                    </div>
+                    <div class="step-info">
+                        <div class="step-number-badge">
+                            <i class="fas fa-circle"></i>
+                            Adım 3
+                        </div>
+                        <h2>Environment Değişkenleri</h2>
+                        <p>Uygulama yapılandırması için gerekli ortam değişkenlerini ayarlayın.</p>
+                    </div>
+                </div>
+
+                <h4 class="mb-2" data-animate>3.1 .env.local Dosyasını Oluşturun</h4>
+                <p class="mb-2" data-animate>Proje kök dizininde <code>.env.local</code> adında bir dosya oluşturun:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-terminal terminal"></i>
+                            <span>Terminal</span>
+                        </div>
+                        <button class="code-copy-btn" onclick="copyCode(this)">
+                            <i class="fas fa-copy"></i>
+                            <span>Kopyala</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-bash"># Windows
+copy NUL .env.local
+
+# macOS / Linux
+touch .env.local</code></pre>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>3.2 Tüm Environment Değişkenleri</h4>
+                <p class="mb-2" data-animate>Aşağıdaki tüm değişkenleri <code>.env.local</code> dosyasına ekleyin ve kendi değerlerinizle doldurun:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-file-code env"></i>
+                            <span>.env.local</span>
+                        </div>
+                        <button class="code-copy-btn" onclick="copyCode(this)">
+                            <i class="fas fa-copy"></i>
+                            <span>Kopyala</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-bash"># ===========================================
+# SUPABASE YAPILANDIRMASI
+# ===========================================
+# Supabase projenizin URL'i
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxxxxxxx.supabase.co
+
+# Supabase anon (public) key
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+# Supabase service role key (sunucu tarafı için)
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+# ===========================================
+# TELEGRAM BOT YAPILANDIRMASI
+# ===========================================
+# Telegram Bot Token (@BotFather'dan alınır)
+TELEGRAM_BOT_TOKEN=7123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw
+
+# Telegram Chat ID (grup veya kanal ID'si)
+TELEGRAM_CHAT_ID=-1001234567890
+
+# ===========================================
+# GOOGLE SHEETS API YAPILANDIRMASI
+# ===========================================
+# Google Sheets dosya ID'si
+GOOGLE_SHEETS_ID=1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms
+
+# Service Account email adresi
+GOOGLE_SERVICE_ACCOUNT_EMAIL=rpd-app@your-project.iam.gserviceaccount.com
+
+# Service Account private key (JSON'dan alınır)
+GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhk...\n-----END PRIVATE KEY-----\n"
+
+# ===========================================
+# UYGULAMA AYARLARI (Opsiyonel)
+# ===========================================
+# Uygulama URL'i (production için)
+NEXT_PUBLIC_APP_URL=https://your-domain.vercel.app
+
+# Cron job secret key
+CRON_SECRET=your-random-secret-key-here</code></pre>
+                </div>
+
+                <div class="info-box warning mt-4" data-animate>
+                    <div class="info-box-icon warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="info-box-content">
+                        <div class="info-box-title">Güvenlik Uyarısı</div>
+                        <div class="info-box-text">
+                            <code>.env.local</code> dosyası hassas bilgiler içerir. Bu dosyayı <strong>asla</strong> 
+                            Git'e commit etmeyin! Proje zaten <code>.gitignore</code> ile bu dosyayı hariç tutar.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-box mt-3" data-animate>
+                    <div class="info-box-icon info">
+                        <i class="fas fa-lightbulb"></i>
+                    </div>
+                    <div class="info-box-content">
+                        <div class="info-box-title">Sonraki Adımlar</div>
+                        <div class="info-box-text">
+                            Her bir entegrasyon için gerekli değerleri nasıl alacağınız aşağıdaki bölümlerde 
+                            detaylı olarak açıklanmıştır. Sırasıyla Supabase, Google Sheets ve Telegram kurulumunu yapın.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 4: Supabase Setup -->
+        <section id="supabase" class="step-section">
+            <div class="container">
+                <div class="step-header" data-animate>
+                    <div class="step-icon orange">
+                        <i class="fas fa-database"></i>
+                    </div>
+                    <div class="step-info">
+                        <div class="step-number-badge">
+                            <i class="fas fa-circle"></i>
+                            Adım 4
+                        </div>
+                        <h2>Supabase Kurulumu</h2>
+                        <p>Veritabanı ve backend servisleri için Supabase'i yapılandırın.</p>
+                    </div>
+                </div>
+
+                <h4 class="mb-2" data-animate>4.1 Supabase Hesabı Oluşturun</h4>
+                <div class="requirement-grid" style="grid-template-columns: 1fr;" data-animate>
+                    <div class="requirement-card">
+                        <div class="requirement-card-header">
+                            <div class="requirement-card-icon" style="background: rgba(62, 207, 142, 0.2); color: #3ecf8e;">
+                                <i class="fas fa-bolt"></i>
+                            </div>
+                            <div>
+                                <div class="requirement-card-title">Supabase</div>
+                                <div class="requirement-card-version">Ücretsiz plan yeterli</div>
+                            </div>
+                        </div>
+                        <p class="requirement-card-description">
+                            <strong>1.</strong> <a href="https://supabase.com" target="_blank">supabase.com</a> adresine gidin<br>
+                            <strong>2.</strong> "Start your project" butonuna tıklayın<br>
+                            <strong>3.</strong> GitHub hesabınızla giriş yapın<br>
+                            <strong>4.</strong> "New Project" ile yeni proje oluşturun<br>
+                            <strong>5.</strong> Proje adı girin ve güçlü bir veritabanı şifresi belirleyin<br>
+                            <strong>6.</strong> Region olarak <code>eu-central-1</code> (Frankfurt) seçin
+                        </p>
+                        <a href="https://supabase.com/dashboard" target="_blank" class="requirement-card-link">
+                            <i class="fas fa-external-link-alt"></i>
+                            Supabase Dashboard
+                        </a>
+                    </div>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>4.2 API Anahtarlarını Alın</h4>
+                <p class="mb-2" data-animate>Proje oluşturulduktan sonra, <strong>Settings → API</strong> bölümüne gidin:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-key env"></i>
+                            <span>API Anahtarları</span>
+                        </div>
+                    </div>
+                    <pre><code class="language-bash"># Project URL - "Project URL" başlığı altında
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxxxxxxx.supabase.co
+
+# Anon/Public Key - "Project API keys" altında "anon public"
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
+
+# Service Role Key - "Project API keys" altında "service_role" (⚠️ Gizli tutun!)
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOi...</code></pre>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>4.3 Veritabanı Tablolarını Oluşturun</h4>
+                <p class="mb-2" data-animate>Supabase Dashboard'da <strong>SQL Editor</strong>'e gidin ve aşağıdaki migration'ları sırasıyla çalıştırın:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-database file"></i>
+                            <span>001_create_tables.sql</span>
+                        </div>
+                        <button class="code-copy-btn" onclick="copyCode(this)">
+                            <i class="fas fa-copy"></i>
+                            <span>Kopyala</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-sql">-- Öğrenci tablosu
+CREATE TABLE IF NOT EXISTS students (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    ogrenci_no VARCHAR(20) UNIQUE NOT NULL,
+    ad_soyad VARCHAR(100) NOT NULL,
+    sinif VARCHAR(10) NOT NULL,
+    sube VARCHAR(5) NOT NULL,
+    cinsiyet VARCHAR(10),
+    dogum_tarihi DATE,
+    veli_adi VARCHAR(100),
+    veli_telefon VARCHAR(20),
+    adres TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Yönlendirme tablosu
+CREATE TABLE IF NOT EXISTS referrals (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    student_id UUID REFERENCES students(id),
+    ogretmen_adi VARCHAR(100) NOT NULL,
+    nedenler TEXT[] NOT NULL,
+    notlar TEXT,
+    durum VARCHAR(20) DEFAULT 'beklemede',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Öğretmen tablosu
+CREATE TABLE IF NOT EXISTS teachers (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    ad_soyad VARCHAR(100) NOT NULL,
+    brans VARCHAR(100),
+    sinif VARCHAR(10),
+    telefon VARCHAR(20),
+    email VARCHAR(100),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexler
+CREATE INDEX IF NOT EXISTS idx_students_sinif ON students(sinif);
+CREATE INDEX IF NOT EXISTS idx_students_ogrenci_no ON students(ogrenci_no);
+CREATE INDEX IF NOT EXISTS idx_referrals_student ON referrals(student_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_durum ON referrals(durum);</code></pre>
+                </div>
+
+                <div class="code-block mt-3" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-database file"></i>
+                            <span>002_create_appointments.sql</span>
+                        </div>
+                        <button class="code-copy-btn" onclick="copyCode(this)">
+                            <i class="fas fa-copy"></i>
+                            <span>Kopyala</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-sql">-- Randevu tablosu
+CREATE TABLE IF NOT EXISTS appointments (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    student_id UUID REFERENCES students(id),
+    tarih DATE NOT NULL,
+    saat TIME NOT NULL,
+    konu VARCHAR(200),
+    notlar TEXT,
+    durum VARCHAR(20) DEFAULT 'planlandı',
+    hatirlatici_gonderildi BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Randevu görevleri tablosu
+CREATE TABLE IF NOT EXISTS appointment_tasks (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    appointment_id UUID REFERENCES appointments(id) ON DELETE CASCADE,
+    gorev TEXT NOT NULL,
+    tamamlandi BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexler
+CREATE INDEX IF NOT EXISTS idx_appointments_tarih ON appointments(tarih);
+CREATE INDEX IF NOT EXISTS idx_appointments_student ON appointments(student_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_durum ON appointments(durum);</code></pre>
+                </div>
+
+                <div class="info-box success mt-4" data-animate>
+                    <div class="info-box-icon success">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="info-box-content">
+                        <div class="info-box-title">Tablo Oluşturma İpucu</div>
+                        <div class="info-box-text">
+                            Migration dosyalarının tamamı <code>supabase/migrations/</code> klasöründe bulunmaktadır. 
+                            Her dosyayı sırasıyla SQL Editor'de çalıştırın veya Supabase CLI kullanın.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 5: Google Sheets API -->
+        <section id="google-sheets" class="step-section">
+            <div class="container">
+                <div class="step-header" data-animate>
+                    <div class="step-icon blue">
+                        <i class="fab fa-google"></i>
+                    </div>
+                    <div class="step-info">
+                        <div class="step-number-badge">
+                            <i class="fas fa-circle"></i>
+                            Adım 5
+                        </div>
+                        <h2>Google Sheets API</h2>
+                        <p>Öğrenci verilerini Google Sheets'ten çekmek için API yapılandırması.</p>
+                    </div>
+                </div>
+
+                <h4 class="mb-2" data-animate>5.1 Google Cloud Projesi Oluşturun</h4>
+                <p class="mb-2" data-animate>Google Cloud Console'da yeni bir proje oluşturun:</p>
+
+                <div class="requirement-grid" style="grid-template-columns: 1fr;" data-animate>
+                    <div class="requirement-card">
+                        <div class="requirement-card-header">
+                            <div class="requirement-card-icon" style="background: rgba(66, 133, 244, 0.2); color: #4285f4;">
+                                <i class="fab fa-google"></i>
+                            </div>
+                            <div>
+                                <div class="requirement-card-title">Google Cloud Console</div>
+                                <div class="requirement-card-version">Ücretsiz kullanım kotası mevcut</div>
+                            </div>
+                        </div>
+                        <p class="requirement-card-description">
+                            <strong>1.</strong> <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a> adresine gidin<br>
+                            <strong>2.</strong> Üstteki proje seçiciden "New Project" seçin<br>
+                            <strong>3.</strong> Proje adı olarak "rpd-app" girin<br>
+                            <strong>4.</strong> "Create" butonuna tıklayın
+                        </p>
+                        <a href="https://console.cloud.google.com/projectcreate" target="_blank" class="requirement-card-link">
+                            <i class="fas fa-external-link-alt"></i>
+                            Yeni Proje Oluştur
+                        </a>
+                    </div>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>5.2 Google Sheets API'yi Etkinleştirin</h4>
+                <p class="mb-2" data-animate>Oluşturduğunuz projede API'yi aktif edin:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-list-check file"></i>
+                            <span>Adımlar</span>
+                        </div>
+                    </div>
+                    <pre><code class="language-bash">1. APIs & Services → Library'ye gidin
+2. "Google Sheets API" arayın
+3. "Enable" butonuna tıklayın
+4. API etkinleştirilene kadar bekleyin</code></pre>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>5.3 Service Account Oluşturun</h4>
+                <p class="mb-2" data-animate>API'ye erişim için Service Account oluşturun:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-user-cog file"></i>
+                            <span>Service Account Adımları</span>
+                        </div>
+                    </div>
+                    <pre><code class="language-bash">1. APIs & Services → Credentials'a gidin
+2. "+ CREATE CREDENTIALS" → "Service account" seçin
+3. Service account adı: "rpd-sheets-access"
+4. "Create and Continue" tıklayın
+5. Role olarak "Editor" seçin (opsiyonel)
+6. "Done" ile tamamlayın</code></pre>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>5.4 JSON Key Dosyasını İndirin</h4>
+                <p class="mb-2" data-animate>Service Account için JSON key oluşturun:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-key env"></i>
+                            <span>Key Oluşturma</span>
+                        </div>
+                    </div>
+                    <pre><code class="language-bash">1. Credentials sayfasında Service Account'ı tıklayın
+2. "Keys" sekmesine gidin
+3. "Add Key" → "Create new key"
+4. Key type: "JSON" seçin
+5. "Create" tıklayın - JSON dosyası indirilecek</code></pre>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>5.5 JSON'dan Değerleri Alın</h4>
+                <p class="mb-2" data-animate>İndirilen JSON dosyasından aşağıdaki değerleri <code>.env.local</code>'e kopyalayın:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-file-code env"></i>
+                            <span>JSON → .env.local</span>
+                        </div>
+                        <button class="code-copy-btn" onclick="copyCode(this)">
+                            <i class="fas fa-copy"></i>
+                            <span>Kopyala</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-json">// İndirilen JSON dosyası şuna benzer:
+{
+  "type": "service_account",
+  "project_id": "rpd-app-xxxxx",
+  "private_key_id": "abc123...",
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+  "client_email": "rpd-sheets-access@rpd-app-xxxxx.iam.gserviceaccount.com",
+  ...
+}
+
+// .env.local'e şu şekilde ekleyin:
+// client_email → GOOGLE_SERVICE_ACCOUNT_EMAIL
+// private_key → GOOGLE_PRIVATE_KEY (tırnak içinde, \n'ler korunmalı)</code></pre>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>5.6 Google Sheets'e Erişim Verin</h4>
+                <p class="mb-2" data-animate>Son olarak, Service Account'a Sheets erişimi verin:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-share-alt file"></i>
+                            <span>Sheets Paylaşım</span>
+                        </div>
+                    </div>
+                    <pre><code class="language-bash">1. Google Sheets dosyanızı açın
+2. Sağ üstteki "Share" butonuna tıklayın
+3. Service Account email'ini yapıştırın:
+   rpd-sheets-access@rpd-app-xxxxx.iam.gserviceaccount.com
+4. "Editor" yetkisi verin
+5. "Send" ile paylaşın
+
+6. Sheets ID'yi URL'den alın:
+   https://docs.google.com/spreadsheets/d/[SHEETS_ID]/edit
+   ↑ Bu kısım GOOGLE_SHEETS_ID değerinizdir</code></pre>
+                </div>
+
+                <div class="info-box warning mt-4" data-animate>
+                    <div class="info-box-icon warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="info-box-content">
+                        <div class="info-box-title">Private Key Formatı</div>
+                        <div class="info-box-text">
+                            <code>GOOGLE_PRIVATE_KEY</code> değerini <strong>çift tırnak içinde</strong> yazın ve 
+                            <code>\n</code> karakterlerini koruyun. Hatalı format API hatalarına neden olur.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 6: Telegram Bot -->
+        <section id="telegram" class="step-section">
+            <div class="container">
+                <div class="step-header" data-animate>
+                    <div class="step-icon pink">
+                        <i class="fab fa-telegram-plane"></i>
+                    </div>
+                    <div class="step-info">
+                        <div class="step-number-badge">
+                            <i class="fas fa-circle"></i>
+                            Adım 6
+                        </div>
+                        <h2>Telegram Bot Kurulumu</h2>
+                        <p>Bildirim sistemi için Telegram Bot oluşturun ve yapılandırın.</p>
+                    </div>
+                </div>
+
+                <h4 class="mb-2" data-animate>6.1 Bot Oluşturun</h4>
+                <p class="mb-2" data-animate>Telegram'da @BotFather ile yeni bot oluşturun:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fab fa-telegram-plane" style="color: #0088cc;"></i>
+                            <span>BotFather Komutları</span>
+                        </div>
+                    </div>
+                    <pre><code class="language-bash"># 1. Telegram'da @BotFather'ı arayın ve başlatın
+
+# 2. Yeni bot oluşturun
+/newbot
+
+# 3. Bot için isim girin (görünen ad)
+RPD Bildirim Botu
+
+# 4. Bot için kullanıcı adı girin (benzersiz, _bot ile bitmeli)
+rpd_okul_bot
+
+# 5. BotFather size token verecek:
+# "Done! Congratulations on your new bot..."
+# Use this token to access the HTTP API:
+# 7123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw
+# ↑ Bu TELEGRAM_BOT_TOKEN değerinizdir</code></pre>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>6.2 Grup/Kanal Oluşturun</h4>
+                <p class="mb-2" data-animate>Bildirimleri alacak grup veya kanalı oluşturun:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-users file"></i>
+                            <span>Grup Kurulumu</span>
+                        </div>
+                    </div>
+                    <pre><code class="language-bash">1. Telegram'da yeni grup oluşturun: "RPD Bildirimleri"
+2. Botu gruba ekleyin (@rpd_okul_bot)
+3. Botu admin yapın (mesaj gönderebilmesi için):
+   - Grup ayarları → Administrators → Add Admin
+   - Botu seçin ve yetkileri verin</code></pre>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>6.3 Chat ID'yi Öğrenin</h4>
+                <p class="mb-2" data-animate>Grubun Chat ID'sini bulmak için:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-search env"></i>
+                            <span>Chat ID Bulma</span>
+                        </div>
+                        <button class="code-copy-btn" onclick="copyCode(this)">
+                            <i class="fas fa-copy"></i>
+                            <span>Kopyala</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-bash"># Yöntem 1: @userinfobot kullanın
+# 1. @userinfobot'u gruba ekleyin
+# 2. Bot otomatik olarak Chat ID'yi gösterecek
+# 3. Sonra botu gruptan çıkarabilirsiniz
+
+# Yöntem 2: API ile
+# 1. Gruba herhangi bir mesaj gönderin
+# 2. Tarayıcıda şu URL'yi açın:
+https://api.telegram.org/bot[BOT_TOKEN]/getUpdates
+
+# 3. JSON yanıtında "chat" → "id" değerini bulun:
+# "chat": {"id": -1001234567890, "title": "RPD Bildirimleri", ...}
+#          ↑ Bu TELEGRAM_CHAT_ID değerinizdir (eksi işareti dahil!)</code></pre>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>6.4 Botu Test Edin</h4>
+                <p class="mb-2" data-animate>Her şeyin doğru çalıştığını test edin:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-vial terminal"></i>
+                            <span>Test Mesajı</span>
+                        </div>
+                        <button class="code-copy-btn" onclick="copyCode(this)">
+                            <i class="fas fa-copy"></i>
+                            <span>Kopyala</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-bash"># Tarayıcıda bu URL'yi açın (değerleri kendi bilgilerinizle değiştirin):
+https://api.telegram.org/bot[BOT_TOKEN]/sendMessage?chat_id=[CHAT_ID]&text=Test%20mesajı
+
+# Örnek:
+https://api.telegram.org/bot7123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/sendMessage?chat_id=-1001234567890&text=RPD%20App%20bağlantısı%20başarılı!
+
+# Başarılıysa gruba mesaj gelir ve JSON yanıtında "ok": true görürsünüz</code></pre>
+                </div>
+
+                <div class="info-box success mt-4" data-animate>
+                    <div class="info-box-icon success">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="info-box-content">
+                        <div class="info-box-title">Telegram Hazır!</div>
+                        <div class="info-box-text">
+                            Test mesajı grubunuza ulaştıysa, Telegram entegrasyonu tamamlanmış demektir.
+                            Artık uygulama üzerinden yapılan yönlendirmeler otomatik olarak gruba bildirilecek.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 7: Deployment -->
+        <section id="deployment" class="step-section">
+            <div class="container">
+                <div class="step-header" data-animate>
+                    <div class="step-icon purple">
+                        <i class="fas fa-rocket"></i>
+                    </div>
+                    <div class="step-info">
+                        <div class="step-number-badge">
+                            <i class="fas fa-circle"></i>
+                            Adım 7
+                        </div>
+                        <h2>Deployment (Yayınlama)</h2>
+                        <p>Uygulamayı Vercel veya Docker ile production'a alın.</p>
+                    </div>
+                </div>
+
+                <h4 class="mb-2" data-animate>7.1 Vercel ile Deployment (Önerilen)</h4>
+                <p class="mb-2" data-animate>En kolay yol Vercel ile otomatik deployment:</p>
+
+                <div class="requirement-grid" data-animate>
+                    <div class="requirement-card">
+                        <div class="requirement-card-header">
+                            <div class="requirement-card-icon" style="background: rgba(0, 0, 0, 0.2); color: white;">
+                                <i class="fas fa-triangle"></i>
+                            </div>
+                            <div>
+                                <div class="requirement-card-title">Vercel</div>
+                                <div class="requirement-card-version">Next.js için optimize</div>
+                            </div>
+                        </div>
+                        <p class="requirement-card-description">
+                            <strong>1.</strong> <a href="https://vercel.com" target="_blank">vercel.com</a>'a GitHub ile giriş yapın<br>
+                            <strong>2.</strong> "Add New Project" tıklayın<br>
+                            <strong>3.</strong> rpd-app repository'sini import edin<br>
+                            <strong>4.</strong> Environment Variables bölümüne .env.local değerlerini ekleyin<br>
+                            <strong>5.</strong> "Deploy" butonuna tıklayın
+                        </p>
+                        <a href="https://vercel.com/new" target="_blank" class="requirement-card-link">
+                            <i class="fas fa-external-link-alt"></i>
+                            Vercel'de Deploy Et
+                        </a>
+                    </div>
+
+                    <div class="requirement-card">
+                        <div class="requirement-card-header">
+                            <div class="requirement-card-icon" style="background: rgba(36, 150, 237, 0.2); color: #2496ed;">
+                                <i class="fab fa-docker"></i>
+                            </div>
+                            <div>
+                                <div class="requirement-card-title">Docker</div>
+                                <div class="requirement-card-version">Self-hosted için</div>
+                            </div>
+                        </div>
+                        <p class="requirement-card-description">
+                            Kendi sunucunuzda barındırmak istiyorsanız Docker kullanabilirsiniz.
+                            Projede hazır Dockerfile ve docker-compose.yml bulunmaktadır.
+                        </p>
+                        <a href="https://docs.docker.com/get-docker/" target="_blank" class="requirement-card-link">
+                            <i class="fas fa-download"></i>
+                            Docker İndir
+                        </a>
+                    </div>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>7.2 Vercel Environment Variables</h4>
+                <p class="mb-2" data-animate>Vercel dashboard'da şu değişkenleri ekleyin:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-cog env"></i>
+                            <span>Vercel → Settings → Environment Variables</span>
+                        </div>
+                    </div>
+                    <pre><code class="language-bash"># Her değişkeni ayrı ayrı ekleyin:
+NEXT_PUBLIC_SUPABASE_URL        = https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY   = eyJhbGci...
+SUPABASE_SERVICE_ROLE_KEY       = eyJhbGci...
+TELEGRAM_BOT_TOKEN              = 7123456789:AAH...
+TELEGRAM_CHAT_ID                = -1001234567890
+GOOGLE_SHEETS_ID                = 1BxiMVs0XRA5nF...
+GOOGLE_SERVICE_ACCOUNT_EMAIL    = xxx@xxx.iam.gserviceaccount.com
+GOOGLE_PRIVATE_KEY              = "-----BEGIN PRIVATE KEY-----\n..."</code></pre>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>7.3 Docker ile Deployment</h4>
+                <p class="mb-2" data-animate>Docker kullanarak deploy etmek için:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fab fa-docker" style="color: #2496ed;"></i>
+                            <span>Docker Komutları</span>
+                        </div>
+                        <button class="code-copy-btn" onclick="copyCode(this)">
+                            <i class="fas fa-copy"></i>
+                            <span>Kopyala</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-bash"># Docker image oluştur
+docker build -t rpd-app .
+
+# Container'ı başlat
+docker run -p 3000:3000 --env-file .env.local rpd-app
+
+# Veya docker-compose ile (önerilen)
+docker-compose up -d
+
+# Logları görüntüle
+docker-compose logs -f
+
+# Durdur
+docker-compose down</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 8: Run -->
+        <section id="run" class="step-section">
+            <div class="container">
+                <div class="step-header" data-animate>
+                    <div class="step-icon cyan">
+                        <i class="fas fa-play"></i>
+                    </div>
+                    <div class="step-info">
+                        <div class="step-number-badge">
+                            <i class="fas fa-circle"></i>
+                            Adım 8
+                        </div>
+                        <h2>Uygulamayı Çalıştırın</h2>
+                        <p>Tebrikler! Artık uygulamayı başlatabilirsiniz.</p>
+                    </div>
+                </div>
+
+                <h4 class="mb-2" data-animate>8.1 Development Mode</h4>
+                <p class="mb-2" data-animate>Geliştirme ortamında çalıştırmak için:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-terminal terminal"></i>
+                            <span>Terminal</span>
+                        </div>
+                        <button class="code-copy-btn" onclick="copyCode(this)">
+                            <i class="fas fa-copy"></i>
+                            <span>Kopyala</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-bash"># Development sunucusunu başlat (Turbopack ile)
+npm run dev
+
+# Uygulama şu adreste çalışacak:
+# http://localhost:3000</code></pre>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>8.2 Production Build</h4>
+                <p class="mb-2" data-animate>Production için optimize edilmiş build almak için:</p>
+
+                <div class="code-block" data-animate>
+                    <div class="code-block-header">
+                        <div class="code-block-title">
+                            <i class="fas fa-terminal terminal"></i>
+                            <span>Terminal</span>
+                        </div>
+                        <button class="code-copy-btn" onclick="copyCode(this)">
+                            <i class="fas fa-copy"></i>
+                            <span>Kopyala</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-bash"># Production build al
+npm run build
+
+# Production sunucusunu başlat
+npm run start
+
+# Uygulama şu adreste çalışacak:
+# http://localhost:3000</code></pre>
+                </div>
+
+                <h4 class="mb-2 mt-4" data-animate>8.3 Kullanıma Hazır!</h4>
+                
+                <div class="info-box success mt-3" data-animate>
+                    <div class="info-box-icon success">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="info-box-content">
+                        <div class="info-box-title">🎉 Tebrikler!</div>
+                        <div class="info-box-text">
+                            RPD App başarıyla kuruldu! Tarayıcınızda <a href="http://localhost:3000" target="_blank">http://localhost:3000</a> 
+                            adresine giderek uygulamayı kullanmaya başlayabilirsiniz.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="requirement-grid mt-4" data-animate>
+                    <div class="requirement-card">
+                        <div class="requirement-card-header">
+                            <div class="requirement-card-icon" style="background: rgba(124, 58, 237, 0.2); color: var(--primary-light);">
+                                <i class="fas fa-home"></i>
+                            </div>
+                            <div>
+                                <div class="requirement-card-title">Ana Sayfa</div>
+                                <div class="requirement-card-version">/</div>
+                            </div>
+                        </div>
+                        <p class="requirement-card-description">
+                            Öğrenci yönlendirme formuna hızlı erişim. Öğretmenler buradan öğrenci yönlendirmesi yapabilir.
+                        </p>
+                    </div>
+
+                    <div class="requirement-card">
+                        <div class="requirement-card-header">
+                            <div class="requirement-card-icon" style="background: rgba(6, 182, 212, 0.2); color: var(--secondary);">
+                                <i class="fas fa-chart-line"></i>
+                            </div>
+                            <div>
+                                <div class="requirement-card-title">Panel</div>
+                                <div class="requirement-card-version">/panel</div>
+                            </div>
+                        </div>
+                        <p class="requirement-card-description">
+                            Yönetim paneli. İstatistikler, randevular, öğrenci listesi, raporlar ve tüm yönetim özellikleri.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Troubleshooting -->
+        <section id="troubleshooting" class="step-section">
+            <div class="container">
+                <div class="step-header" data-animate>
+                    <div class="step-icon orange">
+                        <i class="fas fa-wrench"></i>
+                    </div>
+                    <div class="step-info">
+                        <div class="step-number-badge">
+                            <i class="fas fa-circle"></i>
+                            Bonus
+                        </div>
+                        <h2>Sorun Giderme</h2>
+                        <p>Sık karşılaşılan sorunlar ve çözümleri.</p>
+                    </div>
+                </div>
+
+                <div class="accordion" data-animate>
+                    <div class="accordion-item">
+                        <button class="accordion-header" onclick="toggleAccordion(this)">
+                            <span><i class="fas fa-exclamation-circle"></i> npm install hatası veriyor</span>
+                            <i class="fas fa-chevron-down accordion-icon"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <p>Node.js sürümünüzü kontrol edin. v20 veya üzeri gereklidir:</p>
+                            <code>node --version</code>
+                            <p class="mt-2">Ayrıca npm cache temizlemeyi deneyin:</p>
+                            <code>npm cache clean --force</code><br>
+                            <code>rm -rf node_modules package-lock.json</code><br>
+                            <code>npm install</code>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <button class="accordion-header" onclick="toggleAccordion(this)">
+                            <span><i class="fas fa-exclamation-circle"></i> Supabase bağlantı hatası</span>
+                            <i class="fas fa-chevron-down accordion-icon"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <p><code>.env.local</code> dosyasında şunları kontrol edin:</p>
+                            <ul>
+                                <li>NEXT_PUBLIC_SUPABASE_URL https:// ile başlamalı</li>
+                                <li>URL sonunda / olmamalı</li>
+                                <li>Anahtarlar tam olarak kopyalanmış olmalı</li>
+                            </ul>
+                            <p class="mt-2">Sunucuyu yeniden başlatın:</p>
+                            <code>npm run dev</code>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <button class="accordion-header" onclick="toggleAccordion(this)">
+                            <span><i class="fas fa-exclamation-circle"></i> Telegram mesaj göndermiyor</span>
+                            <i class="fas fa-chevron-down accordion-icon"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <p>Kontrol edilecekler:</p>
+                            <ul>
+                                <li>Bot token doğru mu?</li>
+                                <li>Chat ID eksi (-) işaretiyle birlikte mi yazıldı?</li>
+                                <li>Bot gruba admin olarak eklenmiş mi?</li>
+                                <li>Bot'a "Send Messages" yetkisi verilmiş mi?</li>
+                            </ul>
+                            <p class="mt-2">Test için tarayıcıda deneyin:</p>
+                            <code>https://api.telegram.org/bot[TOKEN]/sendMessage?chat_id=[CHAT_ID]&text=Test</code>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <button class="accordion-header" onclick="toggleAccordion(this)">
+                            <span><i class="fas fa-exclamation-circle"></i> Google Sheets verisi çekilmiyor</span>
+                            <i class="fas fa-chevron-down accordion-icon"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <p>GOOGLE_PRIVATE_KEY formatı kritik:</p>
+                            <ul>
+                                <li>Değer çift tırnak içinde olmalı: <code>"-----BEGIN..."</code></li>
+                                <li>\n karakterleri korunmalı, gerçek satır sonu olmamalı</li>
+                                <li>Service Account email'i Sheets'e Editor olarak paylaşılmış olmalı</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <button class="accordion-header" onclick="toggleAccordion(this)">
+                            <span><i class="fas fa-exclamation-circle"></i> Build hatası alıyorum</span>
+                            <i class="fas fa-chevron-down accordion-icon"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <p>Önce .next klasörünü temizleyin:</p>
+                            <code>npm run clean</code><br>
+                            <code>npm run build</code>
+                            <p class="mt-2">TypeScript hatası varsa:</p>
+                            <code>npm run type-check</code>
+                            <p class="mt-2">ESLint hatası varsa:</p>
+                            <code>npm run lint:fix</code>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-box mt-4" data-animate>
+                    <div class="info-box-icon info">
+                        <i class="fas fa-question-circle"></i>
+                    </div>
+                    <div class="info-box-content">
+                        <div class="info-box-title">Yardım mı Lazım?</div>
+                        <div class="info-box-text">
+                            Sorunuz çözülmediyse GitHub'da issue açabilirsiniz: 
+                            <a href="https://github.com/mervedalgin/rpd-app/issues" target="_blank">GitHub Issues</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-logo">
+                <span class="logo-icon"><i class="fas fa-graduation-cap"></i></span>
+                <span>RPD App</span>
+            </div>
+            
+            <div class="footer-links">
+                <a href="index.html" class="footer-link">Ana Sayfa</a>
+                <a href="#requirements" class="footer-link">Gereksinimler</a>
+                <a href="#installation" class="footer-link">Kurulum</a>
+                <a href="https://github.com/mervedalgin/rpd-app" target="_blank" class="footer-link">GitHub</a>
+            </div>
+            
+            <div class="footer-social">
+                <a href="https://github.com/mervedalgin/rpd-app" target="_blank" class="social-btn">
+                    <i class="fab fa-github"></i>
+                </a>
+            </div>
+            
+            <div class="footer-copyright">
+                © 2026 RPD App. 
+                <a href="https://github.com/mervedalgin" target="_blank">mervedalgin</a> tarafından geliştirildi.
+            </div>
+        </div>
+    </footer>
+
+    <!-- Prism.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+
+    <script>
+        // ==========================================
+        // Navigation Scroll Effect
+        // ==========================================
+        const navbar = document.getElementById('navbar');
+        
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 50) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+            }
+        });
+
+        // ==========================================
+        // Mobile Navigation
+        // ==========================================
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const mobileNav = document.getElementById('mobileNav');
+        const mobileNavClose = document.getElementById('mobileNavClose');
+        const mobileNavLinks = mobileNav.querySelectorAll('.nav-link');
+
+        mobileMenuBtn.addEventListener('click', () => {
+            mobileNav.classList.add('open');
+            document.body.style.overflow = 'hidden';
+        });
+
+        mobileNavClose.addEventListener('click', () => {
+            mobileNav.classList.remove('open');
+            document.body.style.overflow = '';
+        });
+
+        mobileNavLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                mobileNav.classList.remove('open');
+                document.body.style.overflow = '';
+            });
+        });
+
+        // ==========================================
+        // Copy Code Functionality
+        // ==========================================
+        function copyCode(button) {
+            const codeBlock = button.closest('.code-block');
+            const code = codeBlock.querySelector('code').textContent;
+            
+            navigator.clipboard.writeText(code).then(() => {
+                const originalHTML = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-check"></i><span>Kopyalandı!</span>';
+                button.classList.add('copied');
+                
+                setTimeout(() => {
+                    button.innerHTML = originalHTML;
+                    button.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Kopyalama başarısız:', err);
+            });
+        }
+
+        // ==========================================
+        // Accordion Functionality
+        // ==========================================
+        function toggleAccordion(header) {
+            const item = header.closest('.accordion-item');
+            const isOpen = item.classList.contains('open');
+            
+            // Close all other accordion items
+            document.querySelectorAll('.accordion-item.open').forEach(openItem => {
+                if (openItem !== item) {
+                    openItem.classList.remove('open');
+                }
+            });
+            
+            // Toggle current item
+            item.classList.toggle('open', !isOpen);
+        }
+
+        // ==========================================
+        // Progress Tracker
+        // ==========================================
+        const sections = document.querySelectorAll('.step-section');
+        const progressSteps = document.querySelectorAll('.progress-step');
+        const progressLine = document.getElementById('progressLine');
+
+        function updateProgress() {
+            const scrollPosition = window.scrollY + window.innerHeight / 2;
+            let activeStep = 0;
+
+            sections.forEach((section, index) => {
+                const sectionTop = section.offsetTop;
+                const sectionHeight = section.offsetHeight;
+                
+                if (scrollPosition >= sectionTop) {
+                    activeStep = index;
+                }
+            });
+
+            progressSteps.forEach((step, index) => {
+                step.classList.remove('active', 'completed');
+                
+                if (index < activeStep) {
+                    step.classList.add('completed');
+                } else if (index === activeStep) {
+                    step.classList.add('active');
+                }
+            });
+
+            // Update progress line
+            const totalSteps = progressSteps.length - 1;
+            const progress = (activeStep / totalSteps) * 100;
+            if (progressLine) {
+                progressLine.style.width = `${Math.min(progress, 100)}%`;
+            }
+        }
+
+        window.addEventListener('scroll', updateProgress);
+        window.addEventListener('load', updateProgress);
+
+        // ==========================================
+        // Scroll Animation
+        // ==========================================
+        const animateElements = document.querySelectorAll('[data-animate]');
+
+        const observerOptions = {
+            root: null,
+            rootMargin: '0px 0px -100px 0px',
+            threshold: 0.1
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('animated');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, observerOptions);
+
+        animateElements.forEach(el => observer.observe(el));
+
+        // ==========================================
+        // Active Navigation Link
+        // ==========================================
+        const navLinks = document.querySelectorAll('.nav-link');
+
+        function updateActiveNavLink() {
+            const scrollPosition = window.scrollY + 150;
+            
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                const sectionHeight = section.offsetHeight;
+                const sectionId = section.getAttribute('id');
+                
+                if (scrollPosition >= sectionTop && scrollPosition < sectionTop + sectionHeight) {
+                    navLinks.forEach(link => {
+                        link.classList.remove('active');
+                        if (link.getAttribute('href') === `#${sectionId}`) {
+                            link.classList.add('active');
+                        }
+                    });
+                }
+            });
+        }
+
+        window.addEventListener('scroll', updateActiveNavLink);
+
+        // ==========================================
+        // Smooth Scroll for Anchor Links
+        // ==========================================
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Trigger initial animations for visible elements
+            setTimeout(() => {
+                animateElements.forEach(el => {
+                    const rect = el.getBoundingClientRect();
+                    if (rect.top < window.innerHeight) {
+                        el.classList.add('animated');
+                    }
+                });
+            }, 100);
+        });
+    </script>
+</body>
+</html>
