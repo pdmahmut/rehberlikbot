@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import * as Dialog from "@radix-ui/react-dialog";
 import { 
   CalendarDays, 
   TrendingUp, 
@@ -38,12 +39,14 @@ import {
   Trophy,
   Medal,
   Crown,
-  Brain
+  Brain,
+  X
 } from "lucide-react";
 import { toast } from "sonner";
 import { usePanelData } from "./hooks";
 import { ClickableStudent } from "@/components/ClickableStudent";
 import { DashboardCharts } from "@/components/charts/DashboardCharts";
+import { ReferralStudent } from "./types";
 import { 
   NotificationPermissionBanner, 
   NotificationStatus, 
@@ -114,6 +117,121 @@ function LiveClock() {
   );
 }
 
+// Yönlendirme Listesi Modal Komponenti
+function ReferralListModal({ 
+  open, 
+  onOpenChange, 
+  title, 
+  students,
+  gradient
+}: { 
+  open: boolean; 
+  onOpenChange: (open: boolean) => void; 
+  title: string; 
+  students: ReferralStudent[];
+  gradient: string;
+}) {
+  const formatDateTime = (dateStr?: string) => {
+    if (!dateStr) return "-";
+    const date = new Date(dateStr);
+    return date.toLocaleString('tr-TR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <Dialog.Content className="fixed left-[50%] top-[50%] z-50 max-h-[85vh] w-[90vw] max-w-[900px] translate-x-[-50%] translate-y-[-50%] rounded-2xl bg-white shadow-2xl focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]">
+          {/* Header */}
+          <div className={`bg-gradient-to-r ${gradient} p-6 rounded-t-2xl`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-xl">
+                  <Users className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <Dialog.Title className="text-xl font-bold text-white">
+                    {title}
+                  </Dialog.Title>
+                  <p className="text-white/80 text-sm">
+                    Toplam {students.length} yönlendirme
+                  </p>
+                </div>
+              </div>
+              <Dialog.Close asChild>
+                <button className="p-2 rounded-xl bg-white/20 hover:bg-white/30 transition-colors">
+                  <X className="h-5 w-5 text-white" />
+                </button>
+              </Dialog.Close>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 max-h-[60vh] overflow-y-auto">
+            {students.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="mx-auto w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                  <Users className="h-8 w-8 text-slate-400" />
+                </div>
+                <p className="text-slate-500">Bu dönemde yönlendirme bulunamadı</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-slate-200">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Öğrenci</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Sınıf</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Yönlendiren</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Neden</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Tarih/Saat</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {students.map((student, idx) => (
+                      <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                        <td className="py-3 px-4">
+                          <ClickableStudent name={student.student_name} className={student.class_display}>
+                            <span className="font-medium text-slate-800 hover:text-blue-600 cursor-pointer">
+                              {student.student_name}
+                            </span>
+                          </ClickableStudent>
+                        </td>
+                        <td className="py-3 px-4">
+                          <Badge variant="outline" className="bg-slate-50">
+                            {student.class_display}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4 text-slate-600">
+                          {student.teacher_name || "-"}
+                        </td>
+                        <td className="py-3 px-4">
+                          <Badge className={`bg-gradient-to-r ${gradient} text-white border-0`}>
+                            {student.reason || "Belirtilmemiş"}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4 text-slate-500 text-sm whitespace-nowrap">
+                          {formatDateTime(student.created_at)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 // Stat Kartı Komponenti - Modern & Animated
 function StatCard({ 
   title, 
@@ -123,7 +241,8 @@ function StatCard({
   trend, 
   trendValue,
   gradient,
-  delay = 0
+  delay = 0,
+  onClick
 }: { 
   title: string;
   value: number | string;
@@ -133,6 +252,7 @@ function StatCard({
   trendValue?: string;
   gradient: string;
   delay?: number;
+  onClick?: () => void;
 }) {
   const [displayValue, setDisplayValue] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
@@ -160,8 +280,10 @@ function StatCard({
   }, [numericValue, value]);
 
   return (
-    <Card className={`relative overflow-hidden border-0 shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 group cursor-default`}
+    <Card 
+      className={`relative overflow-hidden border-0 shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 group ${onClick ? 'cursor-pointer' : 'cursor-default'}`}
       style={{ animationDelay: `${delay}ms` }}
+      onClick={onClick}
     >
       {/* Gradient Background */}
       <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-5 group-hover:opacity-15 transition-opacity duration-500`} />
@@ -211,6 +333,14 @@ function StatCard({
             style={{ width: isVisible ? '100%' : '0%' }}
           />
         </div>
+        
+        {/* Click Hint */}
+        {onClick && (
+          <div className="mt-2 flex items-center gap-1 text-xs text-slate-400 group-hover:text-slate-600 transition-colors">
+            <Eye className="h-3 w-3" />
+            <span>Detayları görmek için tıklayın</span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -1100,6 +1230,12 @@ export default function PanelOzetPage() {
   const { stats, loadingStats, statsError, fetchStats } = usePanelData();
   const [showCharts, setShowCharts] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Modal state'leri
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState("");
+  const [modalStudents, setModalStudents] = useState<ReferralStudent[]>([]);
+  const [modalGradient, setModalGradient] = useState("from-blue-500 to-indigo-600");
 
   // Yeni yönlendirme bildirimleri
   const latestStudent = stats?.todayStudents?.[0] 
@@ -1111,6 +1247,43 @@ export default function PanelOzetPage() {
     : null;
   
   useNewReferralNotification(stats?.totalCount ?? 0, latestStudent);
+
+  // Tarihe göre öğrencileri filtrele
+  const filterStudentsByPeriod = (period: "today" | "week" | "month" | "all") => {
+    if (!stats?.allStudents) return [];
+    
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay() + 1);
+    const weekStr = startOfWeek.toISOString().slice(0, 10);
+    
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthStr = startOfMonth.toISOString().slice(0, 10);
+
+    switch (period) {
+      case "today":
+        return stats.allStudents.filter(s => s.date === todayStr);
+      case "week":
+        return stats.allStudents.filter(s => s.date >= weekStr && s.date <= todayStr);
+      case "month":
+        return stats.allStudents.filter(s => s.date >= monthStr && s.date <= todayStr);
+      case "all":
+        return stats.allStudents;
+      default:
+        return [];
+    }
+  };
+
+  // Kart tıklama işleyicileri
+  const handleStatCardClick = (period: "today" | "week" | "month" | "all", title: string, gradient: string) => {
+    const students = filterStudentsByPeriod(period);
+    setModalTitle(title);
+    setModalStudents(students);
+    setModalGradient(gradient);
+    setModalOpen(true);
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -1256,6 +1429,7 @@ export default function PanelOzetPage() {
           trend={todayTrend.direction}
           trendValue={todayTrend.value}
           gradient="from-blue-500 to-indigo-600"
+          onClick={() => handleStatCardClick("today", "Bugünkü Yönlendirmeler", "from-blue-500 to-indigo-600")}
         />
         <StatCard
           title="Bu Hafta"
@@ -1263,6 +1437,7 @@ export default function PanelOzetPage() {
           subtitle="toplam yönlendirme"
           icon={TrendingUp}
           gradient="from-emerald-500 to-teal-600"
+          onClick={() => handleStatCardClick("week", "Bu Haftaki Yönlendirmeler", "from-emerald-500 to-teal-600")}
         />
         <StatCard
           title="Bu Ay"
@@ -1270,6 +1445,7 @@ export default function PanelOzetPage() {
           subtitle="aylık toplam"
           icon={BarChart3}
           gradient="from-amber-500 to-orange-600"
+          onClick={() => handleStatCardClick("month", "Bu Ayki Yönlendirmeler", "from-amber-500 to-orange-600")}
         />
         <StatCard
           title="Tüm Zamanlar"
@@ -1277,8 +1453,18 @@ export default function PanelOzetPage() {
           subtitle="toplam kayıt"
           icon={Star}
           gradient="from-violet-500 to-purple-600"
+          onClick={() => handleStatCardClick("all", "Tüm Yönlendirmeler", "from-violet-500 to-purple-600")}
         />
       </div>
+
+      {/* Referral List Modal */}
+      <ReferralListModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        title={modalTitle}
+        students={modalStudents}
+        gradient={modalGradient}
+      />
 
       {/* 3 Sütunlu Grid */}
       <div className="grid gap-6 lg:grid-cols-3">

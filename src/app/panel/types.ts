@@ -2,6 +2,17 @@ export type TodayStudent = {
   student_name: string;
   class_display: string;
   reason?: string;
+  teacher_name?: string;
+  created_at?: string;
+};
+
+export type ReferralStudent = {
+  student_name: string;
+  class_display: string;
+  reason?: string;
+  date: string;
+  teacher_name?: string;
+  created_at?: string;
 };
 
 export type StatsResponse = {
@@ -12,7 +23,7 @@ export type StatsResponse = {
   totalCount?: number;
   topTeacher: { name: string; count: number } | null;
   todayStudents?: TodayStudent[];
-  allStudents?: { student_name: string; class_display: string; reason?: string; date: string }[];
+  allStudents?: ReferralStudent[];
   byTeacher?: Record<string, number>;
   byClass?: Record<string, number>;
   byReason?: Record<string, number>;

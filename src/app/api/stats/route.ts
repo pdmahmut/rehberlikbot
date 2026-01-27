@@ -70,8 +70,8 @@ export async function GET(request: NextRequest) {
     const byReasonToday: Record<string, number> = {};
     const byReasonWeek: Record<string, number> = {};
     const byReasonMonth: Record<string, number> = {};
-    const todayStudents: { student_name: string; class_display: string; reason?: string }[] = [];
-    const allStudents: { student_name: string; class_display: string; reason?: string; date: string }[] = [];
+    const todayStudents: { student_name: string; class_display: string; reason?: string; teacher_name?: string; created_at?: string }[] = [];
+    const allStudents: { student_name: string; class_display: string; reason?: string; date: string; teacher_name?: string; created_at?: string }[] = [];
 
     for (const row of data ?? []) {
       const created = row.created_at as string;
@@ -84,6 +84,8 @@ export async function GET(request: NextRequest) {
         class_display: (row.class_display as string) ?? '',
         reason: reason,
         date: day,
+        teacher_name: (row.teacher_name as string) ?? '',
+        created_at: created,
       });
 
       // Tüm zamanlar için neden sayısı
@@ -96,6 +98,8 @@ export async function GET(request: NextRequest) {
           student_name: (row.student_name as string) ?? '',
           class_display: (row.class_display as string) ?? '',
           reason: reason,
+          teacher_name: (row.teacher_name as string) ?? '',
+          created_at: created,
         });
       }
       
