@@ -2,6 +2,8 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 // Dashboard için skeleton loader
 export function DashboardSkeleton() {
@@ -160,5 +162,3 @@ export function OptimisticButton({
     </Button>
   );
 }
-
-import { cn } from "@/lib/utils";
