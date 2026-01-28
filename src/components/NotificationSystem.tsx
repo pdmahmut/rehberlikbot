@@ -3,9 +3,34 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { toast } from "sonner";
 
-interface NotificationPermissionProps {
-  onPermissionChange?: (permission: NotificationPermission) => void;
+// Bildirim türleri
+export type NotificationType = "success" | "error" | "warning" | "info" | "progress";
+
+// Bildirim geçmişi arayüzü
+export interface NotificationHistoryItem {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message?: string;
+  description?: string;
+  timestamp: number;
+  read: boolean;
+}
+
+// Bildirim ayarları arayüzü
+export interface NotificationSettings {
+  enabled: boolean;
+  soundEnabled: boolean;
+  soundVolume: number;
+  duration: number;
+  categories: {
+    system: boolean;
+    referral: boolean;
+    reminder: boolean;
+    error: boolean;
+  };
 }
 
 // Bildirim izin durumu hook'u
@@ -34,6 +59,189 @@ export function useNotificationPermission() {
   }, [isSupported]);
 
   return { permission, isSupported, requestPermission };
+}
+
+// Bildirim geçmişi yönetimi
+class NotificationHistoryManager {
+  private static readonly STORAGE_KEY = "rpd-notification-history";
+  private static readonly MAX_ITEMS = 50;
+
+  static add(item: Omit<NotificationHistoryItem, "id" | "timestamp" | "read">): NotificationHistoryItem {
+    const history = this.getAll();
+    const newItem: NotificationHistoryItem = {
+      ...item,
+      id: Date.now().toString(),
+      timestamp: Date.now(),
+      read: false,
+    };
+
+    history.unshift(newItem);
+    
+    // Maksimum sayıyı koru
+    if (history.length > this.MAX_ITEMS) {
+      history.splice(this.MAX_ITEMS);
+    }
+
+    this.save(history);
+    return newItem;
+  }
+
+  static getAll(): NotificationHistoryItem[] {
+    if (typeof window === "undefined") return [];
+    
+    try {
+      const stored = localStorage.getItem(this.STORAGE_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  static getUnreadCount(): number {
+    return this.getAll().filter(item => !item.read).length;
+  }
+
+  static markAsRead(id: string): void {
+    const history = this.getAll();
+    const item = history.find(h => h.id === id);
+    if (item) {
+      item.read = true;
+      this.save(history);
+    }
+  }
+
+  static markAllAsRead(): void {
+    const history = this.getAll().map(item => ({ ...item, read: true }));
+    this.save(history);
+  }
+
+  static clear(): void {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(this.STORAGE_KEY);
+    }
+  }
+
+  static filterByType(type: NotificationType): NotificationHistoryItem[] {
+    return this.getAll().filter(item => item.type === type);
+  }
+
+  private static save(history: NotificationHistoryItem[]): void {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(history));
+    }
+  }
+}
+
+// Zengin toast bildirim hook'u
+export function useToast() {
+  const showToast = useCallback((
+    type: NotificationType,
+    title: string,
+    options?: {
+      description?: string;
+      duration?: number;
+      dismissible?: boolean;
+      onDismiss?: () => void;
+    }
+  ) => {
+    const { description, duration = 4000, dismissible = true, onDismiss } = options || {};
+
+    // Bildirim geçmişine ekle
+    NotificationHistoryManager.add({
+      type,
+      title,
+      description,
+    });
+
+    // Toast göster
+    switch (type) {
+      case "success":
+        return toast.success(title, {
+          description,
+          duration,
+          dismissible,
+          onDismiss,
+        });
+      case "error":
+        return toast.error(title, {
+          description,
+          duration: duration || 6000,
+          dismissible,
+          onDismiss,
+        });
+      case "warning":
+        return toast.warning(title, {
+          description,
+          duration,
+          dismissible,
+          onDismiss,
+        });
+      case "info":
+        return toast.info(title, {
+          description,
+          duration,
+          dismissible,
+          onDismiss,
+        });
+      default:
+        return toast(title, {
+          description,
+          duration,
+          dismissible,
+          onDismiss,
+        });
+    }
+  }, []);
+
+  return { showToast };
+}
+
+// İlerleme toast hook'u
+export function useProgressToast() {
+  const showProgressToast = useCallback((
+    title: string,
+    options?: {
+      description?: string;
+      initialProgress?: number;
+    }
+  ) => {
+    const { description, initialProgress = 0 } = options || {};
+    const toastId = toast.loading(title, {
+      description,
+    });
+
+    // Bildirim geçmişine ekle
+    NotificationHistoryManager.add({
+      type: "progress",
+      title,
+      description,
+    });
+
+    return {
+      id: toastId,
+      update: (progress: number, newDescription?: string) => {
+        toast.loading(title, {
+          id: toastId,
+          description: newDescription || description,
+        });
+      },
+      success: (successTitle?: string, successDescription?: string) => {
+        toast.success(successTitle || title, {
+          id: toastId,
+          description: successDescription || description,
+        });
+      },
+      error: (errorTitle?: string, errorDescription?: string) => {
+        toast.error(errorTitle || title, {
+          id: toastId,
+          description: errorDescription || description,
+        });
+      },
+      dismiss: () => toast.dismiss(toastId),
+    };
+  }, []);
+
+  return { showProgressToast };
 }
 
 // Bildirim gönderme hook'u
