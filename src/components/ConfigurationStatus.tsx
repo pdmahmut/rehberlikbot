@@ -58,6 +58,10 @@ export default function ConfigurationStatus() {
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <span className="whitespace-nowrap">v1.0</span>
             </div>
+            <span className="text-slate-300">•</span>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span className="whitespace-nowrap font-medium">Coded By Mehmet DALĞIN</span>
+            </div>
           </div>
           {/* İkinci kopya (seamless loop için) */}
           <div className="flex items-center gap-8 px-8">
@@ -72,6 +76,10 @@ export default function ConfigurationStatus() {
             <span className="text-slate-300">•</span>
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <span className="whitespace-nowrap">v1.0</span>
+            </div>
+            <span className="text-slate-300">•</span>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span className="whitespace-nowrap font-medium">Coded By Mehmet DALĞIN</span>
             </div>
           </div>
         </div>
