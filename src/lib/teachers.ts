@@ -104,7 +104,9 @@ export function buildTeacherIndex(records: TeacherRecord[]) {
   const byKey = new Map<string, TeacherRecord>();
   for (const r of records) {
     byName.set(r.teacherNameNormalized, r);
-    byKey.set(r.sinifSubeKey, r);
+    if (r.sinifSubeKey) {
+      byKey.set(r.sinifSubeKey, r);
+    }
   }
   return { byName, byKey };
 }
@@ -125,7 +127,7 @@ export function validateTeacherClass(teacherName: string, sinifSubeKey: string, 
 }
 
 export function listTeachersForUI(records: TeacherRecord[]) {
-  return records.map(r => ({ value: r.teacherName, label: r.teacherName, sinifSubeKey: r.sinifSubeKey, sinifSubeDisplay: r.sinifSubeDisplay }));
+  return records.map(r => ({ value: r.teacherName, label: r.teacherName }));
 }
 
 export function getTeachersData() {
