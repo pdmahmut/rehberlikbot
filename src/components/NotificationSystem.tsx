@@ -33,6 +33,11 @@ export interface NotificationSettings {
   };
 }
 
+// Bildirim izin props arayüzü
+export interface NotificationPermissionProps {
+  onPermissionChange?: (permission: NotificationPermission) => void;
+}
+
 // Bildirim izin durumu hook'u
 export function useNotificationPermission() {
   const [permission, setPermission] = useState<NotificationPermission>("default");
