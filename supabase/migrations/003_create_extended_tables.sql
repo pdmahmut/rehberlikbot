@@ -261,10 +261,10 @@ CREATE TABLE IF NOT EXISTS settings (
 
 -- Varsayılan ayarları ekle
 INSERT INTO settings (setting_key, setting_value, category) VALUES
-  ('school_name', '"DUMLUPINAR İLKOKULU"', 'okul'),
+  ('school_name', '"DUMLUPINAR ORTAOKULU"', 'okul'),
   ('school_address', '""', 'okul'),
   ('school_phone', '""', 'okul'),
-  ('counselor_name', '"Mehmet DALĞIN"', 'okul'),
+  ('counselor_name', '"Mahmut Karadeniz"', 'okul'),
   ('counselor_title', '"Rehber Öğretmen ve Psikolojik Danışman"', 'okul'),
   ('academic_year', '"2025-2026"', 'genel'),
   ('semester', '"1"', 'genel'),

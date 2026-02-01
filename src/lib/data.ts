@@ -31,12 +31,24 @@ export function getOgrenciListBySinif(sinifSube: string): Ogrenci[] {
     return [];
   }
   
-  // "1. Sınıf / A Şubesi" formatını "Ogrenci_1. Sınıf _ A Şubesi" formatına çevir
+  // "5. Sınıf / A Şubesi" formatını "Ogrenci_5. Sınıf _ A Şubesi" formatına çevir
   const key = `Ogrenci_${sinifSubeText.replace(" / ", " _ ")}`;
   
   const ogrenciList = data[key];
   if (Array.isArray(ogrenciList)) {
-    return ogrenciList as Ogrenci[];
+    // data.json'daki format: { "Tc Kimlik", "Ad", "Soyad", "Okul No", "Sinif Sube" }
+    // Ogrenci tipine dönüştür: { value, text }
+    return ogrenciList.map((student: any) => {
+      const ad = student.Ad || student.ad || '';
+      const soyad = student.Soyad || student.soyad || '';
+      const okulNo = student['Okul No'] || student.okulNo || '';
+      const fullName = `${ad} ${soyad}`.trim();
+      
+      return {
+        value: fullName,
+        text: okulNo ? `${okulNo} ${fullName}` : fullName
+      };
+    });
   }
   
   return [];

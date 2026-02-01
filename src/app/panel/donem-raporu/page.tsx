@@ -487,7 +487,7 @@ export default function DonemRaporuPage() {
         <div className="space-y-6" id="report-content">
           {/* Başlık - Yazdırma için */}
           <div className="hidden print:block text-center mb-8">
-            <h1 className="text-xl font-bold">DUMLUPINAR İLKOKULU</h1>
+            <h1 className="text-xl font-bold">DUMLUPINAR ORTAOKULU</h1>
             <h2 className="text-lg">Rehberlik ve Psikolojik Danışmanlık Hizmetleri</h2>
             <h3 className="text-lg font-medium">{reportData.period} Raporu</h3>
             <p className="text-sm text-slate-600">
@@ -672,7 +672,7 @@ export default function DonemRaporuPage() {
           <Card className="print:hidden">
             <CardContent className="p-4 text-center text-sm text-slate-500">
               <p>Rapor Oluşturma Tarihi: {new Date().toLocaleDateString('tr-TR')} {new Date().toLocaleTimeString('tr-TR')}</p>
-              <p className="mt-1">DUMLUPINAR İLKOKULU - Rehberlik ve Psikolojik Danışmanlık Servisi</p>
+              <p className="mt-1">DUMLUPINAR ORTAOKULU - Rehberlik ve Psikolojik Danışmanlık Servisi</p>
             </CardContent>
           </Card>
         </div>

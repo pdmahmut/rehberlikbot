@@ -47,14 +47,14 @@ interface Setting {
 // Varsayılan ayarlar
 const DEFAULT_SETTINGS = {
   // Okul bilgileri
-  school_name: 'DUMLUPINAR İLKOKULU',
+  school_name: 'DUMLUPINAR ORTAOKULU',
   school_address: '',
   school_phone: '',
   school_email: '',
   school_principal: '',
   
   // Danışman bilgileri
-  counselor_name: 'Mehmet DALĞIN',
+  counselor_name: 'Mahmut Karadeniz',
   counselor_title: 'Rehber Öğretmen ve Psikolojik Danışman',
   counselor_phone: '',
   counselor_email: '',
@@ -76,8 +76,8 @@ const DEFAULT_SETTINGS = {
   compact_mode: false,
   
   // Şablon ayarları
-  signature_text: 'Mehmet DALĞIN\nRehber Öğretmen ve Psikolojik Danışman',
-  document_header: 'DUMLUPINAR İLKOKULU\nREHBERLİK SERVİSİ',
+  signature_text: 'Mahmut Karadeniz\nRehber Öğretmen ve Psikolojik Danışman',
+  document_header: 'DUMLUPINAR ORTAOKULU\nREHBERLİK SERVİSİ',
   document_footer: ''
 };
 

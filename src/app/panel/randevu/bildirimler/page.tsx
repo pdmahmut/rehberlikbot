@@ -249,7 +249,7 @@ Eğer bu saat sizin için uygunsa görüşebiliriz. Uygun değilse, müsait oldu
 
 Teşekkür ederim.
 
-Mehmet DALĞIN
+Mahmut Karadeniz
 Rehber Öğretmen ve Psikolojik Danışman`
   },
   {
@@ -268,7 +268,7 @@ ${apt.participant_class} sınıfından ${apt.participant_name}'nın ${apt.purpos
 Bu zaman sizin için uygunsa görüşebiliriz. Uygun değilse, müsait olduğunuz alternatif bir gün ve saat önerebilir misiniz? Takviminize göre planlayayım.
 
 Teşekkür ederim,
-Mehmet DALĞIN
+Mahmut Karadeniz
 Rehber Öğretmen ve Psikolojik Danışman`
   },
   {
@@ -287,7 +287,7 @@ Rehber Öğretmen ve Psikolojik Danışman`
 Bu zaman veli için uygun olmazsa, velinin müsaitliğine göre alternatif bir gün/saat de ayarlayabiliriz. Haber verirseniz planlayayım.
 
 Teşekkür ederim.
-Mehmet DALĞIN
+Mahmut Karadeniz
 Rehber Öğretmen ve Psikolojik Danışman`
   }
 ];
@@ -304,8 +304,8 @@ export default function RandevuBildirimlerPage() {
   const [showSettings, setShowSettings] = useState(false);
   
   // Ayarlar
-  const [schoolName, setSchoolName] = useState("DUMLUPINAR İLKOKULU");
-  const [counselorName, setCounselorName] = useState("Mehmet DALĞIN");
+  const [schoolName, setSchoolName] = useState("DUMLUPINAR ORTAOKULU");
+  const [counselorName, setCounselorName] = useState("Mahmut Karadeniz");
 
   // Sınıf/şube key veya display text'inden öğretmen adını bul
   const getTeacherByClass = (classKeyOrDisplay: string | undefined): string | undefined => {

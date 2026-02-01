@@ -1,1 +1,107 @@
-[{"teacherId":"t1","teacherName":"AHMET ÖZÜPERK","teacherNameNormalized":"ahmet ozuperk","sinifSubeKey":"22154388#1","sinifSubeDisplay":"1. Sınıf / A Şubesi"},{"teacherId":"t2","teacherName":"AHMET KARAV","teacherNameNormalized":"ahmet karav","sinifSubeKey":"22154324#1","sinifSubeDisplay":"1. Sınıf / B Şubesi"},{"teacherId":"t3","teacherName":"MUSTAFA ULUTAŞ","teacherNameNormalized":"mustafa ulutas","sinifSubeKey":"22154483#1","sinifSubeDisplay":"1. Sınıf / C Şubesi"},{"teacherId":"t4","teacherName":"SEDA EFİL","teacherNameNormalized":"seda efil","sinifSubeKey":"22154405#1","sinifSubeDisplay":"1. Sınıf / D Şubesi"},{"teacherId":"t5","teacherName":"SEÇİL YOLCU","teacherNameNormalized":"secil yolcu","sinifSubeKey":"22150668#2","sinifSubeDisplay":"2. Sınıf / A Şubesi"},{"teacherId":"t6","teacherName":"SERAP SİTİL BALANAN","teacherNameNormalized":"serap sitil balanan","sinifSubeKey":"22150721#2","sinifSubeDisplay":"2. Sınıf / B Şubesi"},{"teacherId":"t7","teacherName":"SEHER DÜZYOL","teacherNameNormalized":"seher duzyol","sinifSubeKey":"22150640#2","sinifSubeDisplay":"2. Sınıf / C Şubesi"},{"teacherId":"t8","teacherName":"MUSTAFA İNCEDAL","teacherNameNormalized":"mustafa incedal","sinifSubeKey":"22151847#3","sinifSubeDisplay":"3. Sınıf / A Şubesi"},{"teacherId":"t9","teacherName":"SERAP GELENER","teacherNameNormalized":"serap gelener","sinifSubeKey":"22151690#3","sinifSubeDisplay":"3. Sınıf / B Şubesi"},{"teacherId":"t10","teacherName":"MERİÇ SARI","teacherNameNormalized":"meric sari","sinifSubeKey":"22152892#3","sinifSubeDisplay":"3. Sınıf / C Şubesi"},{"teacherId":"t11","teacherName":"FATMA ARSLAN","teacherNameNormalized":"fatma arslan","sinifSubeKey":"22150551#3","sinifSubeDisplay":"3. Sınıf / D Şubesi"},{"teacherId":"t12","teacherName":"HİLAL AVLAR","teacherNameNormalized":"hilal avlar","sinifSubeKey":"22151450#4","sinifSubeDisplay":"4. Sınıf / A Şubesi"},{"teacherId":"t13","teacherName":"EKREM YÜCEL","teacherNameNormalized":"ekrem yucel","sinifSubeKey":"22151485#4","sinifSubeDisplay":"4. Sınıf / B Şubesi"},{"teacherId":"t14","teacherName":"ABDÜLKADİR SÜRÜCÜ","teacherNameNormalized":"abdulkadir surucu","sinifSubeKey":"22151476#4","sinifSubeDisplay":"4. Sınıf / C Şubesi"},{"teacherId":"t15","teacherName":"YEŞİM KUŞAKSIZ","teacherNameNormalized":"yesim kusaksiz","sinifSubeKey":"22702337#0","sinifSubeDisplay":"Ana Sınıfı / D Şubesi"},{"teacherId":"t16","teacherName":"MÜNİRE ALTUNBAŞAK","teacherNameNormalized":"munire altunbasak","sinifSubeKey":"22643016#0","sinifSubeDisplay":"Ana Sınıfı / C Şubesi"},{"teacherId":"t17","teacherName":"GÜLSÜM YURUL","teacherNameNormalized":"gulsum yurul","sinifSubeKey":"22602658#0","sinifSubeDisplay":"Ana Sınıfı / A Şubesi"},{"teacherId":"t18","teacherName":"BAHAR ALKAN","teacherNameNormalized":"bahar alkan","sinifSubeKey":"22602663#0","sinifSubeDisplay":"Ana Sınıfı / B Şubesi"}]
+[
+  {
+    "teacherId": "t1",
+    "teacherName": "Gülbahar Öztürk",
+    "teacherNameNormalized": "gulbahar ozturk"
+  },
+  {
+    "teacherId": "t2",
+    "teacherName": "Furkan Cin",
+    "teacherNameNormalized": "furkan cin"
+  },
+  {
+    "teacherId": "t3",
+    "teacherName": "Ömer Akdağ",
+    "teacherNameNormalized": "omer akdag"
+  },
+  {
+    "teacherId": "t4",
+    "teacherName": "Sami Kan",
+    "teacherNameNormalized": "sami kan"
+  },
+  {
+    "teacherId": "t5",
+    "teacherName": "Ebru Can",
+    "teacherNameNormalized": "ebru can"
+  },
+  {
+    "teacherId": "t6",
+    "teacherName": "Orhan Kökçe",
+    "teacherNameNormalized": "orhan kokce"
+  },
+  {
+    "teacherId": "t7",
+    "teacherName": "Reyyan Cennet Yılmaz",
+    "teacherNameNormalized": "reyyan cennet yilmaz"
+  },
+  {
+    "teacherId": "t8",
+    "teacherName": "Firdevs Basat",
+    "teacherNameNormalized": "firdevs basat"
+  },
+  {
+    "teacherId": "t9",
+    "teacherName": "İsmail Özmen",
+    "teacherNameNormalized": "ismail ozmen"
+  },
+  {
+    "teacherId": "t10",
+    "teacherName": "Zeliha Orhan",
+    "teacherNameNormalized": "zeliha orhan"
+  },
+  {
+    "teacherId": "t11",
+    "teacherName": "Beytullah Gürbüz",
+    "teacherNameNormalized": "beytullah gurbuz"
+  },
+  {
+    "teacherId": "t12",
+    "teacherName": "Hüseyin Çabuk",
+    "teacherNameNormalized": "huseyin cabuk"
+  },
+  {
+    "teacherId": "t13",
+    "teacherName": "Saliha Derya",
+    "teacherNameNormalized": "saliha derya"
+  },
+  {
+    "teacherId": "t14",
+    "teacherName": "Neriman Gümüş",
+    "teacherNameNormalized": "neriman gumus"
+  },
+  {
+    "teacherId": "t15",
+    "teacherName": "Ezgi Sevili",
+    "teacherNameNormalized": "ezgi sevili"
+  },
+  {
+    "teacherId": "t16",
+    "teacherName": "Büşra Korkmaz",
+    "teacherNameNormalized": "busra korkmaz"
+  },
+  {
+    "teacherId": "t17",
+    "teacherName": "Sinan Kabaca",
+    "teacherNameNormalized": "sinan kabaca"
+  },
+  {
+    "teacherId": "t18",
+    "teacherName": "Keziban Yıldız",
+    "teacherNameNormalized": "keziban yildiz"
+  },
+  {
+    "teacherId": "t19",
+    "teacherName": "Cansu İmrak",
+    "teacherNameNormalized": "cansu imrak"
+  },
+  {
+    "teacherId": "t20",
+    "teacherName": "İmdat Aydoğan",
+    "teacherNameNormalized": "imdat aydogan"
+  },
+  {
+    "teacherId": "t21",
+    "teacherName": "Yunus Emre Kahveci",
+    "teacherNameNormalized": "yunus emre kahveci"
+  }
+]

@@ -1,2304 +1,1938 @@
 {
   "Sinif_Sube": [
     {
-      "value": "22602658#0",
-      "text": "Ana Sınıfı / A Şubesi"
+      "value": "5A",
+      "text": "5. Sınıf / A Şubesi"
     },
     {
-      "value": "22602663#0",
-      "text": "Ana Sınıfı / B Şubesi"
+      "value": "5B",
+      "text": "5. Sınıf / B Şubesi"
     },
     {
-      "value": "22643016#0",
-      "text": "Ana Sınıfı / C Şubesi"
+      "value": "5C",
+      "text": "5. Sınıf / C Şubesi"
     },
     {
-      "value": "22702337#0",
-      "text": "Ana Sınıfı / D Şubesi"
+      "value": "6A",
+      "text": "6. Sınıf / A Şubesi"
     },
     {
-      "value": "22154388#1",
-      "text": "1. Sınıf / A Şubesi"
+      "value": "6B",
+      "text": "6. Sınıf / B Şubesi"
     },
     {
-      "value": "22154324#1",
-      "text": "1. Sınıf / B Şubesi"
+      "value": "6C",
+      "text": "6. Sınıf / C Şubesi"
     },
     {
-      "value": "22154483#1",
-      "text": "1. Sınıf / C Şubesi"
+      "value": "7A",
+      "text": "7. Sınıf / A Şubesi"
     },
     {
-      "value": "22154405#1",
-      "text": "1. Sınıf / D Şubesi"
+      "value": "7B",
+      "text": "7. Sınıf / B Şubesi"
     },
     {
-      "value": "22546464#1",
-      "text": "1. Sınıf / Geçici Şube"
+      "value": "7C",
+      "text": "7. Sınıf / C Şubesi"
     },
     {
-      "value": "22150668#2",
-      "text": "2. Sınıf / A Şubesi"
+      "value": "8A",
+      "text": "8. Sınıf / A Şubesi"
     },
     {
-      "value": "22150721#2",
-      "text": "2. Sınıf / B Şubesi"
+      "value": "8B",
+      "text": "8. Sınıf / B Şubesi"
     },
     {
-      "value": "22150640#2",
-      "text": "2. Sınıf / C Şubesi"
-    },
-    {
-      "value": "22151847#3",
-      "text": "3. Sınıf / A Şubesi"
-    },
-    {
-      "value": "22151690#3",
-      "text": "3. Sınıf / B Şubesi"
-    },
-    {
-      "value": "22152892#3",
-      "text": "3. Sınıf / C Şubesi"
-    },
-    {
-      "value": "22150551#3",
-      "text": "3. Sınıf / D Şubesi"
-    },
-    {
-      "value": "22151450#4",
-      "text": "4. Sınıf / A Şubesi"
-    },
-    {
-      "value": "22151485#4",
-      "text": "4. Sınıf / B Şubesi"
-    },
-    {
-      "value": "22151476#4",
-      "text": "4. Sınıf / C Şubesi"
+      "value": "8C",
+      "text": "8. Sınıf / C Şubesi"
     }
   ],
-  "Ogrenci_Ana Sınıfı _ A Şubesi": [
+  "Ogrenci_5. Sınıf _ A Şubesi": [
     {
-      "value": "43378967568",
-      "text": "11 EYLÜL SELEN YAVUZ"
+      "Tc Kimlik": "99889813498",
+      "Ad": "ABDULİLLAH",
+      "Soyad": "ELCASIM",
+      "Okul No": "10",
+      "Sinif Sube": "5A"
     },
     {
-      "value": "99507501950",
-      "text": "96 AYE GATİT"
+      "Tc Kimlik": "33338302386",
+      "Ad": "ABDULKADİR",
+      "Soyad": "MURAT",
+      "Okul No": "9",
+      "Sinif Sube": "5A"
     },
     {
-      "value": "36278204260",
-      "text": "117 AHSEN MİRAY KIRĞIL"
+      "Tc Kimlik": "27008283044",
+      "Ad": "AHMET METE",
+      "Soyad": "ÇİFTÇİ",
+      "Okul No": "555",
+      "Sinif Sube": "5A"
     },
     {
-      "value": "99618551318",
-      "text": "120 HUSEN EL HASAN"
+      "Tc Kimlik": "48898783612",
+      "Ad": "ALİ ARDA",
+      "Soyad": "KILIÇ",
+      "Okul No": "260",
+      "Sinif Sube": "5A"
     },
     {
-      "value": "64462264790",
-      "text": "122 ELİF EBRAR ÇULCU"
+      "Tc Kimlik": "39641091856",
+      "Ad": "AMİNE ŞEYMA",
+      "Soyad": "YEŞİLBAŞ",
+      "Okul No": "88",
+      "Sinif Sube": "5A"
     },
     {
-      "value": "46984846616",
-      "text": "126 GİZEM GENÇ"
+      "Tc Kimlik": "29582427234",
+      "Ad": "AYHAN ENES",
+      "Soyad": "KARADAŞ",
+      "Okul No": "188",
+      "Sinif Sube": "5A"
     },
     {
-      "value": "65644241608",
-      "text": "131 HACİRE GENÇ"
+      "Tc Kimlik": "99737093928",
+      "Ad": "AYŞE",
+      "Soyad": "ELHALAF",
+      "Okul No": "92",
+      "Sinif Sube": "5A"
     },
     {
-      "value": "65620226100",
-      "text": "134 MİRAÇ YAŞAR"
+      "Tc Kimlik": "99437035044",
+      "Ad": "BEHÇED",
+      "Soyad": "YASİN",
+      "Okul No": "97",
+      "Sinif Sube": "5A"
     },
     {
-      "value": "66937182158",
-      "text": "389 HÜSEYİN CAN KARADAL"
+      "Tc Kimlik": "64672257582",
+      "Ad": "CANAN SU",
+      "Soyad": "AKINCI",
+      "Okul No": "375",
+      "Sinif Sube": "5A"
     },
     {
-      "value": "17708984082",
-      "text": "408 MUHAMMED EMİN ÖZTÜRK"
+      "Tc Kimlik": "59554428518",
+      "Ad": "CANER",
+      "Soyad": "DEMİR",
+      "Okul No": "379",
+      "Sinif Sube": "5A"
     },
     {
-      "value": "99951475852",
-      "text": "425 TESNİM MUHAMMED EL HASAN ELRABİ"
+      "Tc Kimlik": "14960914284",
+      "Ad": "DİLAN",
+      "Soyad": "TUNGAÇ",
+      "Okul No": "126",
+      "Sinif Sube": "5A"
     },
     {
-      "value": "99636587610",
-      "text": "473 ALLADDİN MOHAMMED"
+      "Tc Kimlik": "99196541992",
+      "Ad": "ESMA",
+      "Soyad": "ELALİ",
+      "Okul No": "191",
+      "Sinif Sube": "5A"
     },
     {
-      "value": "99759516382",
-      "text": "486 MUHAMMED ABID"
+      "Tc Kimlik": "99277902780",
+      "Ad": "GAZALE",
+      "Soyad": "YASİN",
+      "Okul No": "154",
+      "Sinif Sube": "5A"
+    },
+    {
+      "Tc Kimlik": "99025825842",
+      "Ad": "HAMZA",
+      "Soyad": "UMAR",
+      "Okul No": "314",
+      "Sinif Sube": "5A"
+    },
+    {
+      "Tc Kimlik": "51802686770",
+      "Ad": "HİRANUR",
+      "Soyad": "EROĞLU",
+      "Okul No": "381",
+      "Sinif Sube": "5A"
+    },
+    {
+      "Tc Kimlik": "34394266940",
+      "Ad": "KÜBRA",
+      "Soyad": "ASLAN",
+      "Okul No": "426",
+      "Sinif Sube": "5A"
+    },
+    {
+      "Tc Kimlik": "25574560958",
+      "Ad": "MAİL",
+      "Soyad": "SERİN",
+      "Okul No": "391",
+      "Sinif Sube": "5A"
+    },
+    {
+      "Tc Kimlik": "30110409110",
+      "Ad": "MUHAMMED ARDA",
+      "Soyad": "İMRAK",
+      "Okul No": "462",
+      "Sinif Sube": "5A"
+    },
+    {
+      "Tc Kimlik": "37211172790",
+      "Ad": "MÜSLÜM ARAS",
+      "Soyad": "KARTAL",
+      "Okul No": "507",
+      "Sinif Sube": "5A"
+    },
+    {
+      "Tc Kimlik": "99905184106",
+      "Ad": "NEHİT",
+      "Soyad": "DERVİŞ",
+      "Okul No": "515",
+      "Sinif Sube": "5A"
+    },
+    {
+      "Tc Kimlik": "99590381408",
+      "Ad": "NERMİN",
+      "Soyad": "GASİS",
+      "Okul No": "517",
+      "Sinif Sube": "5A"
+    },
+    {
+      "Tc Kimlik": "25448564570",
+      "Ad": "TUANA İREM",
+      "Soyad": "GÜZEL",
+      "Okul No": "597",
+      "Sinif Sube": "5A"
+    },
+    {
+      "Tc Kimlik": "51097710112",
+      "Ad": "UĞUR",
+      "Soyad": "DOĞAN",
+      "Okul No": "181",
+      "Sinif Sube": "5A"
+    },
+    {
+      "Tc Kimlik": "99242901534",
+      "Ad": "VEFA",
+      "Soyad": "EL NAHSAN",
+      "Okul No": "248",
+      "Sinif Sube": "5A"
     }
   ],
-  "Ogrenci_Ana Sınıfı _ B Şubesi": [
+  "Ogrenci_5. Sınıf _ B Şubesi": [
     {
-      "value": "36110209484",
-      "text": "110 YILDIZ KILIÇ"
+      "Tc Kimlik": "39563094492",
+      "Ad": "AHMET",
+      "Soyad": "POLAT",
+      "Okul No": "5",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "53563627962",
-      "text": "119 GÜLÇEHRE KILIÇ"
+      "Tc Kimlik": "99244935230",
+      "Ad": "BİLAL",
+      "Soyad": "GASİS",
+      "Okul No": "111",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "24191606582",
-      "text": "124 FATMA ZEHRA YALÇIN"
+      "Tc Kimlik": "43360967446",
+      "Ad": "DENİZ",
+      "Soyad": "KARADAĞ",
+      "Okul No": "118",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "57685490374",
-      "text": "161 YUSUF EYMEN UYGUNER"
+      "Tc Kimlik": "99224183750",
+      "Ad": "DERİN",
+      "Soyad": "NASEN",
+      "Okul No": "502",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "20447731176",
-      "text": "170 ELİF ERDOĞAN"
+      "Tc Kimlik": "99427549964",
+      "Ad": "DIYALA",
+      "Soyad": "HALIL",
+      "Okul No": "43",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "42068011192",
-      "text": "184 FATMA KILIÇ"
+      "Tc Kimlik": "44224939074",
+      "Ad": "ECRİN",
+      "Soyad": "OKLUER",
+      "Okul No": "128",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "48733788604",
-      "text": "193 MUHAMMED BİLAL ÖZUÇAK"
+      "Tc Kimlik": "37925148852",
+      "Ad": "ELİF",
+      "Soyad": "KANIKARA",
+      "Okul No": "132",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "16403865924",
-      "text": "197 FİLİZ AŞCI"
+      "Tc Kimlik": "29423432694",
+      "Ad": "EMİN",
+      "Soyad": "KARADAL",
+      "Okul No": "137",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "16913849506",
-      "text": "227 HADİCE MİRAY BOZKURT"
+      "Tc Kimlik": "64918249340",
+      "Ad": "EMİNE SULTAN",
+      "Soyad": "ŞİNİKÇİ",
+      "Okul No": "140",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "32792320592",
-      "text": "231 İSLİMNUR KAYA"
+      "Tc Kimlik": "54661590714",
+      "Ad": "ESMA",
+      "Soyad": "ÖZUÇAK",
+      "Okul No": "170",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "37523162076",
-      "text": "244 SABİHA EYLÜL SUBAŞI"
+      "Tc Kimlik": "60019412508",
+      "Ad": "HAMZA",
+      "Soyad": "YILDIRIM",
+      "Okul No": "407",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "14657925098",
-      "text": "250 ÜMMÜ GÜLSÜM GÜZEL"
+      "Tc Kimlik": "22037678106",
+      "Ad": "KENAN",
+      "Soyad": "CANLI",
+      "Okul No": "422",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "49975746988",
-      "text": "292 ZELİHA SARIÇİÇEK"
+      "Tc Kimlik": "99185895914",
+      "Ad": "MERVE",
+      "Soyad": "DEDEN",
+      "Okul No": "276",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "71152041876",
-      "text": "331 AHMET KARLICA"
+      "Tc Kimlik": "28967448086",
+      "Ad": "MUHAMMED RESÜL",
+      "Soyad": "KIRMIZI",
+      "Okul No": "369",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "99339507106",
-      "text": "352 HİŞAM MUHAMMED"
+      "Tc Kimlik": "37493163196",
+      "Ad": "MUHAMMET",
+      "Soyad": "DEMİRCİUŞAĞI",
+      "Okul No": "497",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "70597059552",
-      "text": "355 ÇINAR KIRĞIL"
+      "Tc Kimlik": "39692090020",
+      "Ad": "MÜSLÜM AYAZ",
+      "Soyad": "GÖKTAŞ",
+      "Okul No": "560",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "31058377936",
-      "text": "375 GÖKMEN ÇELİK"
+      "Tc Kimlik": "99731167946",
+      "Ad": "RAHAF",
+      "Soyad": "TÜRKMANİ",
+      "Okul No": "540",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "49987746532",
-      "text": "405 MERT CAN CEYLAN"
+      "Tc Kimlik": "99365212456",
+      "Ad": "RAŞE",
+      "Soyad": "MUHAMMED",
+      "Okul No": "550",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "72382000732",
-      "text": "407 MİRAÇ BİLİŞİK"
+      "Tc Kimlik": "99014218228",
+      "Ad": "SABAH",
+      "Soyad": "MUHAMMED",
+      "Okul No": "578",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "14570927612",
-      "text": "411 MUHAMMET ALİ UZUN"
+      "Tc Kimlik": "67852151410",
+      "Ad": "SABRİYE NUR",
+      "Soyad": "ÖZALTAY",
+      "Okul No": "587",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "34532262568",
-      "text": "413 SALİH AĞIRTAŞ"
+      "Tc Kimlik": "37997146770",
+      "Ad": "SALİH",
+      "Soyad": "SERİN",
+      "Okul No": "591",
+      "Sinif Sube": "5B"
     },
     {
-      "value": "22715656396",
-      "text": "432 İBRAHİM HALİL BAYRAM"
+      "Tc Kimlik": "57709489728",
+      "Ad": "ŞİRVAN",
+      "Soyad": "ÇEKEN",
+      "Okul No": "41",
+      "Sinif Sube": "5B"
+    },
+    {
+      "Tc Kimlik": "71632168666",
+      "Ad": "ZEYNEP",
+      "Soyad": "KORKMAZ",
+      "Okul No": "653",
+      "Sinif Sube": "5B"
     }
   ],
-  "Ogrenci_Ana Sınıfı _ C Şubesi": [
+  "Ogrenci_5. Sınıf _ C Şubesi": [
     {
-      "value": "31241542530",
-      "text": "10 FATMA KILIÇ"
+      "Tc Kimlik": "35078244070",
+      "Ad": "ABDULKADİR",
+      "Soyad": "İMRAK",
+      "Okul No": "6",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "65065244608",
-      "text": "30 MÜSLÜM ESTİT"
+      "Tc Kimlik": "33047312058",
+      "Ad": "AY MİRAY",
+      "Soyad": "ŞAHİN",
+      "Okul No": "90",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "99855828396",
-      "text": "51 ESMA NUR EL MUHAMMED"
+      "Tc Kimlik": "54910582644",
+      "Ad": "BERAT DENİZ",
+      "Soyad": "ESEN",
+      "Okul No": "103",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "30134409004",
-      "text": "64 MEHMET EMİN KURT"
+      "Tc Kimlik": "60178407216",
+      "Ad": "ELİF",
+      "Soyad": "BAYINDIR",
+      "Okul No": "405",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "16574086760",
-      "text": "70 AYŞEGÜL KIRMIZI"
+      "Tc Kimlik": "52465664334",
+      "Ad": "ENİSE GÜL",
+      "Soyad": "ADALMIŞ",
+      "Okul No": "142",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "99423504400",
-      "text": "85 LEVET ABDİ"
+      "Tc Kimlik": "54481597474",
+      "Ad": "FEHMİ",
+      "Soyad": "YALÇIN",
+      "Okul No": "494",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "49561761470",
-      "text": "200 FEVZİ UDUM"
+      "Tc Kimlik": "99863702374",
+      "Ad": "GUFRAN",
+      "Soyad": "AVAD",
+      "Okul No": "270",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "99576559296",
-      "text": "203 MUHAMMED ALİ ELHALAF"
+      "Tc Kimlik": "25586560366",
+      "Ad": "HATİCE",
+      "Soyad": "TİRİTOĞLU",
+      "Okul No": "412",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "15764888030",
-      "text": "298 AHMET EKİN GÜÇLÜ"
+      "Tc Kimlik": "67435165872",
+      "Ad": "İSLİM",
+      "Soyad": "ÜSLÜ",
+      "Okul No": "394",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "71578027096",
-      "text": "410 MUHAMMED TARIK SAĞIR"
+      "Tc Kimlik": "99290146000",
+      "Ad": "İVAN",
+      "Soyad": "HAMO",
+      "Okul No": "315",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "62347335306",
-      "text": "416 TAHİR ÇINAR KOZNAN"
+      "Tc Kimlik": "65215239362",
+      "Ad": "MUHAMMED HAKİM",
+      "Soyad": "KIRĞIL",
+      "Okul No": "1",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "44249088290",
-      "text": "418 YUSUF KAYRA KÜÇÜK"
+      "Tc Kimlik": "57145508410",
+      "Ad": "MUHAMMED HASAN",
+      "Soyad": "DELEN",
+      "Okul No": "171",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "99288504218",
-      "text": "424 NASİM ELKENCO"
+      "Tc Kimlik": "39008113320",
+      "Ad": "MUHAMMED OSMAN",
+      "Soyad": "TAŞ",
+      "Okul No": "491",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "99813568548",
-      "text": "435 KAYS MUHAMMED"
+      "Tc Kimlik": "38138142156",
+      "Ad": "NİSA NUR",
+      "Soyad": "DEMİRBİLEK",
+      "Okul No": "520",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "41045044888",
-      "text": "483 EMİNE AYLİN ASLAN"
+      "Tc Kimlik": "99668361110",
+      "Ad": "NUR HUDA",
+      "Soyad": "SELUM",
+      "Okul No": "200",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "99984558546",
-      "text": "487 SELMA İSA"
+      "Tc Kimlik": "99614191112",
+      "Ad": "RENA",
+      "Soyad": "HACHAMDO",
+      "Okul No": "562",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "99126457508",
-      "text": "497 AMAR DALONA"
+      "Tc Kimlik": "22079677426",
+      "Ad": "ŞAHİN",
+      "Soyad": "AÇIKALIN",
+      "Okul No": "289",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "99219445542",
-      "text": "505 YUSUF AHMED"
+      "Tc Kimlik": "64330268608",
+      "Ad": "VEYSEL",
+      "Soyad": "ŞENKAN",
+      "Okul No": "86",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "99786595176",
-      "text": "506 İBRAHİM AHMED"
+      "Tc Kimlik": "29336435768",
+      "Ad": "ZAHİDE",
+      "Soyad": "DALDA",
+      "Okul No": "651",
+      "Sinif Sube": "5C"
     },
     {
-      "value": "99927519214",
-      "text": "515 ALİ ELHAMMO"
-    },
-    {
-      "value": "14498930244",
-      "text": "561 GAMZE BÜYÜKKAPLAN"
+      "Tc Kimlik": "58303470280",
+      "Ad": "ZELİHA",
+      "Soyad": "MERAL",
+      "Okul No": "392",
+      "Sinif Sube": "5C"
     }
   ],
-  "Ogrenci_Ana Sınıfı _ D Şubesi": [
+  "Ogrenci_6. Sınıf _ A Şubesi": [
     {
-      "value": "40148075010",
-      "text": "57 HATİCE GAMZE KILIÇ"
+      "Tc Kimlik": "99115799954",
+      "Ad": "ABDULLAH",
+      "Soyad": "MIRRAVI",
+      "Okul No": "12",
+      "Sinif Sube": "6A"
     },
     {
-      "value": "99318468930",
-      "text": "114 SÜMBÜL MUHAMMET"
+      "Tc Kimlik": "30457608542",
+      "Ad": "AHMETCAN",
+      "Soyad": "ARSLAN",
+      "Okul No": "18",
+      "Sinif Sube": "6A"
     },
     {
-      "value": "99876525304",
-      "text": "353 MEHMED MUHAMMED"
+      "Tc Kimlik": "20819719658",
+      "Ad": "ASMİN",
+      "Soyad": "ÇİÇEK",
+      "Okul No": "21",
+      "Sinif Sube": "6A"
     },
     {
-      "value": "99831544586",
-      "text": "354 RAVA ELALİ"
+      "Tc Kimlik": "99026107756",
+      "Ad": "EMİR",
+      "Soyad": "HAMO",
+      "Okul No": "63",
+      "Sinif Sube": "6A"
     },
     {
-      "value": "99576579546",
-      "text": "370 KEVSER ELMUHAMMED"
+      "Tc Kimlik": "99395225150",
+      "Ad": "FATMA",
+      "Soyad": "ELHASAN",
+      "Okul No": "107",
+      "Sinif Sube": "6A"
     },
     {
-      "value": "21824685242",
-      "text": "403 AZRA MİNA ARSLAN"
+      "Tc Kimlik": "39920082216",
+      "Ad": "GÖKÇEN",
+      "Soyad": "DEMİRCİOĞLU",
+      "Okul No": "406",
+      "Sinif Sube": "6A"
     },
     {
-      "value": "23786619990",
-      "text": "417 YİGİTHAN ATMACA"
+      "Tc Kimlik": "50065744180",
+      "Ad": "GÖNÜL",
+      "Soyad": "BABAYOĞURT",
+      "Okul No": "408",
+      "Sinif Sube": "6A"
     },
     {
-      "value": "61051378012",
-      "text": "494 HAZAL DEMİR"
+      "Tc Kimlik": "99571529546",
+      "Ad": "İBRAHİM",
+      "Soyad": "GATİT",
+      "Okul No": "203",
+      "Sinif Sube": "6A"
     },
     {
-      "value": "99783527606",
-      "text": "498 DUA EL GANAVİ"
+      "Tc Kimlik": "23114642362",
+      "Ad": "İBRAHİM HALİL",
+      "Soyad": "GÜÇLÜ",
+      "Okul No": "205",
+      "Sinif Sube": "6A"
     },
     {
-      "value": "99354524966",
-      "text": "500 HÜSEYİN ELHASAN"
+      "Tc Kimlik": "57955481330",
+      "Ad": "İSLİM NİSA",
+      "Soyad": "TÜMEN",
+      "Okul No": "211",
+      "Sinif Sube": "6A"
+    },
+    {
+      "Tc Kimlik": "44143942056",
+      "Ad": "İSLİM NUR",
+      "Soyad": "KAPLAN",
+      "Okul No": "213",
+      "Sinif Sube": "6A"
+    },
+    {
+      "Tc Kimlik": "40186288298",
+      "Ad": "MEHMET ALİ",
+      "Soyad": "BİNGÖL",
+      "Okul No": "247",
+      "Sinif Sube": "6A"
+    },
+    {
+      "Tc Kimlik": "27965480876",
+      "Ad": "MUHAMMED MUSTAFA",
+      "Soyad": "EROĞLU",
+      "Okul No": "53",
+      "Sinif Sube": "6A"
+    },
+    {
+      "Tc Kimlik": "99230293962",
+      "Ad": "MUSTAFA",
+      "Soyad": "ELAVVAD",
+      "Okul No": "96",
+      "Sinif Sube": "6A"
+    },
+    {
+      "Tc Kimlik": "38786119968",
+      "Ad": "NEHİR",
+      "Soyad": "MERAL",
+      "Okul No": "291",
+      "Sinif Sube": "6A"
+    },
+    {
+      "Tc Kimlik": "67684156676",
+      "Ad": "TANER CAN",
+      "Soyad": "İMRAK",
+      "Okul No": "356",
+      "Sinif Sube": "6A"
+    },
+    {
+      "Tc Kimlik": "55711556544",
+      "Ad": "YAHYA",
+      "Soyad": "BÜYÜKKAPLAN",
+      "Okul No": "360",
+      "Sinif Sube": "6A"
+    },
+    {
+      "Tc Kimlik": "99938939100",
+      "Ad": "YUNUS",
+      "Soyad": "ELZAKİ",
+      "Okul No": "364",
+      "Sinif Sube": "6A"
+    },
+    {
+      "Tc Kimlik": "36907395956",
+      "Ad": "YUSUF ENES",
+      "Soyad": "KOZNAN",
+      "Okul No": "366",
+      "Sinif Sube": "6A"
+    },
+    {
+      "Tc Kimlik": "64384266964",
+      "Ad": "ZELİHA NUR",
+      "Soyad": "SEÇEN",
+      "Okul No": "84",
+      "Sinif Sube": "6A"
     }
   ],
-  "Ogrenci_1. Sınıf _ A Şubesi": [
+  "Ogrenci_6. Sınıf _ B Şubesi": [
     {
-      "value": "56590527212",
-      "text": "59 GÜLSÜM CEYLAN"
+      "Tc Kimlik": "67975147444",
+      "Ad": "AZAD AYAZ",
+      "Soyad": "COŞKUN",
+      "Okul No": "23",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "22268671082",
-      "text": "75 EREZ TAŞ"
+      "Tc Kimlik": "63064310812",
+      "Ad": "AZİZ İBRAHİM",
+      "Soyad": "ÇELENK",
+      "Okul No": "24",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "99252024834",
-      "text": "102 YASİN HAMZA"
+      "Tc Kimlik": "20795719864",
+      "Ad": "AZRA NUR",
+      "Soyad": "BAZ",
+      "Okul No": "20",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "99051300962",
-      "text": "105 ALİ BOZAN"
+      "Tc Kimlik": "68260137812",
+      "Ad": "BELKIS NİSA",
+      "Soyad": "KURT",
+      "Okul No": "25",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "99866135940",
-      "text": "137 HALE HÜSEYİN"
+      "Tc Kimlik": "99652812260",
+      "Ad": "EMİRA",
+      "Soyad": "ALİ",
+      "Okul No": "64",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "99029702132",
-      "text": "138 SİDRA CASIM"
+      "Tc Kimlik": "37280170918",
+      "Ad": "ENES",
+      "Soyad": "KILIÇ",
+      "Okul No": "66",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "99909340980",
-      "text": "150 MUSTAFA NASEN"
+      "Tc Kimlik": "57868484268",
+      "Ad": "EROL",
+      "Soyad": "ATMACA",
+      "Okul No": "78",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "99836996526",
-      "text": "245 EMEL ELSELUM"
+      "Tc Kimlik": "28739454888",
+      "Ad": "FATMA",
+      "Soyad": "GERÇEK",
+      "Okul No": "75",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "99479720052",
-      "text": "259 EMİNE ELİSA"
+      "Tc Kimlik": "99395130324",
+      "Ad": "FATTUM",
+      "Soyad": "ELALUSE",
+      "Okul No": "36",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "23183639904",
-      "text": "268 HANİFİ ASAF TAŞ"
+      "Tc Kimlik": "46840852164",
+      "Ad": "HASAN MERT",
+      "Soyad": "KILIÇ",
+      "Okul No": "58",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "99848484004",
-      "text": "289 ZİYAD UMAR"
+      "Tc Kimlik": "53773621194",
+      "Ad": "HATİCE KÜBRA",
+      "Soyad": "BUDAK",
+      "Okul No": "167",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "99735169380",
-      "text": "358 ESRA ELMUHAMMED"
+      "Tc Kimlik": "72127008658",
+      "Ad": "HAVVA NUR",
+      "Soyad": "BULUZ",
+      "Okul No": "175",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "99342077214",
-      "text": "383 SELİN EL ALLUS"
+      "Tc Kimlik": "43897949564",
+      "Ad": "MAHMUT",
+      "Soyad": "KARATAŞ",
+      "Okul No": "243",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "12854614012",
-      "text": "404 SELVİ UDUM"
+      "Tc Kimlik": "31496363072",
+      "Ad": "NECİP TAHİR",
+      "Soyad": "TÜMEN",
+      "Okul No": "287",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "21161707836",
-      "text": "409 İSLİMNUR DEMİR"
+      "Tc Kimlik": "99653200172",
+      "Ad": "ÖMER",
+      "Soyad": "HACCAN",
+      "Okul No": "311",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "66043212060",
-      "text": "414 HATİCE KAYA"
+      "Tc Kimlik": "67114175710",
+      "Ad": "RAHİME İKRA",
+      "Soyad": "KANLIEL",
+      "Okul No": "67",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "65737222262",
-      "text": "428 MEHMET KAYA"
+      "Tc Kimlik": "99002605832",
+      "Ad": "RİTAC",
+      "Soyad": "ELHEMMO",
+      "Okul No": "324",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "41564027942",
-      "text": "441 CEYLAN KANIKARA"
+      "Tc Kimlik": "99172794794",
+      "Ad": "SÜNDÜZ",
+      "Soyad": "DERVIŞ",
+      "Okul No": "349",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "51319702840",
-      "text": "449 ENDAM ELMAOĞLU"
+      "Tc Kimlik": "19244771522",
+      "Ad": "TUBA",
+      "Soyad": "POLAT",
+      "Okul No": "11",
+      "Sinif Sube": "6B"
     },
     {
-      "value": "15179906930",
-      "text": "454 GAMZE POLAT"
-    },
-    {
-      "value": "99411193692",
-      "text": "456 HASAN MOHAMMED"
-    },
-    {
-      "value": "65806219940",
-      "text": "460 KEREM KARATAŞ"
-    },
-    {
-      "value": "32015346262",
-      "text": "461 LÜTFİYE EDA BAYINDIR"
-    },
-    {
-      "value": "99090362402",
-      "text": "475 MİDYAN EL HAC SÜLEYMAN"
-    },
-    {
-      "value": "99831316640",
-      "text": "490 MERYEM MUHAMMED"
-    },
-    {
-      "value": "99546005952",
-      "text": "492 DELİL OSO"
-    },
-    {
-      "value": "99816218846",
-      "text": "565 AHMED CEDDUG"
-    },
-    {
-      "value": "99581800000",
-      "text": "1007 NERMİN EL ALLUS"
-    },
-    {
-      "value": "99956526764",
-      "text": "2005 MUHAMMED MAHMUD"
-    },
-    {
-      "value": "99046563518",
-      "text": "2023 SUBHİ ELAHMED"
+      "Tc Kimlik": "99332191906",
+      "Ad": "VELA",
+      "Soyad": "EL NAHSAN",
+      "Okul No": "244",
+      "Sinif Sube": "6B"
     }
   ],
-  "Ogrenci_1. Sınıf _ B Şubesi": [
+  "Ogrenci_6. Sınıf _ C Şubesi": [
     {
-      "value": "99732247722",
-      "text": "22 MİRAL BOZAN"
+      "Tc Kimlik": "32045344702",
+      "Ad": "ABDULLAH",
+      "Soyad": "TUNGAÇ",
+      "Okul No": "13",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "99441415658",
-      "text": "29 ALİ ELCASİM"
+      "Tc Kimlik": "99179896132",
+      "Ad": "ABDULLATİF",
+      "Soyad": "DEDEN",
+      "Okul No": "102",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "23090643636",
-      "text": "45 SERAP NUR KILIÇ"
+      "Tc Kimlik": "38951114866",
+      "Ad": "ALİ",
+      "Soyad": "SÜRGÜVENÇ",
+      "Okul No": "99",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "99000195496",
-      "text": "78 FEDYA EL ĞIREYBİ"
+      "Tc Kimlik": "45451898486",
+      "Ad": "AYNUR ZELİHA",
+      "Soyad": "DEMİRBİLEK",
+      "Okul No": "22",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "99420206338",
-      "text": "90 BEREKAT ABDİ"
+      "Tc Kimlik": "20942725786",
+      "Ad": "BÜŞRA NUR",
+      "Soyad": "YAŞAR",
+      "Okul No": "39",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "99492361058",
-      "text": "111 VATAN İBRAHİM"
+      "Tc Kimlik": "61681356770",
+      "Ad": "ECRİN",
+      "Soyad": "KUŞKU",
+      "Okul No": "46",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "99435256564",
-      "text": "115 FEHED İSA"
+      "Tc Kimlik": "99563239668",
+      "Ad": "FATMA",
+      "Soyad": "DADAN",
+      "Okul No": "32",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "22091845360",
-      "text": "180 GÜLER KARADAL"
+      "Tc Kimlik": "10899192908",
+      "Ad": "HALİL İBRAHİM",
+      "Soyad": "KORKMAZ",
+      "Okul No": "83",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "99801326648",
-      "text": "251 EMEL WALW"
+      "Tc Kimlik": "64819253064",
+      "Ad": "HAMZA",
+      "Soyad": "EROĞLU",
+      "Okul No": "378",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "99620988652",
-      "text": "287 YASMİN UMAR"
+      "Tc Kimlik": "37388166844",
+      "Ad": "HÜSEYİN KENAN",
+      "Soyad": "KARTAL",
+      "Okul No": "196",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "99353855894",
-      "text": "310 MELİKE DERVİŞ"
+      "Tc Kimlik": "99599572128",
+      "Ad": "İSMAİL",
+      "Soyad": "İBO",
+      "Okul No": "220",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "99042069458",
-      "text": "321 SELMA EL ĞIREYBI"
+      "Tc Kimlik": "99385790606",
+      "Ad": "MUHAMMED",
+      "Soyad": "İBRAHİM",
+      "Okul No": "274",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "99543050702",
-      "text": "381 YAHYA YASSUF"
+      "Tc Kimlik": "99080677882",
+      "Ad": "MUHAMMED",
+      "Soyad": "SAİD",
+      "Okul No": "162",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "42146008274",
-      "text": "429 SALİH ŞİNİKÇİ"
+      "Tc Kimlik": "46027092550",
+      "Ad": "MUHAMMED ENES",
+      "Soyad": "ALTUNTAŞ",
+      "Okul No": "100",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "44584926608",
-      "text": "447 ELİF ATEŞ"
+      "Tc Kimlik": "44938914978",
+      "Ad": "MUHAMMET",
+      "Soyad": "ESEN",
+      "Okul No": "277",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "14972914456",
-      "text": "457 HATİCE AZRA MURAT"
+      "Tc Kimlik": "70693056646",
+      "Ad": "MURAT",
+      "Soyad": "DÜLEK",
+      "Okul No": "282",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "66811186142",
-      "text": "462 MEHMET ŞAH YÜREKLİ"
+      "Tc Kimlik": "14429752464",
+      "Ad": "NERGİZ DİCLE",
+      "Soyad": "DAĞDELEN",
+      "Okul No": "293",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "99381178040",
-      "text": "463 MUHAMMED ELĞERİBİ"
+      "Tc Kimlik": "15065910614",
+      "Ad": "PERİHAN SU",
+      "Soyad": "KARTAL",
+      "Okul No": "317",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "54619608874",
-      "text": "464 MUHAMMED SALİH GENÇ"
+      "Tc Kimlik": "42254004854",
+      "Ad": "SÜMEYYE MERYEM",
+      "Soyad": "KAYA",
+      "Okul No": "380",
+      "Sinif Sube": "6C"
     },
     {
-      "value": "66892183238",
-      "text": "467 SALİHA REYYAN TÜMEN"
-    },
-    {
-      "value": "29576427158",
-      "text": "470 ZELİHA YAŞAR"
-    },
-    {
-      "value": "99546351776",
-      "text": "489 MÜFİDE GÜL MELUHİ"
-    },
-    {
-      "value": "99552259332",
-      "text": "491 RODA OSO"
-    },
-    {
-      "value": "58519462932",
-      "text": "504 İKRA NUR AKINCI"
-    },
-    {
-      "value": "99296707380",
-      "text": "1003 AHMED EL MİRİ"
-    },
-    {
-      "value": "99899658058",
-      "text": "1970 EMİNE AL İSA"
-    },
-    {
-      "value": "99578271974",
-      "text": "1979 GAYS ELAZAT"
-    },
-    {
-      "value": "99055563226",
-      "text": "1986 KAMER ELMUHAMMED"
-    },
-    {
-      "value": "99263133006",
-      "text": "2003 MUHAMMED ELMUHAMMED"
+      "Tc Kimlik": "41650248886",
+      "Ad": "TUĞBA",
+      "Soyad": "HASAN",
+      "Okul No": "54",
+      "Sinif Sube": "6C"
     }
   ],
-  "Ogrenci_1. Sınıf _ C Şubesi": [
+  "Ogrenci_7. Sınıf _ A Şubesi": [
     {
-      "value": "99666350970",
-      "text": "17 FATMA OSMAN"
+      "Tc Kimlik": "99500551914",
+      "Ad": "AHMED",
+      "Soyad": "ELMUHAMED",
+      "Okul No": "108",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "99899499286",
-      "text": "44 SABAH ELKENAVİ"
+      "Tc Kimlik": "99611236298",
+      "Ad": "AHMED",
+      "Soyad": "MERRAŞİ",
+      "Okul No": "109",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "99885139608",
-      "text": "49 MUSTAFA OSMAN"
+      "Tc Kimlik": "25901549588",
+      "Ad": "AHMET MUHAMMET",
+      "Soyad": "UZUN",
+      "Okul No": "117",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "99801299782",
-      "text": "52 HAMZA HECCAN"
+      "Tc Kimlik": "25001579638",
+      "Ad": "ASMİN",
+      "Soyad": "MURAT",
+      "Okul No": "129",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "69145107968",
-      "text": "55 SULTAN REYYAN ŞENÇİÇEK"
+      "Tc Kimlik": "49399766340",
+      "Ad": "BERAT MÜFTAH",
+      "Soyad": "OKLUER",
+      "Okul No": "152",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "99231212740",
-      "text": "58 ALAADDİN KÜREYYE"
+      "Tc Kimlik": "25319568942",
+      "Ad": "CEYLİN GÜL",
+      "Soyad": "UZUN",
+      "Okul No": "158",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "99372173450",
-      "text": "76 ESRA EL MUHAMMED"
+      "Tc Kimlik": "18890783712",
+      "Ad": "FATMANUR",
+      "Soyad": "İMRAK",
+      "Okul No": "518",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "16304869670",
-      "text": "125 ADİLE İZCİ"
+      "Tc Kimlik": "27386500078",
+      "Ad": "GAZAL",
+      "Soyad": "YALÇIN",
+      "Okul No": "221",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "99080958042",
-      "text": "337 MUHAMMED ŞİBEN"
+      "Tc Kimlik": "46384866870",
+      "Ad": "HALİL İBRAHİM",
+      "Soyad": "ŞİNİKÇİ",
+      "Okul No": "230",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "99263153288",
-      "text": "361 YASEMİN ELKENAVİ"
+      "Tc Kimlik": "56482530092",
+      "Ad": "HASAN",
+      "Soyad": "YEŞİLTEPELER",
+      "Okul No": "57",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "99498014712",
-      "text": "377 MUHAMMED RIZA SAİD"
+      "Tc Kimlik": "21611692750",
+      "Ad": "HATİCE KÜBRA",
+      "Soyad": "YENİÇELEN",
+      "Okul No": "241",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "99885059104",
-      "text": "382 EMİRA EL ALLUS"
+      "Tc Kimlik": "66700189568",
+      "Ad": "MUHAMMED MUSTAFA",
+      "Soyad": "AÇIKCAN",
+      "Okul No": "403",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "99183001966",
-      "text": "386 BEYEN ELZAKİ"
+      "Tc Kimlik": "99085802326",
+      "Ad": "MUHAMMET",
+      "Soyad": "ALBEYYUŞ",
+      "Okul No": "294",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "19625920228",
-      "text": "394 BEDRİYE DİKİLİTAŞ"
+      "Tc Kimlik": "72322002390",
+      "Ad": "MUSTAFA",
+      "Soyad": "SARIBAŞAK",
+      "Okul No": "297",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "99036318784",
-      "text": "437 AHMED ALMİRİ"
+      "Tc Kimlik": "43729955138",
+      "Ad": "MÜSLÜM",
+      "Soyad": "SERİN",
+      "Okul No": "302",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "30368400778",
-      "text": "439 BERAT MUHAMMET DEMİR"
+      "Tc Kimlik": "71671024312",
+      "Ad": "NEBİ",
+      "Soyad": "KARADAL",
+      "Okul No": "303",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "39476097016",
-      "text": "458 İBRAHİM HALİL İZCİ"
+      "Tc Kimlik": "70180073590",
+      "Ad": "ORHAN",
+      "Soyad": "KAYA",
+      "Okul No": "306",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "45709889112",
-      "text": "459 İSMAİL EFE POLAT"
+      "Tc Kimlik": "40202073020",
+      "Ad": "ÖZLEM NUR",
+      "Soyad": "AKYAVUZ",
+      "Okul No": "313",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "61819352308",
-      "text": "471 EBUBEKİR SIDDIK YENİÇELEN"
+      "Tc Kimlik": "71095043098",
+      "Ad": "RAMAZAN",
+      "Soyad": "BİLİŞİK",
+      "Okul No": "316",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "58306469236",
-      "text": "472 FAZLI ÖZKINACI"
+      "Tc Kimlik": "29372433902",
+      "Ad": "SAMİ FIRAT",
+      "Soyad": "ARSLANTAŞ",
+      "Okul No": "370",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "99414321610",
-      "text": "482 ĞADE KURDİ"
+      "Tc Kimlik": "99917256952",
+      "Ad": "SEMAR",
+      "Soyad": "AHMED",
+      "Okul No": "500",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "99351158270",
-      "text": "496 GÜLBAHAR ALİ"
+      "Tc Kimlik": "25889549976",
+      "Ad": "TUANA NUR",
+      "Soyad": "UZUN",
+      "Okul No": "334",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "99444291686",
-      "text": "501 ALİ AVAD"
+      "Tc Kimlik": "99638367944",
+      "Ad": "YASMİN",
+      "Soyad": "HACHAMDO",
+      "Okul No": "352",
+      "Sinif Sube": "7A"
     },
     {
-      "value": "99759365362",
-      "text": "502 MELEK İBRAHİM"
-    },
-    {
-      "value": "99651228956",
-      "text": "552 ENES ELHAMMO"
-    },
-    {
-      "value": "99205857724",
-      "text": "1980 FATIMA SABBAGH"
-    },
-    {
-      "value": "99017693510",
-      "text": "1991 MECİD ELMUHAMMED"
+      "Tc Kimlik": "40291301202",
+      "Ad": "ZEHRA",
+      "Soyad": "UÇAR",
+      "Okul No": "348",
+      "Sinif Sube": "7A"
     }
   ],
-  "Ogrenci_1. Sınıf _ D Şubesi": [
+  "Ogrenci_7. Sınıf _ B Şubesi": [
     {
-      "value": "99105337692",
-      "text": "33 OSMAN EL HALAF"
+      "Tc Kimlik": "64201272970",
+      "Ad": "ABDULLAH SAİT",
+      "Soyad": "KARA",
+      "Okul No": "119",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "99140764606",
-      "text": "35 ĞUFRAN ELKENAVİ"
+      "Tc Kimlik": "29294436548",
+      "Ad": "AYŞE NAZ",
+      "Soyad": "ARSLANTAŞ",
+      "Okul No": "383",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "99318128360",
-      "text": "46 REVAN MUHAMMET"
+      "Tc Kimlik": "69988080244",
+      "Ad": "BİLAL",
+      "Soyad": "DEMİR",
+      "Okul No": "156",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "99045245996",
-      "text": "54 CUDİ EL ŞEYH ABDALLAH"
+      "Tc Kimlik": "99818128624",
+      "Ad": "CUMA",
+      "Soyad": "EL HALAF",
+      "Okul No": "160",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "99165042444",
-      "text": "65 HALİT NASEN"
+      "Tc Kimlik": "99020028088",
+      "Ad": "DUA",
+      "Soyad": "SUVEYD",
+      "Okul No": "166",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "99390421816",
-      "text": "97 MUHAMMED ABDİ"
+      "Tc Kimlik": "43801952956",
+      "Ad": "EFE",
+      "Soyad": "TİRİTOĞLU",
+      "Okul No": "147",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "44215939298",
-      "text": "103 REYHAN KARACA"
+      "Tc Kimlik": "50650724740",
+      "Ad": "ELİF ADA",
+      "Soyad": "SANAĞ",
+      "Okul No": "501",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "99309125378",
-      "text": "118 MUHAMMED MUHAMMED"
+      "Tc Kimlik": "25297802724",
+      "Ad": "EMİNE",
+      "Soyad": "DİKİLİTAŞ",
+      "Okul No": "523",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "99693096506",
-      "text": "221 CANE BASHBITAR"
+      "Tc Kimlik": "71200039596",
+      "Ad": "FATMA NUR",
+      "Soyad": "KORKMAZ",
+      "Okul No": "204",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "99456179460",
-      "text": "248 HALİL ELHÜSEYİN"
+      "Tc Kimlik": "58810452878",
+      "Ad": "FERMANDAR EGİT",
+      "Soyad": "BOZKURT",
+      "Okul No": "219",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "99692374582",
-      "text": "338 RİMES ŞİBEN"
+      "Tc Kimlik": "57826486006",
+      "Ad": "HAYRUNNİSA",
+      "Soyad": "İNCEDAL",
+      "Okul No": "996",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "72358001220",
-      "text": "421 EBRAR ADA ASLAN"
+      "Tc Kimlik": "30179407102",
+      "Ad": "İBRAHİM HALİL",
+      "Soyad": "AÇIKALIN",
+      "Okul No": "257",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "72361001156",
-      "text": "422 HİRA NUR ASLAN"
+      "Tc Kimlik": "41204040140",
+      "Ad": "KADER",
+      "Soyad": "BAYRAM",
+      "Okul No": "307",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "99186208812",
-      "text": "423 NAĞAM ELKENCO"
+      "Tc Kimlik": "27524495334",
+      "Ad": "MEHMET ALİ",
+      "Soyad": "GÜÇLÜ",
+      "Okul No": "269",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "99378445346",
-      "text": "426 CENE ELKENC"
+      "Tc Kimlik": "17468830704",
+      "Ad": "MUHAMMED ALİ",
+      "Soyad": "ASLAN",
+      "Okul No": "393",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "17068265128",
-      "text": "427 NUDA ÇOBAN"
+      "Tc Kimlik": "21545694578",
+      "Ad": "MUSTAFA",
+      "Soyad": "BULUT",
+      "Okul No": "295",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "31507589514",
-      "text": "438 ABDULLAH EFE BİNGÖL"
+      "Tc Kimlik": "17012845918",
+      "Ad": "MUSTAFA YİĞİT",
+      "Soyad": "DURMAZ",
+      "Okul No": "299",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "50566727682",
-      "text": "440 CELAL ARAS KAN"
+      "Tc Kimlik": "99611711498",
+      "Ad": "NEDA",
+      "Soyad": "ALMİRİ",
+      "Okul No": "48",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "23396632914",
-      "text": "452 FATMA İKRA YİĞİT"
+      "Tc Kimlik": "69181107632",
+      "Ad": "SALİH",
+      "Soyad": "KARADAL",
+      "Okul No": "323",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "57499497026",
-      "text": "453 SÜLEYMAN IŞIK"
+      "Tc Kimlik": "72232005146",
+      "Ad": "SEVGİ",
+      "Soyad": "ARSLAN",
+      "Okul No": "327",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "56248538270",
-      "text": "466 NİDA EROĞLU"
+      "Tc Kimlik": "68977113956",
+      "Ad": "TUNA EGEMEN",
+      "Soyad": "AYILMAZER",
+      "Okul No": "335",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "49942748434",
-      "text": "468 SEYİT AHMET KIRĞIL"
+      "Tc Kimlik": "53590636456",
+      "Ad": "ÜMİT",
+      "Soyad": "YAMUKTU",
+      "Okul No": "337",
+      "Sinif Sube": "7B"
     },
     {
-      "value": "99378178114",
-      "text": "469 VARDE ELĞERİBİ"
-    },
-    {
-      "value": "44527928898",
-      "text": "485 FİKRİYE NUR KARACA"
-    },
-    {
-      "value": "99636340482",
-      "text": "488 AHMED DEĞBUL"
-    },
-    {
-      "value": "99171363380",
-      "text": "503 YEZEN ELAVVAD"
-    },
-    {
-      "value": "99459179306",
-      "text": "551 MERVE ELHÜSEYİN"
-    },
-    {
-      "value": "99599810572",
-      "text": "899 ĞALİD ALALI"
-    },
-    {
-      "value": "99188730342",
-      "text": "2007 MUSTAFA FATO"
+      "Tc Kimlik": "61495363568",
+      "Ad": "ZİLAN",
+      "Soyad": "SAĞIR",
+      "Okul No": "347",
+      "Sinif Sube": "7B"
     }
   ],
-  "Ogrenci_2. Sınıf _ A Şubesi": [
+  "Ogrenci_7. Sınıf _ C Şubesi": [
     {
-      "value": "99140746886",
-      "text": "50 İVANA HAMO"
+      "Tc Kimlik": "42574993654",
+      "Ad": "AYŞE",
+      "Soyad": "ELMAOĞLU",
+      "Okul No": "139",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "99104216462",
-      "text": "60 RİM MOHAMMED"
+      "Tc Kimlik": "68824118738",
+      "Ad": "BAĞDAGÜL",
+      "Soyad": "UYGUNER",
+      "Okul No": "301",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "99024240202",
-      "text": "63 NURALŞAM ELGANİM"
+      "Tc Kimlik": "71329035370",
+      "Ad": "BÜNYAMİN",
+      "Soyad": "ŞAHİN",
+      "Okul No": "400",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "99239781378",
-      "text": "82 SADDAM ELHASAN"
+      "Tc Kimlik": "68671124050",
+      "Ad": "EBUBEKİR",
+      "Soyad": "POLAT",
+      "Okul No": "169",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "49276770866",
-      "text": "83 EMİR TAHA KARADAŞ"
+      "Tc Kimlik": "43573960524",
+      "Ad": "ELİF NUR",
+      "Soyad": "ORUZ",
+      "Okul No": "179",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "24095610388",
-      "text": "91 BİLGE BETÜL BAYRAM"
+      "Tc Kimlik": "28820452304",
+      "Ad": "FATMA ECRİN",
+      "Soyad": "ARSLANTAŞ",
+      "Okul No": "372",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "16958847772",
-      "text": "99 ÇINAR BERK KILIÇ"
+      "Tc Kimlik": "67513162472",
+      "Ad": "FATMA NUR",
+      "Soyad": "UYGUNER",
+      "Okul No": "209",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "18464797466",
-      "text": "142 HİRANUR KANLIEL"
+      "Tc Kimlik": "20413959856",
+      "Ad": "GÜLİSTAN",
+      "Soyad": "ATAŞ",
+      "Okul No": "519",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "25613559196",
-      "text": "188 ERKAN YAŞAR"
+      "Tc Kimlik": "99788255610",
+      "Ad": "HALİD",
+      "Soyad": "NASEN",
+      "Okul No": "503",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "53434632156",
-      "text": "213 ARAS EROĞLU"
+      "Tc Kimlik": "45838885436",
+      "Ad": "HASAN HÜSEYİN",
+      "Soyad": "DEMİR",
+      "Okul No": "851",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "99416512108",
-      "text": "216 EMNİ DALONA"
+      "Tc Kimlik": "99092677436",
+      "Ad": "HENE",
+      "Soyad": "SAİD",
+      "Okul No": "513",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "99147094362",
-      "text": "240 ESİL GASİS"
+      "Tc Kimlik": "99641367870",
+      "Ad": "HUSEM",
+      "Soyad": "HACHAMDO",
+      "Okul No": "645",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "99311675922",
-      "text": "260 HADİCE CEDDUG"
+      "Tc Kimlik": "40304212792",
+      "Ad": "İBRAHİM HALİL",
+      "Soyad": "AKYAVUZ",
+      "Okul No": "499",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "99149239556",
-      "text": "261 MUHAMMED CEDDUG"
+      "Tc Kimlik": "24044611732",
+      "Ad": "İBRAHİM HALİL",
+      "Soyad": "ÖZÜPERK",
+      "Okul No": "258",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "68710122726",
-      "text": "264 ZEYNEP BAYRAM"
+      "Tc Kimlik": "63106310190",
+      "Ad": "İLAYDA",
+      "Soyad": "ÖZDİLEK",
+      "Okul No": "516",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "51892683642",
-      "text": "273 HASRET DAĞDELEN"
+      "Tc Kimlik": "37868150806",
+      "Ad": "KÜBRA",
+      "Soyad": "KILIÇ",
+      "Okul No": "262",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "57982480610",
-      "text": "312 MEHMET ALİ ESGİN"
+      "Tc Kimlik": "33442521666",
+      "Ad": "MİKAİL CAN",
+      "Soyad": "TOKMAK",
+      "Okul No": "280",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "16385867374",
-      "text": "319 NACİYE YALÇIN"
+      "Tc Kimlik": "34727255252",
+      "Ad": "MUHAMMED BİLAL",
+      "Soyad": "ÖZKAN",
+      "Okul No": "286",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "54100609960",
-      "text": "322 ŞEYMA NAS GÜÇLÜ"
+      "Tc Kimlik": "35303236566",
+      "Ad": "MUHAMMED EMİR",
+      "Soyad": "ÖCALAN",
+      "Okul No": "82",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "31457364216",
-      "text": "323 UĞUR MELEK ERDOĞAN"
+      "Tc Kimlik": "32135341956",
+      "Ad": "MUHAMMED NECİP",
+      "Soyad": "TÜMEN",
+      "Okul No": "288",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "33901515366",
-      "text": "349 YAĞMUR AKARSU"
+      "Tc Kimlik": "99818254668",
+      "Ad": "MUSTAFA",
+      "Soyad": "NASEN",
+      "Okul No": "508",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "99378121448",
-      "text": "366 YUSUF AHMED"
+      "Tc Kimlik": "35249237948",
+      "Ad": "SALİHA NUR",
+      "Soyad": "DEMİRCİOĞLU",
+      "Okul No": "514",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "23666624588",
-      "text": "376 HALİL ENES ASLAN"
+      "Tc Kimlik": "20786720282",
+      "Ad": "SEVDA NUR",
+      "Soyad": "KANKILIÇ",
+      "Okul No": "325",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "60445398346",
-      "text": "388 SÜMEYYE ÖZDALAR"
+      "Tc Kimlik": "65026389324",
+      "Ad": "UMUT BARAN",
+      "Soyad": "TURAN",
+      "Okul No": "401",
+      "Sinif Sube": "7C"
     },
     {
-      "value": "99470984088",
-      "text": "391 FATIMA ZEHRA ELHUMEDİ"
-    },
-    {
-      "value": "99455605946",
-      "text": "446 HİBE ELASİ"
-    },
-    {
-      "value": "99080906326",
-      "text": "944 ŞAM ELİSA"
+      "Tc Kimlik": "21662690934",
+      "Ad": "VAKKAS EREN",
+      "Soyad": "ERDOĞAN",
+      "Okul No": "340",
+      "Sinif Sube": "7C"
     }
   ],
-  "Ogrenci_2. Sınıf _ B Şubesi": [
+  "Ogrenci_8. Sınıf _ A Şubesi": [
     {
-      "value": "99618071854",
-      "text": "71 AYŞE ELKENC"
+      "Tc Kimlik": "99611711870",
+      "Ad": "AHMED",
+      "Soyad": "AVAD",
+      "Okul No": "29",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "99408085542",
-      "text": "79 HÜSEYİN ALKHLIF"
+      "Tc Kimlik": "99757539970",
+      "Ad": "AHMED",
+      "Soyad": "ELKATUF",
+      "Okul No": "110",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "99905914512",
-      "text": "92 ÖMER ELDEDDU"
+      "Tc Kimlik": "40964047970",
+      "Ad": "AHMET",
+      "Soyad": "SAVAŞ",
+      "Okul No": "104",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "99750117526",
-      "text": "98 ABDULKERİM OSMAN"
+      "Tc Kimlik": "25676556934",
+      "Ad": "AYSEL",
+      "Soyad": "ULUSOY",
+      "Okul No": "148",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "99311860984",
-      "text": "113 ABDULLAH GATİT"
+      "Tc Kimlik": "47116842520",
+      "Ad": "BÜNYAMİN",
+      "Soyad": "SAĞIR",
+      "Okul No": "37",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "99786057360",
-      "text": "130 HADİCE MALLA"
+      "Tc Kimlik": "99766724268",
+      "Ad": "DUA",
+      "Soyad": "ĞIREYBI",
+      "Okul No": "40",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "35864217400",
-      "text": "176 GÜLAY YAMUKTU"
+      "Tc Kimlik": "62728322260",
+      "Ad": "ELİF",
+      "Soyad": "DEMİR",
+      "Okul No": "250",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "26861517624",
-      "text": "205 FATMA ESTİT"
+      "Tc Kimlik": "99587712222",
+      "Ad": "EMİNE",
+      "Soyad": "ALMİRİ",
+      "Okul No": "130",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "99509682862",
-      "text": "215 VELİD UBEYDO"
+      "Tc Kimlik": "23852618308",
+      "Ad": "FATMA",
+      "Soyad": "KAYAOKAY",
+      "Okul No": "47",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "50725722268",
-      "text": "218 FETHİ POLAT"
+      "Tc Kimlik": "18665790822",
+      "Ad": "FEHİMENUR",
+      "Soyad": "ORUZ",
+      "Okul No": "49",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "35144241408",
-      "text": "223 MUHAMMET HÜSEYİN KABAKULAK"
+      "Tc Kimlik": "99881181410",
+      "Ad": "İBRAHİM",
+      "Soyad": "DADAN",
+      "Okul No": "62",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "62503329842",
-      "text": "279 HAVVA NUR DENİZER"
+      "Tc Kimlik": "63223305802",
+      "Ad": "İLAYDA",
+      "Soyad": "BAZ",
+      "Okul No": "120",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "22940648678",
-      "text": "284 HİRANUR KIZILATEŞ"
+      "Tc Kimlik": "14933915140",
+      "Ad": "İSLİM",
+      "Soyad": "ARSLAN",
+      "Okul No": "65",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "99185629076",
-      "text": "285 REDUR AHMED"
+      "Tc Kimlik": "18323802546",
+      "Ad": "KAZIM SÜFYAN",
+      "Soyad": "ÇETİN",
+      "Okul No": "71",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "66289203938",
-      "text": "318 MÜSLÜM POLAT"
+      "Tc Kimlik": "45094910002",
+      "Ad": "MAHMUT",
+      "Soyad": "MERAL",
+      "Okul No": "74",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "38279136830",
-      "text": "332 ZELİHA SERRA TÜMEN"
+      "Tc Kimlik": "31124375736",
+      "Ad": "MEHMET ALİ",
+      "Soyad": "KURT",
+      "Okul No": "76",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "99533945940",
-      "text": "336 SİDRA CEDDUG"
+      "Tc Kimlik": "49234772390",
+      "Ad": "MEHMET MUSTAFA",
+      "Soyad": "CANLI",
+      "Okul No": "4",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "99713670136",
-      "text": "346 MUHAMMED MOHAMMED"
+      "Tc Kimlik": "53749621692",
+      "Ad": "MUSTAFA",
+      "Soyad": "ARIKAN",
+      "Okul No": "116",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "56047706634",
-      "text": "359 HAVVANUR ATMACA"
+      "Tc Kimlik": "61495363186",
+      "Ad": "SALİH",
+      "Soyad": "BİLİŞİK",
+      "Okul No": "226",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "99093043322",
-      "text": "384 MERVE ĞIREYBİ"
+      "Tc Kimlik": "34112276466",
+      "Ad": "SEYFETTİN CAN",
+      "Soyad": "İMRAK",
+      "Okul No": "229",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "99678101966",
-      "text": "385 ŞAM MUHAMMED"
+      "Tc Kimlik": "99920156270",
+      "Ad": "YUSUF",
+      "Soyad": "AVAD",
+      "Okul No": "444",
+      "Sinif Sube": "8A"
     },
     {
-      "value": "33185306650",
-      "text": "392 NİSA NUR KIZILATEŞ"
-    },
-    {
-      "value": "64201273106",
-      "text": "484 AYDIN KARACA"
-    },
-    {
-      "value": "99269847396",
-      "text": "966 MUNE HAMDAVİ"
-    },
-    {
-      "value": "99291015220",
-      "text": "1004 HELİN ESAAD"
-    },
-    {
-      "value": "67858151360",
-      "text": "2020 SABİHA NUR ÖLMEZ"
+      "Tc Kimlik": "15746888546",
+      "Ad": "ZEYNEP ZENAN",
+      "Soyad": "KANLIEL",
+      "Okul No": "192",
+      "Sinif Sube": "8A"
     }
   ],
-  "Ogrenci_2. Sınıf _ C Şubesi": [
+  "Ogrenci_8. Sınıf _ B Şubesi": [
     {
-      "value": "40130075516",
-      "text": "21 HAMZA DENİZER"
+      "Tc Kimlik": "47113843056",
+      "Ad": "ABDULLAH",
+      "Soyad": "KILIÇ",
+      "Okul No": "195",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "65614225966",
-      "text": "28 MUHAMMED KILIÇ"
+      "Tc Kimlik": "99035239820",
+      "Ad": "ABDURRAHMAN",
+      "Soyad": "ELİSA",
+      "Okul No": "27",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "99398696346",
-      "text": "36 İSA ELALUSE"
+      "Tc Kimlik": "99347043672",
+      "Ad": "AHMED",
+      "Soyad": "AHMED",
+      "Okul No": "509",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "43339968320",
-      "text": "84 DENİZ CAN KAYA"
+      "Tc Kimlik": "99074349870",
+      "Ad": "AHMED",
+      "Soyad": "ELHUMEYDİ",
+      "Okul No": "284",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "99144162422",
-      "text": "88 ZEYNEB BOZAN"
+      "Tc Kimlik": "14732922516",
+      "Ad": "AHMET",
+      "Soyad": "ÇİFÇİ",
+      "Okul No": "17",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "25604559488",
-      "text": "89 AZRA NARİN KAN"
+      "Tc Kimlik": "66832185278",
+      "Ad": "BERAT",
+      "Soyad": "SARI",
+      "Okul No": "34",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "99606060792",
-      "text": "94 MARİA HACCAN"
+      "Tc Kimlik": "57718489504",
+      "Ad": "BERAT",
+      "Soyad": "SEÇEN",
+      "Okul No": "190",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "41936015188",
-      "text": "109 DAMLA ÇETİN"
+      "Tc Kimlik": "50425732222",
+      "Ad": "CEREN",
+      "Soyad": "SAĞIR",
+      "Okul No": "38",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "71977013836",
-      "text": "149 BÜŞRA KILIÇ"
+      "Tc Kimlik": "36575194448",
+      "Ad": "ELİF",
+      "Soyad": "KAPLAN",
+      "Okul No": "42",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "99269513802",
-      "text": "230 SABAH ELİBRAHİM"
+      "Tc Kimlik": "30668390960",
+      "Ad": "ESMA NUR",
+      "Soyad": "GÜZEL",
+      "Okul No": "45",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "99210253528",
-      "text": "281 MUNE EŞŞAHABİ"
+      "Tc Kimlik": "68995113754",
+      "Ad": "FATOŞ",
+      "Soyad": "ALTUNTAŞ",
+      "Okul No": "155",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "65692223342",
-      "text": "295 KEVSER KAYAOKAY"
+      "Tc Kimlik": "64117275676",
+      "Ad": "FERHAT",
+      "Soyad": "KOT",
+      "Okul No": "50",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "99995838224",
-      "text": "304 AHMED GATİT"
+      "Tc Kimlik": "69766087830",
+      "Ad": "MEHMET",
+      "Soyad": "ATMACA",
+      "Okul No": "253",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "70684056792",
-      "text": "306 MELİHA NUR BUDAK"
+      "Tc Kimlik": "99989316172",
+      "Ad": "MUHAMMED",
+      "Soyad": "DERVİŞ",
+      "Okul No": "81",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "59299436298",
-      "text": "315 YAKUP ASAF ASLAN"
+      "Tc Kimlik": "30164408084",
+      "Ad": "MUHAMMED EFE",
+      "Soyad": "KILIÇ",
+      "Okul No": "223",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "70423065962",
-      "text": "326 YAKUP BÜYÜKKAPLAN"
+      "Tc Kimlik": "58843451862",
+      "Ad": "MUHAMMED MUSTAFA",
+      "Soyad": "AKYAVUZ",
+      "Okul No": "105",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "39107109606",
-      "text": "328 YILMAZ KILIÇ"
+      "Tc Kimlik": "99556787534",
+      "Ad": "MUSTAFA",
+      "Soyad": "EL HASAN",
+      "Okul No": "271",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "46735855430",
-      "text": "334 BEKİR ŞİNİKÇİ"
+      "Tc Kimlik": "71422032696",
+      "Ad": "MÜSLÜM EFE",
+      "Soyad": "ASLAN",
+      "Okul No": "135",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "66583193652",
-      "text": "342 MECİDE BÜYÜKKAPLAN"
+      "Tc Kimlik": "36179206868",
+      "Ad": "SADİN ENES",
+      "Soyad": "BALOĞLU",
+      "Okul No": "312",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "99258152012",
-      "text": "344 CENNET NAHSAN"
+      "Tc Kimlik": "36776187218",
+      "Ad": "YÜKSEL",
+      "Soyad": "ASLAN",
+      "Okul No": "459",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "99809967300",
-      "text": "345 AHMED MÜSLÜM BOZAN"
+      "Tc Kimlik": "70378067288",
+      "Ad": "ZEHRA",
+      "Soyad": "BULUZ",
+      "Okul No": "504",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "54961581122",
-      "text": "360 MENESSA ARSLAN"
+      "Tc Kimlik": "20288737108",
+      "Ad": "ZEYNEP",
+      "Soyad": "GEZER",
+      "Okul No": "210",
+      "Sinif Sube": "8B"
     },
     {
-      "value": "63454297730",
-      "text": "372 FAHRİYE TURAN"
-    },
-    {
-      "value": "99245963478",
-      "text": "378 NUR DADAN"
-    },
-    {
-      "value": "66607192838",
-      "text": "401 EMİNE NUR ÇAKIR"
-    },
-    {
-      "value": "99125563606",
-      "text": "445 ABDURRAHMAN ŞEYH MUHAMMED"
-    },
-    {
-      "value": "51925682222",
-      "text": "448 EMİRHAN KILIÇ"
-    },
-    {
-      "value": "40052078398",
-      "text": "499 YAĞIZ EYMEN ERKILIÇ"
-    },
-    {
-      "value": "99560784918",
-      "text": "1952 NESRİN YASİN"
+      "Tc Kimlik": "71152041944",
+      "Ad": "ZEYNEP",
+      "Soyad": "GÜZEL",
+      "Okul No": "528",
+      "Sinif Sube": "8B"
     }
   ],
-  "Ogrenci_3. Sınıf _ A Şubesi": [
+  "Ogrenci_8. Sınıf _ C Şubesi": [
     {
-      "value": "49351768474",
-      "text": "38 YUSUF BERAT ALOĞLU"
+      "Tc Kimlik": "51301703572",
+      "Ad": "ABDULLAH",
+      "Soyad": "DAĞDELEN",
+      "Okul No": "15",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "99005605778",
-      "text": "74 ERİC ELHAMMO"
+      "Tc Kimlik": "35159241066",
+      "Ad": "BERAT",
+      "Soyad": "YİĞİT",
+      "Okul No": "125",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "99122374748",
-      "text": "95 NASIR GATİT"
+      "Tc Kimlik": "58435465628",
+      "Ad": "BEYZANUR",
+      "Soyad": "AYKUT",
+      "Okul No": "481",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "34370267596",
-      "text": "106 FATMA TAŞOĞLU"
+      "Tc Kimlik": "19664758028",
+      "Ad": "EYLÜL",
+      "Soyad": "DALKIRAN",
+      "Okul No": "194",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "52045678096",
-      "text": "147 DAMLA KOZNAN"
+      "Tc Kimlik": "99649812334",
+      "Ad": "FİDA",
+      "Soyad": "ALİ",
+      "Okul No": "52",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "47740821878",
-      "text": "160 EDANUR ATMACA"
+      "Tc Kimlik": "62083343672",
+      "Ad": "HANIMGÜL",
+      "Soyad": "IŞIK",
+      "Okul No": "55",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "51118709316",
-      "text": "172 HALİL TUNGAÇ"
+      "Tc Kimlik": "29147441798",
+      "Ad": "HÜSEYİN",
+      "Soyad": "TUNGAÇ",
+      "Okul No": "61",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "99710711184",
-      "text": "181 FATMA AHMED"
+      "Tc Kimlik": "44401932782",
+      "Ad": "LEYLANUR",
+      "Soyad": "DAĞDELEN",
+      "Okul No": "72",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "69640091892",
-      "text": "185 NAZLI KURT"
+      "Tc Kimlik": "70810052520",
+      "Ad": "MEHMET",
+      "Soyad": "AYILMAZER",
+      "Okul No": "505",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "30842385508",
-      "text": "274 ASMİN COŞKUN"
+      "Tc Kimlik": "51082710004",
+      "Ad": "MEHMETCAN",
+      "Soyad": "YİĞİT",
+      "Okul No": "80",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "35489230464",
-      "text": "350 SADETTİN SARIÇİÇEK"
+      "Tc Kimlik": "70258071190",
+      "Ad": "MUHAMMED",
+      "Soyad": "TAŞOĞLU",
+      "Okul No": "106",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "99611360184",
-      "text": "368 YASEMİN ELHASAN"
+      "Tc Kimlik": "23024645422",
+      "Ad": "MUHAMMED MUSTAFA",
+      "Soyad": "OPAK",
+      "Okul No": "186",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "19225987744",
-      "text": "396 EMİR BERKE BİNGÖL"
+      "Tc Kimlik": "39176107138",
+      "Ad": "MÜSLÜM",
+      "Soyad": "GÜLEÇ",
+      "Okul No": "474",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "67672157494",
-      "text": "412 ABDULKADİR KAYA"
+      "Tc Kimlik": "18533795416",
+      "Ad": "NEHİR SELEN",
+      "Soyad": "GÜÇLÜ",
+      "Okul No": "136",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "15671890782",
-      "text": "596 YILDIZ ATMACA"
+      "Tc Kimlik": "49741755282",
+      "Ad": "ÖZKAN",
+      "Soyad": "DEMİR",
+      "Okul No": "26",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "99302165746",
-      "text": "703 AYAD ELALİ"
+      "Tc Kimlik": "99457858678",
+      "Ad": "SAMIR",
+      "Soyad": "ELHASAN",
+      "Okul No": "227",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "48127808772",
-      "text": "964 FATMA ZEHRA OKYAY"
+      "Tc Kimlik": "38039145676",
+      "Ad": "SEYFEDDİN CAN",
+      "Soyad": "İMRAK",
+      "Okul No": "228",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "39104109838",
-      "text": "967 MERYEM AYRAN"
+      "Tc Kimlik": "99725621584",
+      "Ad": "SİDRA",
+      "Soyad": "EL HASAN",
+      "Okul No": "151",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "99044353456",
-      "text": "1050 AHMED HACHAMDO"
-    }
-  ],
-  "Ogrenci_3. Sınıf _ B Şubesi": [
-    {
-      "value": "31316369024",
-      "text": "144 BARIŞ KANKILIÇ"
-    },
-    {
-      "value": "43825952222",
-      "text": "155 CANER UYGUNER"
-    },
-    {
-      "value": "31763354574",
-      "text": "168 AYAZ UYGUNER"
-    },
-    {
-      "value": "99329407676",
-      "text": "171 JÜLYET HAMDAVİ"
-    },
-    {
-      "value": "99341609966",
-      "text": "210 MUTESİM BİLLAH ELMUHAMMED"
-    },
-    {
-      "value": "55138575302",
-      "text": "217 NİZAMETTİN İMRAK"
-    },
-    {
-      "value": "99411085478",
-      "text": "234 ŞEHED ALKHLIF"
-    },
-    {
-      "value": "99404696186",
-      "text": "275 FATMA EL ALLUS"
-    },
-    {
-      "value": "99413258382",
-      "text": "276 NIRCIS NASEN"
-    },
-    {
-      "value": "99011694964",
-      "text": "288 MUHAMMED ABDULLAH"
-    },
-    {
-      "value": "99599920226",
-      "text": "305 ALİ ELŞEYH ABDULLAH"
-    },
-    {
-      "value": "99590920508",
-      "text": "308 HACER ELŞEYH ABDULLAH"
-    },
-    {
-      "value": "99023928552",
-      "text": "311 MUHAMMED MUHAMMED EL HASAN ELRABİ"
-    },
-    {
-      "value": "18053811276",
-      "text": "314 REYYAN NUR KARADAŞ"
-    },
-    {
-      "value": "14456931238",
-      "text": "402 HALİL SAVAŞ"
-    },
-    {
-      "value": "42715989386",
-      "text": "406 MUHAMMED MEHMET KARATAŞ"
-    },
-    {
-      "value": "39455098126",
-      "text": "1014 MÜSLÜM KAPLAN"
-    }
-  ],
-  "Ogrenci_3. Sınıf _ C Şubesi": [
-    {
-      "value": "99749696964",
-      "text": "3 ABDULMELİK DADAN"
-    },
-    {
-      "value": "56161540930",
-      "text": "37 YUSUF İPEKLEŞEN"
-    },
-    {
-      "value": "27512496084",
-      "text": "183 HASRET DEMİR"
-    },
-    {
-      "value": "99131665998",
-      "text": "202 ABDURRAHMAN ELMUHAMMED"
-    },
-    {
-      "value": "99812485006",
-      "text": "208 MUHAMMED HABİB HASSAN"
-    },
-    {
-      "value": "70804053120",
-      "text": "211 MUHAMMED EMİR DEMİRBİLEK"
-    },
-    {
-      "value": "99890865622",
-      "text": "220 İLEF ELZAKİ"
-    },
-    {
-      "value": "99795780150",
-      "text": "222 MERYEM ELAZİMİ"
-    },
-    {
-      "value": "99092766390",
-      "text": "232 CENE ELİSA"
-    },
-    {
-      "value": "50512729494",
-      "text": "242 YÜZGÜL NUR ERDAL"
-    },
-    {
-      "value": "99122931040",
-      "text": "247 AHMED ABDİ"
-    },
-    {
-      "value": "19256771176",
-      "text": "253 RUMEYSA NUR DEMİR"
-    },
-    {
-      "value": "35675224284",
-      "text": "254 HATİCE TAYLAN"
-    },
-    {
-      "value": "59977415300",
-      "text": "257 BEYZAGÜL TAŞ"
-    },
-    {
-      "value": "27338502112",
-      "text": "269 HATİCE TÜMEN"
-    },
-    {
-      "value": "99257778374",
-      "text": "280 HACE ELHAMMO"
-    },
-    {
-      "value": "99869759136",
-      "text": "282 EMİNE GASİS"
-    },
-    {
-      "value": "99260947354",
-      "text": "286 TESNİM OSMAN"
-    },
-    {
-      "value": "57481497140",
-      "text": "1008 SEYİT HALİT KARTAL"
-    },
-    {
-      "value": "99068939452",
-      "text": "2006 MUHAMMED MUSTAFA"
-    }
-  ],
-  "Ogrenci_3. Sınıf _ D Şubesi": [
-    {
-      "value": "23564627544",
-      "text": "20 MUSTAFA KILIÇ"
-    },
-    {
-      "value": "99446890436",
-      "text": "40 ESRA ELCASIM"
-    },
-    {
-      "value": "99119563834",
-      "text": "157 FİKRİYE NAHSAN"
-    },
-    {
-      "value": "99971670862",
-      "text": "175 SUPHİYE AVAD"
-    },
-    {
-      "value": "23342635020",
-      "text": "186 IŞILAY AYILMAZER"
-    },
-    {
-      "value": "62551328248",
-      "text": "187 İREM SU KUŞKU"
-    },
-    {
-      "value": "70420065958",
-      "text": "194 LEYLA NUR ATEŞ"
-    },
-    {
-      "value": "54790586756",
-      "text": "239 ZEHRANUR KAYA"
-    },
-    {
-      "value": "99263610118",
-      "text": "241 ELYAS ELZAKI"
-    },
-    {
-      "value": "25532562000",
-      "text": "252 ŞENEL KIZILATEŞ"
-    },
-    {
-      "value": "99632747186",
-      "text": "303 AHMED BOZAN"
-    },
-    {
-      "value": "23653848324",
-      "text": "965 FERDİ ATAŞ"
-    },
-    {
-      "value": "25139575120",
-      "text": "971 MİRAY NUR YEŞİLTEPELER"
-    },
-    {
-      "value": "99182783726",
-      "text": "1024 ZEKERİYYA MUHAMMED"
-    },
-    {
-      "value": "36595420756",
-      "text": "1155 CEYLİN NUR MERYEM TAYLAN"
-    }
-  ],
-  "Ogrenci_4. Sınıf _ A Şubesi": [
-    {
-      "value": "99125676320",
-      "text": "6 ŞEHED SAİD"
-    },
-    {
-      "value": "46504863130",
-      "text": "9 YAŞAR ELMAOĞLU"
-    },
-    {
-      "value": "99509475266",
-      "text": "13 MERYEM ĞIREYBİ"
-    },
-    {
-      "value": "99383195816",
-      "text": "23 FATMA CASİM"
-    },
-    {
-      "value": "47983813968",
-      "text": "25 AYKUT KARAKURT"
-    },
-    {
-      "value": "27284503652",
-      "text": "32 HAMZA KIZILATEŞ"
-    },
-    {
-      "value": "66637191504",
-      "text": "47 HASAN DEMİR"
-    },
-    {
-      "value": "99725189954",
-      "text": "48 MUSTAFA ELİSA"
-    },
-    {
-      "value": "30551394976",
-      "text": "61 MUHAMMED ALİ TİRİTOĞLU"
-    },
-    {
-      "value": "50959714640",
-      "text": "80 MUHAMMED KAYA"
-    },
-    {
-      "value": "30782387020",
-      "text": "86 ÖMER ALOĞLU"
-    },
-    {
-      "value": "27641491868",
-      "text": "123 HÜMEYRA ERDOĞAN"
-    },
-    {
-      "value": "39773087284",
-      "text": "135 ELİF ÖZKAN"
-    },
-    {
-      "value": "54736588646",
-      "text": "140 MEHMET ALİ OĞUL"
-    },
-    {
-      "value": "51037711544",
-      "text": "146 AYSEL BULUT"
-    },
-    {
-      "value": "44659924980",
-      "text": "148 HATİCE NUR YEŞİLTEPELER"
-    },
-    {
-      "value": "26135542154",
-      "text": "151 HAVVA NİSA İNCİ"
-    },
-    {
-      "value": "40298070224",
-      "text": "154 RABİA FİDAN GÜZEL"
-    },
-    {
-      "value": "42961981516",
-      "text": "173 EYLÜL NİSA GÜÇLÜ"
-    },
-    {
-      "value": "99665527076",
-      "text": "189 HASAN ELCASİM"
-    },
-    {
-      "value": "65509229604",
-      "text": "207 MUHAMMED MUSTAFA DEMİR"
-    },
-    {
-      "value": "99848097082",
-      "text": "212 AHMED SADUN ELALUSE"
-    },
-    {
-      "value": "99092728602",
-      "text": "219 İLEF ELİSA"
-    },
-    {
-      "value": "99296514926",
-      "text": "233 SÜNDÜS MUHAMMED EL HASAN"
-    },
-    {
-      "value": "45523895764",
-      "text": "262 PERİHAN BALOĞLU"
-    },
-    {
-      "value": "99925814434",
-      "text": "272 ALİ HASAN"
-    },
-    {
-      "value": "99185644208",
-      "text": "277 VELE ELĞERİBİ"
-    },
-    {
-      "value": "99545627490",
-      "text": "301 MAHMUD ABUREŞ"
-    },
-    {
-      "value": "99413146276",
-      "text": "442 ÖMER HACHAMDO"
-    }
-  ],
-  "Ogrenci_4. Sınıf _ B Şubesi": [
-    {
-      "value": "99239181024",
-      "text": "24 HASAN CASİM"
-    },
-    {
-      "value": "32405332776",
-      "text": "67 ARMAĞAN KIZILTOPRAK"
-    },
-    {
-      "value": "60460398208",
-      "text": "93 HASAN POLAT"
-    },
-    {
-      "value": "47722822688",
-      "text": "100 İBRAHİM HALİL TAYLAN"
-    },
-    {
-      "value": "99997698680",
-      "text": "101 MUHAMMED NASIR"
-    },
-    {
-      "value": "19286769952",
-      "text": "136 FURKAN FEVZİ POLAT"
-    },
-    {
-      "value": "49309769928",
-      "text": "156 ECRİN ERDOĞAN"
-    },
-    {
-      "value": "46651857754",
-      "text": "158 HİLAL SU ÖZÜPERK"
-    },
-    {
-      "value": "19928748604",
-      "text": "159 HİRA GÜL İMRAK"
-    },
-    {
-      "value": "99689709670",
-      "text": "192 İBRAHİM MELUHİ"
-    },
-    {
-      "value": "65107242524",
-      "text": "199 NAZLI ÇETİN"
-    },
-    {
-      "value": "99815370552",
-      "text": "206 MUHAMED İSA"
-    },
-    {
-      "value": "99851483704",
-      "text": "214 EMİRA ELHUMEDİ"
-    },
-    {
-      "value": "99233521598",
-      "text": "236 ZEHRA ELHALAF"
-    },
-    {
-      "value": "60910382504",
-      "text": "237 ZEHRA NUR POLAT"
-    },
-    {
-      "value": "48856784774",
-      "text": "265 PRENSES ATMACA"
-    },
-    {
-      "value": "99893698944",
-      "text": "270 MUHAMMED ELAHMED"
-    },
-    {
-      "value": "65122258708",
-      "text": "291 HİLAL GENÇ"
-    },
-    {
-      "value": "99311305652",
-      "text": "296 AHMED SALİH"
-    },
-    {
-      "value": "45763887918",
-      "text": "299 YUSUF EROĞLU"
-    },
-    {
-      "value": "99453179524",
-      "text": "695 SAFA ELHÜSEYİN"
-    },
-    {
-      "value": "99932350550",
-      "text": "788 MUHAMMED NUR WALW"
-    }
-  ],
-  "Ogrenci_4. Sınıf _ C Şubesi": [
-    {
-      "value": "99707262316",
-      "text": "43 MUNE ZAZA"
-    },
-    {
-      "value": "99026686152",
-      "text": "62 ABDULLAH ELGANİM"
-    },
-    {
-      "value": "99874813908",
-      "text": "72 HASAN ELCASIM"
-    },
-    {
-      "value": "49456764746",
-      "text": "108 EMİR TOKKAN"
-    },
-    {
-      "value": "20852718564",
-      "text": "121 NİZAMETTİN KAYA"
-    },
-    {
-      "value": "56704523024",
-      "text": "128 YUSUF KARADAL"
-    },
-    {
-      "value": "99119803336",
-      "text": "143 MUHAMMED MUHAMMED"
-    },
-    {
-      "value": "60697390426",
-      "text": "166 FATMA DAĞDELEN"
-    },
-    {
-      "value": "57874483736",
-      "text": "177 İCLAL POLAT"
-    },
-    {
-      "value": "25703556722",
-      "text": "178 SONGÜL İKRA KANIKARA"
-    },
-    {
-      "value": "99860626826",
-      "text": "195 EYE AHMED"
-    },
-    {
-      "value": "54559594916",
-      "text": "196 HALİSE BOZKURT"
-    },
-    {
-      "value": "99587651606",
-      "text": "224 NAZDAR BEŞAR"
-    },
-    {
-      "value": "99191674152",
-      "text": "225 RİNED EL MUHAMMED"
-    },
-    {
-      "value": "39650091250",
-      "text": "246 UMUT TİRİTOĞLU"
-    },
-    {
-      "value": "64435265588",
-      "text": "267 ZELİHA NUR AĞAÇKESEN"
-    },
-    {
-      "value": "16412865946",
-      "text": "271 SABİHA KORKMAZ"
-    },
-    {
-      "value": "99253796280",
-      "text": "278 AYŞE HAMMUDİ"
-    },
-    {
-      "value": "99965589088",
-      "text": "283 LUAY MUHAMMED"
-    },
-    {
-      "value": "99335610152",
-      "text": "290 MUHAMMED ELMUHAMMED"
-    },
-    {
-      "value": "44920916140",
-      "text": "293 GÜLÇEHRE KARTAL"
-    },
-    {
-      "value": "71215039390",
-      "text": "371 MÜSLÜM TURAN"
-    },
-    {
-      "value": "12563208434",
-      "text": "397 MURAT ENES BİNGÖL"
-    },
-    {
-      "value": "99956315030",
-      "text": "399 MUSA İBRAHİM"
-    },
-    {
-      "value": "37081402072",
-      "text": "916 AHMET ATAŞ"
-    },
-    {
-      "value": "99893397984",
-      "text": "1057 HALİD EL AVVAD"
-    },
-    {
-      "value": "54547594744",
-      "text": "1114 MİRAÇ EVREN KOT"
-    },
-    {
-      "value": "99809012604",
-      "text": "2059 ZUBEYDE AHMED"
-    }
-  ],
-  "RPD_Hizmet_Turu": [
-    {
-      "value": "7",
-      "text": "D - DESTEK HİZMETLER"
-    },
-    {
-      "value": "5",
-      "text": "Ö - GELİŞİMSEL VE ÖNLEYİCİ HİZMETLER"
-    },
-    {
-      "value": "6",
-      "text": "İ - İYİLEŞTİRİCİ HİZMETLER"
-    }
-  ],
-  "Asama1_D___DESTEK_HİZMETLER": [
-    {
-      "value": "20",
-      "text": "DM - Müşavirlik"
-    }
-  ],
-  "Asama2_DM___Müşavirlik": [
-    {
-      "value": "22",
-      "text": "DMÖ - Öğretmene Yönelik"
-    },
-    {
-      "value": "21",
-      "text": "DMV - Veliye Yönelik"
-    }
-  ],
-  "Asama3_DM___Müşavirlik": [
-    {
-      "value": "108",
-      "text": "DMÖG - Aile"
-    },
-    {
-      "value": "116",
-      "text": "DMÖG - Akademik Konular"
-    },
-    {
-      "value": "110",
-      "text": "DMÖG - Okula ve Çevreye Uyum"
-    },
-    {
-      "value": "113",
-      "text": "DMÖG - Problem Davranış"
-    },
-    {
-      "value": "112",
-      "text": "DMÖG - Psikolojik Uyum"
-    },
-    {
-      "value": "109",
-      "text": "DMÖG - Sağlık"
-    },
-    {
-      "value": "1341",
-      "text": "DMÖG - Sevk Bilgilendirme"
-    },
-    {
-      "value": "111",
-      "text": "DMÖG - Sosyal Uyum"
-    },
-    {
-      "value": "114",
-      "text": "DMÖG - Sosyoekonomik Konular"
-    },
-    {
-      "value": "115",
-      "text": "DMÖG - Yöneltme Yerleştirme"
-    }
-  ],
-  "Asama1_Ö___GELİŞİMSEL_VE_ÖN": [
-    {
-      "value": "12",
-      "text": "ÖOV - Bilgi Verme Çalışmaları"
-    },
-    {
-      "value": "11",
-      "text": "ÖOB - Bireyi Tanıma Çalışmaları"
-    },
-    {
-      "value": "13",
-      "text": "ÖOY - Yöneltme Ve İzleme"
-    }
-  ],
-  "Asama2_ÖOV___Bilgi_Ver": [
-    {
-      "value": "15",
-      "text": "ÖOVE - Akademik Gelişim"
-    },
-    {
-      "value": "16",
-      "text": "ÖOVM - Kariyer Gelişimi"
-    },
-    {
-      "value": "14",
-      "text": "ÖOVK - Sosyal Duygusal Gelişim"
-    }
-  ],
-  "Asama3_ÖOV___Bilgi_Ver": [
-    {
-      "value": "53",
-      "text": "ÖOVEb - Başarısızlık Nedenleri"
-    },
-    {
-      "value": "365",
-      "text": "ÖOVEb - Çalışma Programı Hazırlama"
-    },
-    {
-      "value": "50",
-      "text": "ÖOVEb - Ders Seçimi"
-    },
-    {
-      "value": "368",
-      "text": "ÖOVEb - Devamsızlığı Önleme"
-    },
-    {
-      "value": "54",
-      "text": "ÖOVEb - Devamsızlık Nedenleri"
-    },
-    {
-      "value": "366",
-      "text": "ÖOVEb - Dikkat Geliştirme Çalışmaları"
-    },
-    {
-      "value": "362",
-      "text": "ÖOVEb - Hedef Belirleme"
-    },
-    {
-      "value": "364",
-      "text": "ÖOVEb - Motivasyon"
-    },
-    {
-      "value": "40",
-      "text": "ÖOVEb - Okul Kuralları"
-    },
-    {
-      "value": "367",
-      "text": "ÖOVEb - Okul ve Çevresindeki Eğitim Olanakları"
-    },
-    {
-      "value": "681",
-      "text": "ÖOVEb - Okula ve Çevreye Uyum"
-    },
-    {
-      "value": "51",
-      "text": "ÖOVEb - Okulda Seçilebilecek Alan/Dal"
-    },
-    {
-      "value": "38",
-      "text": "ÖOVEb - Okulun Fiziksel İmkanları"
-    },
-    {
-      "value": "39",
-      "text": "ÖOVEb - Okulun Sosyokültürel İmkanları"
-    },
-    {
-      "value": "41",
-      "text": "ÖOVEb - Öğrenciyi İlgilendiren Yönetmelikler"
-    },
-    {
-      "value": "47",
-      "text": "ÖOVEb - Öğrenme Stilleri"
-    },
-    {
-      "value": "363",
-      "text": "ÖOVEb - Öz Disiplin Geliştirme"
-    },
-    {
-      "value": "42",
-      "text": "ÖOVEb - Rehberlik ve Psikolojik Danışma Servisinin Tanıtılması"
-    },
-    {
-      "value": "46",
-      "text": "ÖOVEb - Serbest Zamanı Değerlendirme"
-    },
-    {
-      "value": "49",
-      "text": "ÖOVEb - Sınav Kaygısı"
-    },
-    {
-      "value": "48",
-      "text": "ÖOVEb - Sınavda Başarılı Olma Stratejileri"
-    },
-    {
-      "value": "43",
-      "text": "ÖOVEb - Sosyal Kulüpler"
-    },
-    {
-      "value": "683",
-      "text": "ÖOVEb - Üst Öğrenimde Yararlanılacak Burslar ve Barınma Olanakları"
-    },
-    {
-      "value": "52",
-      "text": "ÖOVEb - Üst Öğrenime Geçiş Sınavları"
-    },
-    {
-      "value": "44",
-      "text": "ÖOVEb - Verimli Ders Çalışma"
-    },
-    {
-      "value": "682",
-      "text": "ÖOVEb - Yurt Dışı Eğitim Olanakları"
-    },
-    {
-      "value": "45",
-      "text": "ÖOVEb - Zamanı Yönetimi"
-    }
-  ],
-  "Asama2_ÖOB___Bireyi_Ta": [
-    {
-      "value": "23",
-      "text": "B.K.P.1.c - Yaşam Pencerem"
-    },
-    {
-      "value": "24",
-      "text": "B.K.G.4.c - Öğrenci Bilgi Formu"
-    },
-    {
-      "value": "25",
-      "text": "B.K.G.12.c - Yol Haritam"
-    },
-    {
-      "value": "26",
-      "text": "B.K.O.1.c - Bana Kendini Anlat"
-    },
-    {
-      "value": "28",
-      "text": "B.K.G.3.c - Kendimi Tanıyorum"
-    },
-    {
-      "value": "29",
-      "text": "ÖOB99 - Diğer"
-    },
-    {
-      "value": "582",
-      "text": "B.K.A.7.c - Şiddet Algısı Anketi"
-    },
-    {
-      "value": "583",
-      "text": "B.K.A.8.c - Şiddet Sıklığı Anketi"
-    },
-    {
-      "value": "584",
-      "text": "B.K.A.9.c - Şiddet Meşruiyeti Anketi"
-    },
-    {
-      "value": "585",
-      "text": "B.K.A.10.c - Şiddet Algısı Anketi (Veli)"
-    },
-    {
-      "value": "586",
-      "text": "B.G.G.10.c - Şiddet Sıklığı Anketi (Veli)"
-    },
-    {
-      "value": "587",
-      "text": "B.K.A.12.c - Şiddet Meşruiyeti Anketi (Veli)"
-    },
-    {
-      "value": "588",
-      "text": "B.K.A.11.c - Şiddet Algısı Anketi (Öğretmen)"
-    },
-    {
-      "value": "589",
-      "text": "B.G.G.11.c - Şiddet Sıklığı Anketi (Öğretmen)"
-    },
-    {
-      "value": "590",
-      "text": "B.K.A.13.c - Şiddet Meşruiyeti Anketi (Öğretmen 4-6.sınıf)"
-    },
-    {
-      "value": "591",
-      "text": "B.K.A.14.c - Şiddet Meşruiyeti Anketi (Öğretmen 7-12. Sınıf)"
-    },
-    {
-      "value": "673",
-      "text": "B.K.İ.1.c - Verimli Ders Çalışma Kontrol Listesi"
-    },
-    {
-      "value": "674",
-      "text": "B.G.G.2.c - Çocuğumu Tanıyorum Formu"
-    },
-    {
-      "value": "675",
-      "text": "B.G.G.1.c - Aile içi Gözlem Formu"
-    },
-    {
-      "value": "676",
-      "text": "B.G.G.3.c - DEHB Gözlem Formu"
-    },
-    {
-      "value": "677",
-      "text": "B.G.G.4.c - Ev Ziyaret Formu"
-    },
-    {
-      "value": "678",
-      "text": "B.G.G.7.c - Öğrenci Gözlem Kaydı"
-    },
-    {
-      "value": "679",
-      "text": "B.G.G.8.a - Özel Öğrenme Güçlüğü Gözlem Formu"
-    },
-    {
-      "value": "680",
-      "text": "B.K.G.7.c - Öğrenci-Öngörüşme Formu"
-    },
-    {
-      "value": "1309",
-      "text": "RAM (WISC-R) - RAM (WISC-R)"
-    },
-    {
-      "value": "964",
-      "text": "B.K.A.2.C - Devamsızlık Nedenleri Anketi"
-    },
-    {
-      "value": "1310",
-      "text": "RAM (LEITER) - RAM (LEITER)"
-    },
-    {
-      "value": "1311",
-      "text": "RAM (ASİS) - RAM (ASİS)"
-    },
-    {
-      "value": "1312",
-      "text": "RAM (S.BİNET) - RAM (S.BİNET)"
-    },
-    {
-      "value": "1313",
-      "text": "RAM (ÖGT) - RAM (ÖGT)"
-    }
-  ],
-  "Asama3_ÖOB___Bireyi_Ta": [
-    {
-      "value": "293",
-      "text": "B.K.P.1.c.2 - Yaşam Pencerem - Geribildirim"
-    },
-    {
-      "value": "892",
-      "text": "B.K.P.1.c.3 - Yaşam Pencerem - Sonuç Değerlendirme"
-    },
-    {
-      "value": "286",
-      "text": "B.K.P.1.c.1 - Yaşam Pencerem - Uygulama"
-    }
-  ],
-  "Asama2_ÖOY___Yöneltme_": [
-    {
-      "value": "64",
-      "text": "ÖOYb - Alan/Dal Tercihleri"
-    },
-    {
-      "value": "1331",
-      "text": "ÖOYb - Değişen Ben-Sosyal Kültürel Faaliyetler"
-    },
-    {
-      "value": "1332",
-      "text": "ÖOYb - Risk Haritası-Sosyal Kültürel Faaliyetler"
-    },
-    {
-      "value": "65",
-      "text": "ÖOYb - Seçmeli Ders"
-    },
-    {
-      "value": "66",
-      "text": "ÖOYb - Sosyal Kulüpler"
-    },
-    {
-      "value": "67",
-      "text": "ÖOYb - Üst Öğrenim Kurumuna Geçen Öğrencilerin İzlenmesi"
-    }
-  ],
-  "Asama1_İ___İYİLEŞTİRİCİ_HİZ": [
-    {
-      "value": "17",
-      "text": "İB - Bireysel Psikolojik Danışma"
-    },
-    {
-      "value": "18",
-      "text": "İP - Psikososyal Müdahale"
-    },
-    {
-      "value": "19",
-      "text": "İS - Sevk (Yönlendirme)"
-    }
-  ],
-  "Asama2_İB___Bireysel_P": [
-    {
-      "value": "71",
-      "text": "İB - Aile"
-    },
-    {
-      "value": "76",
-      "text": "İB - Davranış Sorunları"
-    },
-    {
-      "value": "1032",
-      "text": "İB - OBM"
-    },
-    {
-      "value": "1569",
-      "text": "İB - Okul öncesi-Arkadaşlık İlişkileri Geliştirme Psikoeğitim Programı(Zorba)"
-    },
-    {
-      "value": "1338",
-      "text": "İB - Okul öncesi-Arkadaşlık İlişkileri Geliştirme Psikoeğitm Programı(Maruz Kalan)"
-    },
-    {
-      "value": "73",
-      "text": "İB - Okula Ve Çevreye Uyum"
-    },
-    {
-      "value": "75",
-      "text": "İB - Psikolojik Uyum"
-    },
-    {
-      "value": "72",
-      "text": "İB - Sağlık"
-    },
-    {
-      "value": "74",
-      "text": "İB - Sosyal Uyum"
-    },
-    {
-      "value": "77",
-      "text": "İB - Sosyoekonomik Konular"
-    },
-    {
-      "value": "1336",
-      "text": "İB - Travma Sonrası Grup Temelli Müdahale Programı (TS-GTM)"
-    },
-    {
-      "value": "78",
-      "text": "İB - Yöneltme Yerleştirme"
-    }
-  ],
-  "Asama2_İP___Psikososya": [
-    {
-      "value": "592",
-      "text": "İPbB - Bildirim Yükümlülüğü"
-    },
-    {
-      "value": "594",
-      "text": "İPbİ - İntihar"
-    },
-    {
-      "value": "593",
-      "text": "İPbT - Koruyucu ve Destekleyici Tedbir"
-    }
-  ],
-  "Asama3_İP___Psikososya": [
-    {
-      "value": "628",
-      "text": "İPbB - Cinsel İstismar"
-    },
-    {
-      "value": "597",
-      "text": "İPbB - Duygusal İhmal"
-    },
-    {
-      "value": "627",
-      "text": "İPbB - Duygusal İstismar"
-    },
-    {
-      "value": "596",
-      "text": "İPbB - Eğitim İle İlgili İhmal"
-    },
-    {
-      "value": "629",
-      "text": "İPbB - Ekonomik İstismar"
-    },
-    {
-      "value": "595",
-      "text": "İPbB - Fiziksel İhmal"
-    },
-    {
-      "value": "626",
-      "text": "İPbB - Fiziksel İstismar"
-    },
-    {
-      "value": "631",
-      "text": "İPbB - Madde Bulundurma"
-    },
-    {
-      "value": "630",
-      "text": "İPbB - Madde Kullanımı"
-    },
-    {
-      "value": "632",
-      "text": "İPbB - Madde Satışı"
-    },
-    {
-      "value": "625",
-      "text": "İPbB - Sağlık İhmali"
-    }
-  ],
-  "Asama2_İS___Sevk_(Yönl": [
-    {
-      "value": "97",
-      "text": "İS - Diğer"
-    },
-    {
-      "value": "91",
-      "text": "İS - RAM Rehberlik ve Psikolojik Danışma Hizmetleri Bölümüne Yönlendirme"
-    },
-    {
-      "value": "92",
-      "text": "İS - Sağlık Kuruluşuna Yönlendirme"
-    }
-  ],
-  "Calisma_Yeri": [
-    {
-      "value": "1",
-      "text": "Rehberlik Servisi"
-    },
-    {
-      "value": "2",
-      "text": "Ev (Ziyaret)"
-    },
-    {
-      "value": "3",
-      "text": "Sınıf (Gözlem)"
+      "Tc Kimlik": "47992813058",
+      "Ad": "TUĞBA",
+      "Soyad": "MERMER",
+      "Okul No": "236",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "4",
-      "text": "Diğer"
+      "Tc Kimlik": "63547295360",
+      "Ad": "TUĞBANUR",
+      "Soyad": "KAYA",
+      "Okul No": "368",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "5",
-      "text": "RAM"
+      "Tc Kimlik": "15005913408",
+      "Ad": "YALÇIN",
+      "Soyad": "ÇİFÇİ",
+      "Okul No": "19",
+      "Sinif Sube": "8C"
     },
     {
-      "value": "6",
-      "text": "Bilsem"
+      "Tc Kimlik": "48940782068",
+      "Ad": "YASİN",
+      "Soyad": "SAVAŞ",
+      "Okul No": "206",
+      "Sinif Sube": "8C"
     }
   ]
 }

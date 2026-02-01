@@ -26,8 +26,8 @@ export interface TeacherRecord {
   teacherId: string; // derived if not present
   teacherName: string;
   teacherNameNormalized: string;
-  sinifSubeKey: string; // e.g. "1#A"
-  sinifSubeDisplay: string; // e.g. "1. Sınıf / A Şubesi"
+  sinifSubeKey?: string; // optional, no longer enforced
+  sinifSubeDisplay?: string; // optional, no longer enforced
 }
 
 function normalizeTr(value: string): string {
@@ -120,13 +120,7 @@ export function validateTeacherClass(teacherName: string, sinifSubeKey: string, 
   if (!teacher) {
     return { valid: false, message: `Öğretmen bulunamadı: ${teacherName}` };
   }
-  if (teacher.sinifSubeKey !== sinifSubeKey) {
-    return {
-      valid: false,
-      message: `Hatalı sınıf/şube seçtiniz. ${teacher.teacherName} yalnızca ${teacher.sinifSubeDisplay} öğretmenidir.`,
-      teacher,
-    };
-  }
+  // No longer validate class matching - teachers can teach any class
   return { valid: true, teacher };
 }
 

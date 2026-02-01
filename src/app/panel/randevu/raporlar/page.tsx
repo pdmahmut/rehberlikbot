@@ -156,7 +156,7 @@ const generateReportWithAI = (
 
   switch (reportType) {
     case "idare":
-      return `DUMLUPINAR İLKOKULU
+      return `DUMLUPINAR ORTAOKULU
 REHBERLİK SERVİSİ - İDARE BİLGİLENDİRME RAPORU
 
 Tarih: ${date}
@@ -196,7 +196,7 @@ ${!sessionNotes.toLowerCase().includes("devamsızlık") && !sessionNotes.toLower
 Bilgilerinize arz ederim.
 
 Psikolojik Danışman
-Mehmet DALĞIN`;
+Mahmut Karadeniz`;
 
     case "ogretmen":
       return `📚 SINIF ÖĞRETMENİ BİLGİLENDİRME NOTU
@@ -240,7 +240,7 @@ ${!sessionNotes.toLowerCase().includes("dikkat") && !sessionNotes.toLowerCase().
 Herhangi bir gözlem veya sorununuz olduğunda rehberlik servisi ile iletişime geçebilirsiniz.
 
 Saygılarımla,
-Psikolojik Danışman Mehmet DALĞIN`;
+Psikolojik Danışman Mahmut Karadeniz`;
 
     case "veli":
       return `Sayın Veli,
@@ -285,8 +285,8 @@ Herhangi bir soru veya görüşmeniz için rehberlik servisi ile iletişime geç
 Çocuğunuzun gelişimi için iş birliğinize teşekkür ederiz.
 
 Saygılarımızla,
-Dumlupınar İlkokulu Rehberlik Servisi
-Psikolojik Danışman Mehmet DALĞIN`;
+Dumlupınar Ortaokulu Rehberlik Servisi
+Psikolojik Danışman Mahmut Karadeniz`;
 
     case "rehberlik":
       return `═══════════════════════════════════════════════════════════════════
@@ -650,10 +650,10 @@ export default function RandevuRaporlariPage() {
             <tr>
               <td>
                 <p style="margin: 0; font-size: 14px; font-weight: bold; color: #374151;">Psikolojik Danışman</p>
-                <p style="margin: 4px 0 0 0; font-size: 13px; color: #6b7280;">Mehmet DALĞIN</p>
+                <p style="margin: 4px 0 0 0; font-size: 13px; color: #6b7280;">Mahmut Karadeniz</p>
               </td>
               <td style="text-align: right;">
-                <p style="margin: 0; font-size: 11px; color: #9ca3af;">Dumlupınar İlkokulu</p>
+                <p style="margin: 0; font-size: 11px; color: #9ca3af;">Dumlupınar Ortaokulu</p>
                 <p style="margin: 2px 0 0 0; font-size: 11px; color: #9ca3af;">Rehberlik Servisi © ${new Date().getFullYear()}</p>
               </td>
             </tr>
@@ -808,7 +808,7 @@ export default function RandevuRaporlariPage() {
                       }),
                       new Paragraph({
                         children: [
-                          new TextRun({ text: "Dumlupınar İlkokulu Rehberlik Servisi", size: 20, color: "666666" })
+                          new TextRun({ text: "Dumlupınar Ortaokulu Rehberlik Servisi", size: 20, color: "666666" })
                         ],
                         spacing: { before: 50 }
                       })

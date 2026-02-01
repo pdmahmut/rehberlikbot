@@ -228,14 +228,6 @@ export default function RPDYonlendirme() {
   };
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
-    // If teachers data exists, enforce UI-level validation and auto class
-    const t = teacherOptions.find(t => t.value === values.ogretmenAdi);
-    if (t) {
-      if (values.sinifSube !== t.sinifSubeKey) {
-        toast.error(`Hatalı sınıf/şube seçtiniz. ${t.label} yalnızca ${t.sinifSubeDisplay} öğretmenidir.`);
-        return;
-      }
-    }
     const sinifSubeText = sinifSubeList.find(s => s.value === values.sinifSube)?.text || "";
     const ogrenciAdi = ogrenciList.find(o => o.value === values.ogrenci)?.text || "";
 
@@ -619,22 +611,10 @@ export default function RPDYonlendirme() {
                             onValueChange={(val) => {
                               console.log('👨‍🏫 Öğretmen değişti:', val);
                               field.onChange(val);
-                              const t = teacherOptions.find(t => t.value === val);
-                              if (t) {
-                                console.log('🎯 Öğretmen bulundu:', t.label, '-> Sınıf:', t.sinifSubeDisplay);
-                                // auto select class and fetch students
-                                form.setValue('sinifSube', t.sinifSubeKey, { shouldValidate: true });
-                                form.setValue('ogrenci', ''); // Öğrenci seçimini sıfırla
-                                // Küçük bir delay ile öğrenci listesini yükle
-                                setTimeout(() => {
-                                  handleSinifChange(t.sinifSubeKey);
-                                }, 100);
-                              } else {
-                                console.log('⚠️  Öğretmen bulunamadı, listeler temizleniyor');
-                                // Öğretmen seçimi temizlenirse öğrenci listesini de temizle
-                                setOgrenciList([]);
-                                form.setValue('ogrenci', '');
-                              }
+                              // Öğretmen değiştiğinde sınıf ve öğrenci seçimini sıfırla
+                              form.setValue('sinifSube', '');
+                              form.setValue('ogrenci', '');
+                              setOgrenciList([]);
                             }}
                             value={field.value}
                           >
@@ -659,27 +639,23 @@ export default function RPDYonlendirme() {
                   <FormField
                     control={form.control}
                     name="sinifSube"
-                    render={({ field }) => {
-                      const t = teacherOptions.find(t => t.value === form.getValues('ogretmenAdi'));
-                      return (
+                    render={({ field }) => (
                         <FormItem>
                           <FormLabel className="flex items-center gap-2 text-gray-700 font-medium text-sm sm:text-base">
                             <BookOpen className="w-4 h-4 text-indigo-500" />
                             Sınıf *
-                            {t && <Badge variant="secondary" className="text-[10px] sm:text-xs bg-indigo-100 text-indigo-700">Otomatik</Badge>}
                           </FormLabel>
                           <Select
                             onValueChange={(value) => { field.onChange(value); handleSinifChange(value); }}
                             value={field.value}
-                            disabled={Boolean(t)}
                           >
                             <FormControl>
-                              <SelectTrigger className={`border-2 border-gray-200 hover:border-indigo-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 transition-all duration-300 bg-white/70 backdrop-blur-sm hover:bg-white/90 hover:shadow-md min-h-[48px] sm:min-h-[52px] px-3 sm:px-4 text-sm sm:text-base w-full rounded-xl active:scale-[0.99] ${Boolean(t) ? 'bg-indigo-50/50 border-indigo-200' : ''}`}>
+                              <SelectTrigger className="border-2 border-gray-200 hover:border-indigo-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 transition-all duration-300 bg-white/70 backdrop-blur-sm hover:bg-white/90 hover:shadow-md min-h-[48px] sm:min-h-[52px] px-3 sm:px-4 text-sm sm:text-base w-full rounded-xl active:scale-[0.99]">
                                 <SelectValue placeholder="🏫 Sınıf seçin" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent className="max-h-[40vh]">
-                              {(t ? sinifSubeList.filter(s => s.value === t.sinifSubeKey) : sinifSubeList).map((sinif) => (
+                              {sinifSubeList.map((sinif) => (
                                 <SelectItem key={sinif.value} value={sinif.value}>
                                   {sinif.text}
                                 </SelectItem>
@@ -688,8 +664,7 @@ export default function RPDYonlendirme() {
                           </Select>
                           <FormMessage />
                         </FormItem>
-                      );
-                    }}
+                      )}
                   />
                   </div>
 

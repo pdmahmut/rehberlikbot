@@ -284,7 +284,7 @@ export default function BelgePage() {
   const generateDocumentContent = (type: DocumentType, studentName: string, className: string, date?: string, time?: string): string => {
     const header = `<p style="text-align: center"><strong>T.C.</strong></p>
 <p style="text-align: center"><strong>BİRECİK KAYMAKAMLIĞI</strong></p>
-<p style="text-align: center"><strong>DUMLUPINAR İLKOKULU MÜDÜRLÜĞÜ</strong></p>
+<p style="text-align: center"><strong>DUMLUPINAR ORTAOKULU MÜDÜRLÜĞÜ</strong></p>
 <p style="text-align: center"><strong>REHBERLİK SERVİSİ</strong></p>
 <p></p>`;
 
@@ -293,7 +293,7 @@ export default function BelgePage() {
 <p></p>
 <p>${formattedDate}</p>
 <p></p>
-<p style="text-align: right"><strong>MEHMET DALĞIN</strong></p>
+<p style="text-align: right"><strong>MAHMUT KARADENİZ</strong></p>
 <p style="text-align: right">Rehber Öğretmen ve Psikolojik Danışman</p>`;
 
     const formattedMeetingDate = date 
