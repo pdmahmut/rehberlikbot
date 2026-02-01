@@ -197,11 +197,7 @@ function ReferralListModal({
                     {students.map((student, idx) => (
                       <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                         <td className="py-3 px-4">
-                          <ClickableStudent name={student.student_name} className={student.class_display}>
-                            <span className="font-medium text-slate-800 hover:text-blue-600 cursor-pointer">
-                              {student.student_name}
-                            </span>
-                          </ClickableStudent>
+                          <ClickableStudent studentName={student.student_name} classDisplay={student.class_display} />
                         </td>
                         <td className="py-3 px-4">
                           <Badge variant="outline" className="bg-slate-50">
