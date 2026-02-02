@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
 
-import { SinifSube, Ogrenci, YonlendirilenOgrenci, YONLENDIRME_NEDENLERI } from "@/types";
+import { SinifSube, Ogrenci, YonlendirilenOgrenci, YONLENDIRME_KATEGORILERI } from "@/types";
 
 const formSchema = z.object({
   ogretmenAdi: z.string().min(2, "Öğretmen adı en az 2 karakter olmalıdır"),
@@ -163,12 +163,26 @@ export default function RPDYonlendirme() {
     }
   }, [showNotifications]);
 
-  // Filtrelenmiş nedenler
-  const filteredReasons = useMemo(() => {
-    if (!reasonSearch) return YONLENDIRME_NEDENLERI;
-    return YONLENDIRME_NEDENLERI.filter(neden => 
-      neden.toLowerCase().includes(reasonSearch.toLowerCase())
+  // Açık kategorileri takip et
+  const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
+
+  const toggleCategory = (categoryId: string) => {
+    setExpandedCategories(prev => 
+      prev.includes(categoryId) 
+        ? prev.filter(id => id !== categoryId)
+        : [...prev, categoryId]
     );
+  };
+
+  // Filtrelenmiş kategoriler
+  const filteredCategories = useMemo(() => {
+    if (!reasonSearch) return YONLENDIRME_KATEGORILERI;
+    return YONLENDIRME_KATEGORILERI.map(kategori => ({
+      ...kategori,
+      altNedenler: kategori.altNedenler.filter(neden =>
+        neden.toLowerCase().includes(reasonSearch.toLowerCase())
+      )
+    })).filter(kategori => kategori.altNedenler.length > 0);
   }, [reasonSearch]);
 
   // Session süresi hesaplama
@@ -722,7 +736,7 @@ export default function RPDYonlendirme() {
                           </div>
                           <div className="flex items-center gap-1.5 sm:gap-2">
                             {field.value?.length > 0 && (
-                              <Badge className="bg-emerald-100 text-emerald-700 text-[10px] sm:text-xs">{field.value.length}</Badge>
+                              <Badge className="bg-emerald-100 text-emerald-700 text-[10px] sm:text-xs">{field.value.length} seçili</Badge>
                             )}
                             <button
                               type="button"
@@ -741,52 +755,107 @@ export default function RPDYonlendirme() {
                               type="text"
                               value={reasonSearch}
                               onChange={(e) => setReasonSearch(e.target.value)}
-                              placeholder="🔍 Ara..."
+                              placeholder="🔍 Neden ara..."
                               className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                             />
                           </div>
                         )}
                         
-                        <div className="grid grid-cols-1 gap-1.5 sm:gap-2 md:gap-3 border-2 border-gray-200 rounded-xl p-2.5 sm:p-3 md:p-4 bg-gradient-to-br from-white/50 to-gray-50/50 backdrop-blur-sm">
-                          {filteredReasons.map((neden, index) => (
-                            <label 
-                              key={neden} 
-                              className="flex items-center space-x-3 min-h-[44px] sm:min-h-[48px] group cursor-pointer animate-fade-in p-1.5 sm:p-2 rounded-lg hover:bg-emerald-50/50 active:bg-emerald-100/50 transition-colors"
-                              style={{ animationDelay: `${index * 0.02}s` }}
-                            >
-                              <div className="relative flex-shrink-0">
-                                <input
-                                  type="checkbox"
-                                  id={neden}
-                                  checked={field.value?.includes(neden) || false}
-                                  onChange={(e) => {
-                                    const currentValues = field.value || [];
-                                    if (e.target.checked) {
-                                      field.onChange([...currentValues, neden]);
-                                    } else {
-                                      field.onChange(currentValues.filter(v => v !== neden));
-                                    }
-                                  }}
-                                  className="absolute inset-0 w-6 h-6 sm:w-7 sm:h-7 opacity-0 cursor-pointer"
-                                />
-                                <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg border-2 transition-all duration-300 flex items-center justify-center ${field.value?.includes(neden)
-                                    ? 'bg-gradient-to-br from-emerald-500 to-teal-600 border-emerald-500 shadow-lg shadow-emerald-500/30 scale-105'
-                                    : 'border-gray-300 hover:border-emerald-400 hover:bg-emerald-50'
-                                  }`}>
-                                  {field.value?.includes(neden) && (
-                                    <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white animate-in zoom-in-50 duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                  )}
-                                </div>
+                        <div className="border-2 border-gray-200 rounded-xl p-2 sm:p-3 bg-gradient-to-br from-white/50 to-gray-50/50 backdrop-blur-sm max-h-[400px] overflow-y-auto">
+                          {filteredCategories.map((kategori) => {
+                            const isExpanded = expandedCategories.includes(kategori.id);
+                            const selectedInCategory = kategori.altNedenler.filter(n => field.value?.includes(n)).length;
+                            
+                            // Renk eşlemesi
+                            const colorMap: Record<string, { bg: string; border: string; text: string; light: string }> = {
+                              blue: { bg: 'bg-blue-500', border: 'border-blue-300', text: 'text-blue-700', light: 'bg-blue-50' },
+                              orange: { bg: 'bg-orange-500', border: 'border-orange-300', text: 'text-orange-700', light: 'bg-orange-50' },
+                              purple: { bg: 'bg-purple-500', border: 'border-purple-300', text: 'text-purple-700', light: 'bg-purple-50' },
+                              pink: { bg: 'bg-pink-500', border: 'border-pink-300', text: 'text-pink-700', light: 'bg-pink-50' },
+                              teal: { bg: 'bg-teal-500', border: 'border-teal-300', text: 'text-teal-700', light: 'bg-teal-50' },
+                              red: { bg: 'bg-red-500', border: 'border-red-300', text: 'text-red-700', light: 'bg-red-50' },
+                              indigo: { bg: 'bg-indigo-500', border: 'border-indigo-300', text: 'text-indigo-700', light: 'bg-indigo-50' },
+                              amber: { bg: 'bg-amber-500', border: 'border-amber-300', text: 'text-amber-700', light: 'bg-amber-50' },
+                            };
+                            const colors = colorMap[kategori.renk] || colorMap.blue;
+                            
+                            return (
+                              <div key={kategori.id} className="mb-2 last:mb-0">
+                                {/* Kategori Başlığı */}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleCategory(kategori.id)}
+                                  className={`w-full flex items-center justify-between p-2.5 sm:p-3 rounded-lg transition-all duration-200 ${
+                                    isExpanded ? `${colors.light} ${colors.border} border-2` : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 sm:gap-3">
+                                    <span className="text-lg sm:text-xl">{kategori.icon}</span>
+                                    <span className={`font-semibold text-xs sm:text-sm ${isExpanded ? colors.text : 'text-gray-700'}`}>
+                                      {kategori.baslik}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {selectedInCategory > 0 && (
+                                      <Badge className={`${colors.bg} text-white text-[10px] px-1.5`}>
+                                        {selectedInCategory}
+                                      </Badge>
+                                    )}
+                                    {isExpanded ? (
+                                      <ChevronUp className={`w-4 h-4 ${colors.text}`} />
+                                    ) : (
+                                      <ChevronDown className="w-4 h-4 text-gray-400" />
+                                    )}
+                                  </div>
+                                </button>
+                                
+                                {/* Alt Nedenler */}
+                                {isExpanded && (
+                                  <div className={`mt-1 ml-4 sm:ml-6 pl-3 sm:pl-4 border-l-2 ${colors.border} animate-fade-in`}>
+                                    {kategori.altNedenler.map((neden, index) => (
+                                      <label 
+                                        key={neden} 
+                                        className="flex items-center space-x-3 min-h-[40px] sm:min-h-[44px] group cursor-pointer p-1.5 sm:p-2 rounded-lg hover:bg-white/70 active:bg-white transition-colors"
+                                        style={{ animationDelay: `${index * 0.03}s` }}
+                                      >
+                                        <div className="relative flex-shrink-0">
+                                          <input
+                                            type="checkbox"
+                                            checked={field.value?.includes(neden) || false}
+                                            onChange={(e) => {
+                                              const currentValues = field.value || [];
+                                              if (e.target.checked) {
+                                                field.onChange([...currentValues, neden]);
+                                              } else {
+                                                field.onChange(currentValues.filter(v => v !== neden));
+                                              }
+                                            }}
+                                            className="absolute inset-0 w-5 h-5 sm:w-6 sm:h-6 opacity-0 cursor-pointer"
+                                          />
+                                          <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-md border-2 transition-all duration-300 flex items-center justify-center ${
+                                            field.value?.includes(neden)
+                                              ? `${colors.bg} border-transparent shadow-md scale-105`
+                                              : 'border-gray-300 hover:border-gray-400 bg-white'
+                                          }`}>
+                                            {field.value?.includes(neden) && (
+                                              <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white animate-in zoom-in-50 duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                                              </svg>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <span className={`text-xs sm:text-sm font-medium leading-tight flex-1 transition-all duration-200 ${
+                                          field.value?.includes(neden) ? colors.text : 'text-gray-600 group-hover:text-gray-800'
+                                        }`}>
+                                          {neden}
+                                        </span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
-                              <span className={`text-sm sm:text-base font-medium leading-tight flex-1 transition-all duration-200 ${
-                                field.value?.includes(neden) ? 'text-emerald-700' : 'group-hover:text-emerald-700'
-                              }`}>
-                                {neden}
-                              </span>
-                            </label>
-                          ))}
+                            );
+                          })}
                         </div>
                         <FormMessage />
                       </FormItem>

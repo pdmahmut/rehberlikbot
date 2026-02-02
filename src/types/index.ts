@@ -43,19 +43,118 @@ export interface ReferralRecord {
   source?: string;
 }
 
-export const YONLENDIRME_NEDENLERI = [
-  "Akran Zorbalığı Yapan",
-  "Özel Gereksinimli",
-  "Devamsızlık Yapan", 
-  "Sınıf Kurallarına Uymayan",
-  "Öksüz/Yetim",
-  "Ailevi Travması Olan",
-  "Maddi Durumu Yetersiz",
-  "Göçmen / Mülteci (Suriyeli)",
-  "RAM'a yönlendirilmesi gereken"
-] as const;
+// Yönlendirme Kategorileri ve Alt Nedenler (Hiyerarşik Yapı)
+export interface YonlendirmeKategori {
+  id: string;
+  baslik: string;
+  icon: string;
+  renk: string;
+  altNedenler: string[];
+}
 
-export type YonlendirmeNedeni = typeof YONLENDIRME_NEDENLERI[number];
+export const YONLENDIRME_KATEGORILERI: YonlendirmeKategori[] = [
+  {
+    id: "akademik",
+    baslik: "Akademik / Okula Uyum Kaynaklı Nedenler",
+    icon: "📚",
+    renk: "blue",
+    altNedenler: [
+      "Akademik başarısızlık",
+      "Derslere ilgisizlik / motivasyon düşüklüğü",
+      "Ödev yapmama / sorumluluk almama",
+      "Dikkat ve odaklanma güçlüğü",
+      "Sınav kaygısı",
+      "Okula uyum sorunu"
+    ]
+  },
+  {
+    id: "davranissal",
+    baslik: "Davranışsal Nedenler",
+    icon: "⚠️",
+    renk: "orange",
+    altNedenler: [
+      "Sınıf kurallarına uymama",
+      "Arkadaşlarını rahatsız etme",
+      "Öğretmene karşı saygısız davranış",
+      "Öfke kontrolü güçlüğü",
+      "İnatlaşma / karşı gelme"
+    ]
+  },
+  {
+    id: "akran",
+    baslik: "Akran İlişkileri",
+    icon: "👥",
+    renk: "purple",
+    altNedenler: [
+      "Zorbalığa maruz kalan",
+      "Zorbalık yapan",
+      "Sosyal iletişim güçlüğü"
+    ]
+  },
+  {
+    id: "duygusal",
+    baslik: "Duygusal – Psikolojik Nedenler",
+    icon: "💭",
+    renk: "pink",
+    altNedenler: [
+      "Duygusal – Psikolojik sorunlar"
+    ]
+  },
+  {
+    id: "aile",
+    baslik: "Aile Kaynaklı Nedenler",
+    icon: "🏠",
+    renk: "teal",
+    altNedenler: [
+      "Aile içi iletişim sorunları",
+      "Boşanma süreci / aile değişimi",
+      "Aile tutumlarıyla ilgili sorunlar",
+      "Ev ortamına bağlı ders çalışma güçlüğü"
+    ]
+  },
+  {
+    id: "devamsizlik",
+    baslik: "Devamsızlık ve Okul Disiplini",
+    icon: "📋",
+    renk: "red",
+    altNedenler: [
+      "Devamsızlık",
+      "Geç kalma",
+      "Okul kurallarına uymama",
+      "Okul eşyalarına zarar verme",
+      "Disipline yönlendirme"
+    ]
+  },
+  {
+    id: "dijital",
+    baslik: "Dijital / Güncel Sorun Alanları",
+    icon: "📱",
+    renk: "indigo",
+    altNedenler: [
+      "Aşırı ekran kullanımı",
+      "Dijital oyun bağımlılığı",
+      "Sosyal medya kaynaklı sorunlar",
+      "Siber zorbalık"
+    ]
+  },
+  {
+    id: "ozel",
+    baslik: "Özel Durumlar",
+    icon: "⭐",
+    renk: "amber",
+    altNedenler: [
+      "Sağlık sorunlarına bağlı uyum güçlüğü",
+      "Özel gereksinim şüphesi",
+      "Travmatik yaşantı (kayıp, hastalık vb.)",
+      "Rehberlik servisi tarafından takip edilen öğrenci"
+    ]
+  }
+];
+
+// Tüm alt nedenleri düz array olarak export et (geriye dönük uyumluluk için)
+export const YONLENDIRME_NEDENLERI = YONLENDIRME_KATEGORILERI.flatMap(k => k.altNedenler);
+
+export type YonlendirmeNedeni = string;
 
 // Disiplin Ceza Türleri
 export const DISIPLIN_CEZALARI = [

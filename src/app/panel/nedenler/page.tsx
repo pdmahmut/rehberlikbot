@@ -34,7 +34,7 @@ import autoTable from "jspdf-autotable";
 import { Document, Packer, Paragraph, Table, TableCell, TableRow, TextRun, HeadingLevel, AlignmentType, WidthType, BorderStyle } from "docx";
 import { saveAs } from "file-saver";
 import { usePanelData } from "../hooks";
-import { YONLENDIRME_NEDENLERI } from "@/types";
+import { YONLENDIRME_NEDENLERI, YONLENDIRME_KATEGORILERI } from "@/types";
 import { TimeFilter, StatsResponse } from "../types";
 import { ClickableStudent } from "@/components/ClickableStudent";
 import { 
