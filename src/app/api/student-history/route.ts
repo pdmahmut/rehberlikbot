@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
       totalReferrals: referrals.length,
       referrals: referrals.map(r => ({
         id: r.id,
+        studentName: r.student_name || studentName,
         reason: r.reason || 'Belirtilmemiş',
         teacherName: r.teacher_name || 'Bilinmiyor',
         classDisplay: r.class_display,

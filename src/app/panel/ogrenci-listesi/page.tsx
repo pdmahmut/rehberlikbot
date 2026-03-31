@@ -45,6 +45,7 @@ interface ClassOption {
 
 interface ReferralHistory {
   id: string;
+  studentName: string;
   reason: string;
   teacherName: string;
   classDisplay: string;
@@ -1140,6 +1141,14 @@ export default function OgrenciListesiPage() {
                               {studentHistory.totalReferrals - idx}
                             </div>
                             <div className="flex-1 min-w-0">
+                              <div className="mb-2">
+                                <p className="text-base font-bold text-slate-800 leading-tight">
+                                  {referral.studentName || selectedStudent?.text || studentHistory.studentName}
+                                </p>
+                                <p className="text-[11px] text-slate-500 mt-0.5">
+                                  Öğrenci yönlendirme kaydı
+                                </p>
+                              </div>
                               <div className="flex items-center gap-2 flex-wrap">
                                 <Badge className={`${getReasonColor(referral.reason)} border text-xs`}>
                                   {referral.reason}

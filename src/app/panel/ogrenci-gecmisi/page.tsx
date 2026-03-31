@@ -50,6 +50,7 @@ import {
 
 interface ReferralRecord {
   id: string;
+  studentName: string;
   reason: string;
   teacherName: string;
   classDisplay: string;
@@ -891,6 +892,14 @@ export default function OgrenciGecmisiPage() {
                         >
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1 min-w-0">
+                              <div className="mb-3">
+                                <h3 className="text-lg font-bold text-slate-800 leading-tight">
+                                  {record.studentName || selectedStudent?.text || searchQuery.trim()}
+                                </h3>
+                                <p className="text-xs text-slate-500 mt-1">
+                                  Yönlendirme kaydı
+                                </p>
+                              </div>
                               <div className="flex items-center gap-2 flex-wrap">
                                 <Badge className="bg-blue-600 text-white">
                                   {record.reason}
