@@ -21,7 +21,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { toast } from "sonner";
 
 import { SinifSube, Ogrenci, YonlendirilenOgrenci, YONLENDIRME_KATEGORILERI } from "@/types";
-import { buildGuidanceKey, groupGuidanceStudents, normalizeGuidanceStudent } from "@/lib/guidance";
+import { buildGuidanceKey, groupGuidanceStudents, normalizeGuidanceStudent, notifyGuidanceReferralsChanged } from "@/lib/guidance";
 
 const formSchema = z.object({
   ogretmenAdi: z.string().min(2, "Öğretmen adı en az 2 karakter olmalıdır"),
@@ -348,6 +348,10 @@ export default function RPDYonlendirme() {
 
         if (result.telegram || result.sheets) {
           setYonlendirilenOgrenciler([]);
+          notifyGuidanceReferralsChanged({
+            action: "create",
+            studentName: "bulk-send",
+          });
           addActivity('send', `${yonlendirilenOgrenciler.length} öğrenci rehberliğe gönderildi`);
         }
       } else {

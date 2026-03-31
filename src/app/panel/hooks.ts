@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { StatsResponse, TimeFilter, ClassStudent } from "./types";
+import { GUIDANCE_REFERRALS_CHANGED_EVENT } from "@/lib/guidance";
 
 export function usePanelData() {
   const [stats, setStats] = useState<StatsResponse | null>(null);
@@ -113,6 +114,16 @@ export function usePanelData() {
 
     fetchStats();
     fetchFilters();
+
+    const handleReferralChange = () => {
+      fetchStats();
+    };
+
+    window.addEventListener(GUIDANCE_REFERRALS_CHANGED_EVENT, handleReferralChange);
+
+    return () => {
+      window.removeEventListener(GUIDANCE_REFERRALS_CHANGED_EVENT, handleReferralChange);
+    };
   }, [fetchStats]);
 
   return {

@@ -37,6 +37,7 @@ import {
   Send
 } from "lucide-react";
 import { toast } from "sonner";
+import { notifyGuidanceReferralsChanged } from "@/lib/guidance";
 import {
   HistorySummaryCard,
   ReferralReasonsChart,
@@ -222,6 +223,11 @@ export default function OgrenciGecmisiPage() {
       
       if (res.ok) {
         setReferrals(prev => prev.filter(r => r.id !== id));
+        notifyGuidanceReferralsChanged({
+          action: "delete",
+          id,
+          studentName: selectedStudent?.text || searchQuery.trim() || undefined,
+        });
         toast.success("Yönlendirme kaydı silindi");
       } else {
         const data = await res.json();
@@ -913,9 +919,11 @@ export default function OgrenciGecmisiPage() {
                             <Button
                               variant="outline"
                               size="icon"
-                              className="h-8 w-8 text-red-500 border-red-200 hover:bg-red-50 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-8 w-8 text-red-500 border-red-200 hover:bg-red-50 flex-shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                               onClick={() => handleDeleteReferral(record.id)}
                               disabled={deletingId === record.id}
+                              aria-label="Yönlendirme kaydını sil"
+                              title="Yönlendirme kaydını sil"
                             >
                               {deletingId === record.id ? (
                                 <RefreshCw className="h-4 w-4 animate-spin" />

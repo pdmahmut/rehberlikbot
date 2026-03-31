@@ -19,6 +19,15 @@ export type NormalizedGuidanceStudent = Omit<
   yonlendirmeNedeni: string;
 };
 
+export const GUIDANCE_REFERRALS_CHANGED_EVENT = "referrals:changed";
+
+export type GuidanceChangeDetail = {
+  action: "create" | "delete" | "update";
+  id?: string;
+  studentName?: string;
+  teacherName?: string;
+};
+
 function normalizeText(value: string) {
   return value
     .trim()
@@ -101,4 +110,9 @@ export function groupGuidanceStudents(students: GuidanceStudentInput[]) {
   }
 
   return [...grouped.values()];
+}
+
+export function notifyGuidanceReferralsChanged(detail: GuidanceChangeDetail) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(GUIDANCE_REFERRALS_CHANGED_EVENT, { detail }));
 }
