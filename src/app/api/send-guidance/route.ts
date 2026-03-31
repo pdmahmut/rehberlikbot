@@ -5,12 +5,13 @@ import { writeToGoogleSheets } from '@/lib/sheets';
 import { YonlendirilenOgrenci, ReferralRecord } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { getTeachersData, validateTeacherClass, resolveKeyFromDisplay } from '@/lib/teachers';
+import { groupGuidanceStudents, normalizeGuidanceStudent } from '@/lib/guidance';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
-  const { students }: { students: YonlendirilenOgrenci[] } = await request.json();
+    const { students }: { students: YonlendirilenOgrenci[] } = await request.json();
     
     if (!students || students.length === 0) {
       return NextResponse.json(
@@ -34,6 +35,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const normalizedStudents = groupGuidanceStudents(
+      students.map((student) => normalizeGuidanceStudent(student))
+    );
+
     // Results tracking
     let telegramSuccess = false;
     let sheetsSuccess = false;
@@ -41,12 +46,12 @@ export async function POST(request: NextRequest) {
 
     // 1. Telegram Bot API entegrasyonu
     try {
-      const telegramMessages = students.map((student) =>
+      const telegramMessages = normalizedStudents.map((student) =>
         formatTelegramMessageHTML(
           student.ogretmenAdi,
           student.ogrenciAdi,
           student.sinifSube,
-          student.yonlendirmeNedeni,
+          student.yonlendirmeNedenleri,
           student.not
         )
       );
@@ -69,7 +74,7 @@ export async function POST(request: NextRequest) {
 
     // 2. Google Sheets entegrasyonu
     try {
-      sheetsSuccess = await writeToGoogleSheets(students);
+      sheetsSuccess = await writeToGoogleSheets(normalizedStudents);
       if (!sheetsSuccess) {
         errors.push('Google Sheets kaydı başarısız');
       }
@@ -81,9 +86,9 @@ export async function POST(request: NextRequest) {
     // 3. Supabase referrals tablosuna kayıt (opsiyonel, akışı bozmaz)
     try {
       if (supabase) {
-        const payload: ReferralRecord[] = students.map((student) => ({
+        const payload: ReferralRecord[] = normalizedStudents.map((student) => ({
           teacher_name: student.ogretmenAdi,
-          class_key: '', // İleride sinifSube value'su ile doldurulabilir
+          class_key: student.sinifSubeKey || resolveKeyFromDisplay(student.sinifSube) || '',
           class_display: student.sinifSube,
           student_name: student.ogrenciAdi,
           reason: student.yonlendirmeNedeni,
@@ -109,12 +114,12 @@ export async function POST(request: NextRequest) {
 
     // 4. Console log (backup)
     console.log('=== RPD Öğrenci Yönlendirme ===');
-    students.forEach((student, index) => {
+    normalizedStudents.forEach((student, index) => {
       const message = formatTelegramMessage(
         student.ogretmenAdi,
         student.ogrenciAdi,
         student.sinifSube,
-        student.yonlendirmeNedeni
+        student.yonlendirmeNedenleri
       );
       console.log(`\nÖğrenci ${index + 1}:`);
       console.log(message);
@@ -122,20 +127,21 @@ export async function POST(request: NextRequest) {
 
     // Response based on results
     const successCount = (telegramSuccess ? 1 : 0) + (sheetsSuccess ? 1 : 0);
+    const sentCount = normalizedStudents.length;
     
     if (successCount === 2) {
       return NextResponse.json({
         success: true,
-        message: `${students.length} öğrenci başarıyla Telegram ve Google Sheets'e gönderildi`,
-        sentCount: students.length,
+        message: `${sentCount} öğrenci başarıyla Telegram ve Google Sheets'e gönderildi`,
+        sentCount,
         telegram: telegramSuccess,
         sheets: sheetsSuccess
       });
     } else if (successCount === 1) {
       return NextResponse.json({
         success: true,
-        message: `${students.length} öğrenci kısmen gönderildi. ${errors.join(', ')}`,
-        sentCount: students.length,
+        message: `${sentCount} öğrenci kısmen gönderildi. ${errors.join(', ')}`,
+        sentCount,
         telegram: telegramSuccess,
         sheets: sheetsSuccess,
         warnings: errors

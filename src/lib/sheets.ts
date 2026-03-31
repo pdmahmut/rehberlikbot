@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { YonlendirilenOgrenci } from '@/types';
+import { formatGuidanceReasons, normalizeGuidanceReasons } from '@/lib/guidance';
 
 export async function writeToGoogleSheets(students: YonlendirilenOgrenci[]): Promise<boolean> {
   const sheetsId = process.env.SHEETS_SPREADSHEET_ID;
@@ -29,6 +30,7 @@ export async function writeToGoogleSheets(students: YonlendirilenOgrenci[]): Pro
     
     const rows = students.map(student => {
       const sinifNormalized = student.sinifSube?.replace(' Şubesi', '') || student.sinifSube;
+      const reasons = normalizeGuidanceReasons(student.yonlendirmeNedenleri ?? student.yonlendirmeNedeni);
       return [
         // TarihSaat
         timestamp,
@@ -39,7 +41,7 @@ export async function writeToGoogleSheets(students: YonlendirilenOgrenci[]): Pro
         // Öğrenci
         student.ogrenciAdi,
   // Neden
-  student.yonlendirmeNedeni,
+  formatGuidanceReasons(reasons),
   // Not
   student.not || '',
         // ReferralID (uygulamadaki id)

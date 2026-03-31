@@ -20,16 +20,12 @@ import {
   ChevronRight,
   LayoutGrid,
   List,
-  AlertCircle,
   CheckCircle2,
   XCircle,
   PauseCircle,
   Ban,
   Sparkles,
-  Target,
-  Bell,
   GraduationCap,
-  Phone,
   X
 } from "lucide-react";
 import { toast } from "sonner";
@@ -42,7 +38,7 @@ import {
   APPOINTMENT_STATUS, 
   PRIORITY_LEVELS,
   APPOINTMENT_LOCATIONS,
-  APPOINTMENT_DURATIONS,
+  LESSON_SLOTS,
   TOPIC_TAGS,
   OUTCOME_DECISIONS,
   AppointmentStatus,
@@ -74,7 +70,6 @@ const statusIcons: Record<AppointmentStatus, typeof CheckCircle2> = {
 };
 
 export default function RandevuPage() {
-  // Hooks
   const { 
     appointments, 
     loading, 
@@ -86,9 +81,8 @@ export default function RandevuPage() {
     getStatusCounts 
   } = useAppointments();
   const { tasks, fetchTasks, createTask } = useAppointmentTasks();
-  const { getWeekDays, getTimeSlots, formatDate, formatShortDate, getDayName, isToday } = useCalendarHelpers();
+  const { getWeekDays, formatDate, formatShortDate, getDayName, isToday } = useCalendarHelpers();
 
-  // State
   const [viewMode, setViewMode] = useState<"day" | "week">("day");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState("");
@@ -96,29 +90,24 @@ export default function RandevuPage() {
   const [filterType, setFilterType] = useState<ParticipantType | "all">("all");
   const [filterPriority, setFilterPriority] = useState<PriorityLevel | "all">("all");
   const [showFilters, setShowFilters] = useState(false);
-  
-  // Sınıf ve öğrenci verileri
+
   const [classes, setClasses] = useState<{ value: string; text: string }[]>([]);
   const [students, setStudents] = useState<{ value: string; text: string }[]>([]);
   const [teachers, setTeachers] = useState<{ value: string; label: string }[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [selectedClass, setSelectedClass] = useState("");
-  
-  // Modal states
+
   const [showNewAppointmentModal, setShowNewAppointmentModal] = useState(false);
   const [showClosureModal, setShowClosureModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  
-  // Özel etiket ekleme
+
   const [customTag, setCustomTag] = useState("");
   const [customTags, setCustomTags] = useState<string[]>([]);
 
-  // Form state
   const [formData, setFormData] = useState<AppointmentFormData>({
     appointment_date: new Date().toISOString().slice(0, 10),
-    start_time: "09:00",
-    duration: 15,
+    start_time: "1. Ders",
     participant_type: "student",
     participant_name: "",
     participant_class: "",
@@ -129,7 +118,6 @@ export default function RandevuPage() {
     priority: "normal"
   });
 
-  // Closure form state
   const [closureData, setClosureData] = useState<AppointmentClosureData>({
     status: "attended",
     outcome_summary: "",
@@ -138,14 +126,11 @@ export default function RandevuPage() {
     create_follow_up: false
   });
 
-  // Yeni görev state
   const [newTaskDescription, setNewTaskDescription] = useState("");
 
-  // Sınıf ve öğretmen listelerini yükle
   useEffect(() => {
     const fetchClassesAndTeachers = async () => {
       try {
-        // Sınıfları yükle
         const classRes = await fetch("/api/data");
         if (classRes.ok) {
           const classData = await classRes.json();
@@ -153,8 +138,6 @@ export default function RandevuPage() {
             setClasses(classData.sinifSubeList);
           }
         }
-        
-        // Öğretmenleri yükle
         const teacherRes = await fetch("/api/teachers");
         if (teacherRes.ok) {
           const teacherData = await teacherRes.json();
@@ -166,17 +149,14 @@ export default function RandevuPage() {
         console.error("Veri yükleme hatası:", error);
       }
     };
-    
     fetchClassesAndTeachers();
   }, []);
 
-  // Sınıf seçildiğinde öğrencileri yükle
   const fetchStudentsByClass = async (classKey: string) => {
     if (!classKey) {
       setStudents([]);
       return;
     }
-    
     try {
       setLoadingStudents(true);
       const res = await fetch(`/api/students?sinifSube=${encodeURIComponent(classKey)}`);
@@ -192,14 +172,12 @@ export default function RandevuPage() {
     }
   };
 
-  // Sınıf değiştiğinde öğrencileri yükle
   useEffect(() => {
     if (selectedClass && (formData.participant_type === "student" || formData.participant_type === "parent")) {
       fetchStudentsByClass(selectedClass);
     }
   }, [selectedClass, formData.participant_type]);
 
-  // İlk yükleme
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10);
     const weekEnd = new Date();
@@ -207,11 +185,9 @@ export default function RandevuPage() {
     fetchAppointments({ from: today, to: weekEnd.toISOString().slice(0, 10) });
   }, [fetchAppointments]);
 
-  // Filtrelenmiş randevular
   const filteredAppointments = useMemo(() => {
     let filtered = [...appointments];
 
-    // Tarih filtresi
     if (viewMode === "day") {
       const dateStr = currentDate.toISOString().slice(0, 10);
       filtered = filtered.filter(apt => apt.appointment_date === dateStr);
@@ -219,40 +195,33 @@ export default function RandevuPage() {
       const weekDays = getWeekDays(currentDate);
       const start = weekDays[0].toISOString().slice(0, 10);
       const end = weekDays[6].toISOString().slice(0, 10);
-      filtered = filtered.filter(apt => 
+      filtered = filtered.filter(apt =>
         apt.appointment_date >= start && apt.appointment_date <= end
       );
     }
 
-    // Arama filtresi
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(apt => 
+      filtered = filtered.filter(apt =>
         apt.participant_name.toLowerCase().includes(query) ||
         apt.topic_tags.some(tag => tag.toLowerCase().includes(query))
       );
     }
 
-    // Durum filtresi
     if (filterStatus !== "all") {
       filtered = filtered.filter(apt => apt.status === filterStatus);
     }
-
-    // Tür filtresi
     if (filterType !== "all") {
       filtered = filtered.filter(apt => apt.participant_type === filterType);
     }
-
-    // Öncelik filtresi
     if (filterPriority !== "all") {
       filtered = filtered.filter(apt => apt.priority === filterPriority);
     }
 
-    // Saate göre sırala
+    // Ders sırasına göre sırala (1. Ders, 2. Ders ...)
     return filtered.sort((a, b) => a.start_time.localeCompare(b.start_time));
   }, [appointments, viewMode, currentDate, searchQuery, filterStatus, filterType, filterPriority, getWeekDays]);
 
-  // Navigasyon
   const goToToday = () => setCurrentDate(new Date());
   const goToPrev = () => {
     const newDate = new Date(currentDate);
@@ -265,18 +234,15 @@ export default function RandevuPage() {
     setCurrentDate(newDate);
   };
 
-  // Yeni randevu oluştur
   const handleCreateAppointment = async () => {
     if (!formData.participant_name) {
       toast.error("Katılımcı adı zorunludur");
       return;
     }
-
     const result = await createAppointment(formData);
     if (result) {
       setShowNewAppointmentModal(false);
       resetForm();
-      // Listeyi yenile
       const today = new Date().toISOString().slice(0, 10);
       const weekEnd = new Date();
       weekEnd.setDate(weekEnd.getDate() + 7);
@@ -284,12 +250,10 @@ export default function RandevuPage() {
     }
   };
 
-  // Form sıfırla
   const resetForm = () => {
     setFormData({
       appointment_date: new Date().toISOString().slice(0, 10),
-      start_time: "09:00",
-      duration: 15,
+      start_time: "1. Ders",
       participant_type: "student",
       participant_name: "",
       participant_class: "",
@@ -304,10 +268,8 @@ export default function RandevuPage() {
     setCustomTag("");
   };
 
-  // Görüşme kapat
   const handleCloseAppointment = async () => {
     if (!selectedAppointment) return;
-    
     const result = await closeAppointment(selectedAppointment.id, closureData);
     if (result) {
       setShowClosureModal(false);
@@ -322,11 +284,9 @@ export default function RandevuPage() {
     }
   };
 
-  // Randevu kartı tıklama
   const handleAppointmentClick = (appointment: Appointment) => {
     setSelectedAppointment(appointment);
     if (appointment.status === "planned") {
-      // Planlanmış randevu - kapanış modalı aç
       setClosureData({
         status: "attended",
         outcome_summary: "",
@@ -336,43 +296,33 @@ export default function RandevuPage() {
       });
       setShowClosureModal(true);
     } else {
-      // Diğer durumlar - detay modalı aç
       setShowDetailModal(true);
     }
   };
 
-  // Görev ekle
   const handleAddTask = async () => {
     if (!selectedAppointment || !newTaskDescription) return;
     await createTask(selectedAppointment.id, newTaskDescription);
     setNewTaskDescription("");
   };
 
-  // Durum sayıları
   const statusCounts = getStatusCounts();
-  const timeSlots = getTimeSlots(8, 17, 30);
   const weekDays = getWeekDays(currentDate);
 
-  // Yer adını getir
-  const getLocationLabel = (location: string) => {
-    return APPOINTMENT_LOCATIONS.find(l => l.value === location)?.label || location;
-  };
+  const getLocationLabel = (location: string) =>
+    APPOINTMENT_LOCATIONS.find(l => l.value === location)?.label || location;
 
-  // Katılımcı türü adını getir
-  const getParticipantLabel = (type: ParticipantType) => {
-    return PARTICIPANT_TYPES.find(p => p.value === type)?.label || type;
-  };
+  const getParticipantLabel = (type: ParticipantType) =>
+    PARTICIPANT_TYPES.find(p => p.value === type)?.label || type;
 
   return (
     <div className="space-y-6">
-      {/* ========== HEADER ========== */}
+      {/* HEADER */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-500 via-emerald-500 to-cyan-600 p-6 text-white shadow-xl">
         <div className="absolute inset-0 bg-grid-white/10 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.5))]" />
-        
-        {/* Animated Background */}
         <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-teal-300/20 blur-3xl animate-float-slow" />
         <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-emerald-400/20 blur-3xl animate-float-reverse" />
-        
+
         <div className="relative">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-4">
@@ -384,8 +334,7 @@ export default function RandevuPage() {
                 <p className="text-teal-100">Görüşme planlama ve takip sistemi</p>
               </div>
             </div>
-            
-            {/* Hızlı İstatistikler */}
+
             <div className="flex flex-wrap gap-2">
               <div className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-3 py-2 border border-white/10">
                 <Clock className="h-4 w-4 text-teal-200" />
@@ -410,17 +359,15 @@ export default function RandevuPage() {
               </div>
             </div>
           </div>
-          
-          {/* Alt Bar - Aksiyonlar */}
+
           <div className="mt-4 pt-4 border-t border-white/20 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              {/* Görünüm Değiştirme */}
               <div className="flex items-center bg-white/10 rounded-lg p-1">
                 <button
                   onClick={() => setViewMode("day")}
                   className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                    viewMode === "day" 
-                      ? "bg-white text-teal-600 shadow-sm" 
+                    viewMode === "day"
+                      ? "bg-white text-teal-600 shadow-sm"
                       : "text-white/80 hover:text-white"
                   }`}
                 >
@@ -430,8 +377,8 @@ export default function RandevuPage() {
                 <button
                   onClick={() => setViewMode("week")}
                   className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                    viewMode === "week" 
-                      ? "bg-white text-teal-600 shadow-sm" 
+                    viewMode === "week"
+                      ? "bg-white text-teal-600 shadow-sm"
                       : "text-white/80 hover:text-white"
                   }`}
                 >
@@ -440,40 +387,28 @@ export default function RandevuPage() {
                 </button>
               </div>
 
-              {/* Tarih Navigasyonu */}
               <div className="flex items-center gap-1 bg-white/10 rounded-lg p-1">
-                <button 
-                  onClick={goToPrev}
-                  className="p-1.5 rounded hover:bg-white/10 transition-colors"
-                >
+                <button onClick={goToPrev} className="p-1.5 rounded hover:bg-white/10 transition-colors">
                   <ChevronLeft className="h-4 w-4" />
                 </button>
-                <button 
-                  onClick={goToToday}
-                  className="px-2 py-1 text-xs font-medium hover:bg-white/10 rounded transition-colors"
-                >
+                <button onClick={goToToday} className="px-2 py-1 text-xs font-medium hover:bg-white/10 rounded transition-colors">
                   Bugün
                 </button>
-                <button 
-                  onClick={goToNext}
-                  className="p-1.5 rounded hover:bg-white/10 transition-colors"
-                >
+                <button onClick={goToNext} className="p-1.5 rounded hover:bg-white/10 transition-colors">
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
 
-              {/* Seçili Tarih */}
               <Badge className="bg-white/20 text-white border-0">
                 <CalendarDays className="h-3 w-3 mr-1" />
-                {viewMode === "day" 
+                {viewMode === "day"
                   ? formatDate(currentDate.toISOString().slice(0, 10))
                   : `${formatShortDate(weekDays[0].toISOString().slice(0, 10))} - ${formatShortDate(weekDays[6].toISOString().slice(0, 10))}`
                 }
               </Badge>
             </div>
-            
+
             <div className="flex items-center gap-2">
-              {/* Filtre Toggle */}
               <Button
                 variant="secondary"
                 size="sm"
@@ -483,8 +418,6 @@ export default function RandevuPage() {
                 <Filter className="h-4 w-4 mr-1" />
                 Filtreler
               </Button>
-              
-              {/* Yenile */}
               <Button
                 variant="secondary"
                 size="sm"
@@ -499,8 +432,6 @@ export default function RandevuPage() {
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               </Button>
-              
-              {/* Yeni Randevu */}
               <Button
                 onClick={() => setShowNewAppointmentModal(true)}
                 className="bg-white text-teal-600 hover:bg-white/90 shadow-lg"
@@ -513,12 +444,11 @@ export default function RandevuPage() {
         </div>
       </div>
 
-      {/* ========== FİLTRELER ========== */}
+      {/* FİLTRELER */}
       {showFilters && (
         <Card className="bg-white/80 backdrop-blur border-slate-200/50">
           <CardContent className="p-4">
             <div className="flex flex-wrap gap-4 items-end">
-              {/* Arama */}
               <div className="flex-1 min-w-[200px]">
                 <label className="text-xs font-medium text-slate-500 mb-1 block">Ara</label>
                 <div className="relative">
@@ -532,8 +462,6 @@ export default function RandevuPage() {
                   />
                 </div>
               </div>
-
-              {/* Durum Filtresi */}
               <div>
                 <label className="text-xs font-medium text-slate-500 mb-1 block">Durum</label>
                 <select
@@ -547,8 +475,6 @@ export default function RandevuPage() {
                   ))}
                 </select>
               </div>
-
-              {/* Tür Filtresi */}
               <div>
                 <label className="text-xs font-medium text-slate-500 mb-1 block">Görüşme Türü</label>
                 <select
@@ -562,8 +488,6 @@ export default function RandevuPage() {
                   ))}
                 </select>
               </div>
-
-              {/* Öncelik Filtresi */}
               <div>
                 <label className="text-xs font-medium text-slate-500 mb-1 block">Öncelik</label>
                 <select
@@ -577,8 +501,6 @@ export default function RandevuPage() {
                   ))}
                 </select>
               </div>
-
-              {/* Filtreleri Temizle */}
               <Button
                 variant="ghost"
                 size="sm"
@@ -597,9 +519,8 @@ export default function RandevuPage() {
         </Card>
       )}
 
-      {/* ========== TAKVİM ALANI ========== */}
+      {/* TAKVİM ALANI */}
       {viewMode === "day" ? (
-        /* GÜNLÜK GÖRÜNÜM */
         <Card className="bg-white/90 backdrop-blur">
           <CardHeader className="pb-2 border-b">
             <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
@@ -639,7 +560,7 @@ export default function RandevuPage() {
                   const ParticipantIcon = participantColors[appointment.participant_type].icon;
                   const colors = statusColors[appointment.status];
                   const pColors = participantColors[appointment.participant_type];
-                  
+
                   return (
                     <div
                       key={appointment.id}
@@ -648,26 +569,21 @@ export default function RandevuPage() {
                         appointment.priority === "urgent" ? "ring-2 ring-red-400 ring-offset-2" : ""
                       }`}
                     >
-                      {/* Acil İşareti */}
                       {appointment.priority === "urgent" && (
                         <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
                           ACİL
                         </div>
                       )}
-                      
+
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-start gap-3">
-                          {/* Saat */}
-                          <div className="text-center min-w-[50px]">
-                            <div className={`text-lg font-bold ${colors.text}`}>
-                              {appointment.start_time.slice(0, 5)}
-                            </div>
-                            <div className="text-[10px] text-slate-500">
-                              {appointment.duration} dk
+                          {/* Ders bilgisi */}
+                          <div className="text-center min-w-[60px]">
+                            <div className={`text-base font-bold ${colors.text}`}>
+                              {appointment.start_time}
                             </div>
                           </div>
-                          
-                          {/* Detaylar */}
+
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <Badge className={`${pColors.bg} ${pColors.text} text-xs gap-1`}>
@@ -683,12 +599,11 @@ export default function RandevuPage() {
                                 </span>
                               )}
                             </div>
-                            
-                            {/* Etiketler */}
+
                             {appointment.topic_tags.length > 0 && (
                               <div className="flex flex-wrap gap-1 mb-2">
                                 {appointment.topic_tags.slice(0, 3).map((tag, idx) => (
-                                  <span 
+                                  <span
                                     key={idx}
                                     className="text-[10px] px-2 py-0.5 rounded-full bg-white/80 text-slate-600 border"
                                   >
@@ -702,8 +617,7 @@ export default function RandevuPage() {
                                 )}
                               </div>
                             )}
-                            
-                            {/* Yer */}
+
                             <div className="flex items-center gap-3 text-xs text-slate-500">
                               <span className="flex items-center gap-1">
                                 <MapPin className="h-3 w-3" />
@@ -712,8 +626,7 @@ export default function RandevuPage() {
                             </div>
                           </div>
                         </div>
-                        
-                        {/* Durum */}
+
                         <div className={`flex items-center gap-1 px-2 py-1 rounded-lg ${colors.bg} ${colors.text}`}>
                           <StatusIcon className="h-4 w-4" />
                           <span className="text-xs font-medium">
@@ -733,17 +646,15 @@ export default function RandevuPage() {
         <Card className="bg-white/90 backdrop-blur overflow-hidden">
           <CardContent className="p-0">
             <div className="grid grid-cols-8 border-b">
-              {/* Saat Kolonu */}
               <div className="p-2 border-r bg-slate-50">
                 <div className="h-12"></div>
               </div>
-              {/* Gün Başlıkları */}
               {weekDays.map((day, idx) => {
                 const dayStr = day.toISOString().slice(0, 10);
                 const dayAppointments = appointments.filter(a => a.appointment_date === dayStr);
                 return (
-                  <div 
-                    key={idx} 
+                  <div
+                    key={idx}
                     className={`p-2 text-center border-r ${isToday(day) ? "bg-teal-50" : "bg-slate-50"}`}
                   >
                     <div className={`text-xs font-medium ${isToday(day) ? "text-teal-600" : "text-slate-500"}`}>
@@ -761,27 +672,24 @@ export default function RandevuPage() {
                 );
               })}
             </div>
-            
-            {/* Takvim Grid */}
+
             <div className="max-h-[500px] overflow-y-auto">
-              {timeSlots.map((time, timeIdx) => (
-                <div key={time} className="grid grid-cols-8 border-b">
-                  {/* Saat */}
-                  <div className="p-2 text-xs text-slate-500 text-right border-r bg-slate-50/50">
-                    {time}
+              {LESSON_SLOTS.map((slot) => (
+                <div key={slot.value} className="grid grid-cols-8 border-b">
+                  <div className="p-2 text-xs text-slate-500 text-right border-r bg-slate-50/50 flex items-center justify-end">
+                    {slot.label}
                   </div>
-                  {/* Her gün için hücre */}
                   {weekDays.map((day, dayIdx) => {
                     const dayStr = day.toISOString().slice(0, 10);
-                    const slotAppointments = filteredAppointments.filter(a => 
-                      a.appointment_date === dayStr && 
-                      a.start_time.slice(0, 5) === time
+                    const slotAppointments = filteredAppointments.filter(a =>
+                      a.appointment_date === dayStr &&
+                      a.start_time === slot.value
                     );
-                    
+
                     return (
-                      <div 
-                        key={dayIdx} 
-                        className={`min-h-[40px] p-1 border-r ${isToday(day) ? "bg-teal-50/30" : ""} hover:bg-slate-50 transition-colors`}
+                      <div
+                        key={dayIdx}
+                        className={`min-h-[48px] p-1 border-r ${isToday(day) ? "bg-teal-50/30" : ""} hover:bg-slate-50 transition-colors`}
                       >
                         {slotAppointments.map((apt) => {
                           const pColors = participantColors[apt.participant_type];
@@ -810,7 +718,7 @@ export default function RandevuPage() {
         </Card>
       )}
 
-      {/* ========== YENİ RANDEVU MODALI ========== */}
+      {/* YENİ RANDEVU MODALI */}
       {showNewAppointmentModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -819,19 +727,16 @@ export default function RandevuPage() {
                 <Plus className="h-5 w-5 text-teal-600" />
                 Yeni Randevu
               </h2>
-              <button 
-                onClick={() => {
-                  setShowNewAppointmentModal(false);
-                  resetForm();
-                }}
+              <button
+                onClick={() => { setShowNewAppointmentModal(false); resetForm(); }}
                 className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
               >
                 <X className="h-5 w-5 text-slate-500" />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-4">
-              {/* Kiminle */}
+              {/* Görüşme Türü ve Öncelik */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-slate-600 mb-1 block">Görüşme Türü *</label>
@@ -839,12 +744,7 @@ export default function RandevuPage() {
                     value={formData.participant_type}
                     onChange={(e) => {
                       const newType = e.target.value as ParticipantType;
-                      setFormData({ 
-                        ...formData, 
-                        participant_type: newType,
-                        participant_name: "",
-                        participant_class: ""
-                      });
+                      setFormData({ ...formData, participant_type: newType, participant_name: "", participant_class: "" });
                       setSelectedClass("");
                       setStudents([]);
                     }}
@@ -869,10 +769,9 @@ export default function RandevuPage() {
                 </div>
               </div>
 
-              {/* Öğrenci veya Veli seçimi - Sınıftan */}
+              {/* Öğrenci / Veli seçimi */}
               {(formData.participant_type === "student" || formData.participant_type === "parent") && (
                 <>
-                  {/* Sınıf Seçimi */}
                   <div>
                     <label className="text-xs font-medium text-slate-600 mb-1 block">Sınıf Seçin</label>
                     <select
@@ -881,11 +780,7 @@ export default function RandevuPage() {
                         const classKey = e.target.value;
                         setSelectedClass(classKey);
                         const classText = classes.find(c => c.value === classKey)?.text || "";
-                        setFormData({ 
-                          ...formData, 
-                          participant_class: classText,
-                          participant_name: ""
-                        });
+                        setFormData({ ...formData, participant_class: classText, participant_name: "" });
                       }}
                       className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
                     >
@@ -896,7 +791,6 @@ export default function RandevuPage() {
                     </select>
                   </div>
 
-                  {/* Öğrenci Seçimi */}
                   <div>
                     <label className="text-xs font-medium text-slate-600 mb-1 block">
                       {formData.participant_type === "student" ? "Öğrenci Seçin *" : "Velisi Olduğu Öğrenci *"}
@@ -921,14 +815,8 @@ export default function RandevuPage() {
                         ))}
                       </select>
                     )}
-                    {formData.participant_type === "parent" && formData.participant_name && (
-                      <p className="text-xs text-slate-500 mt-1">
-                        Veli adını aşağıya yazabilirsiniz (opsiyonel)
-                      </p>
-                    )}
                   </div>
 
-                  {/* Veli için ek isim alanı */}
                   {formData.participant_type === "parent" && (
                     <div>
                       <label className="text-xs font-medium text-slate-600 mb-1 block">Veli Adı (opsiyonel)</label>
@@ -938,8 +826,8 @@ export default function RandevuPage() {
                         className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
                         onChange={(e) => {
                           if (e.target.value) {
-                            setFormData({ 
-                              ...formData, 
+                            setFormData({
+                              ...formData,
                               participant_name: `${e.target.value} (${formData.participant_name} velisi)`
                             });
                           }
@@ -964,9 +852,7 @@ export default function RandevuPage() {
                       <option key={t.value} value={t.label}>{t.label}</option>
                     ))}
                   </select>
-                  <p className="text-xs text-slate-500 mt-1">
-                    veya manuel girin:
-                  </p>
+                  <p className="text-xs text-slate-500 mt-1">veya manuel girin:</p>
                   <input
                     type="text"
                     value={formData.participant_name}
@@ -977,8 +863,8 @@ export default function RandevuPage() {
                 </div>
               )}
 
-              {/* Tarih, Saat, Süre */}
-              <div className="grid grid-cols-3 gap-3">
+              {/* Tarih ve Ders */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-slate-600 mb-1 block">Tarih *</label>
                   <input
@@ -989,26 +875,14 @@ export default function RandevuPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-600 mb-1 block">Saat *</label>
+                  <label className="text-xs font-medium text-slate-600 mb-1 block">Ders *</label>
                   <select
                     value={formData.start_time}
                     onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
                   >
-                    {timeSlots.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-slate-600 mb-1 block">Süre</label>
-                  <select
-                    value={formData.duration}
-                    onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
-                  >
-                    {APPOINTMENT_DURATIONS.map(d => (
-                      <option key={d.value} value={d.value}>{d.label}</option>
+                    {LESSON_SLOTS.map(slot => (
+                      <option key={slot.value} value={slot.value}>{slot.label}</option>
                     ))}
                   </select>
                 </div>
@@ -1031,8 +905,6 @@ export default function RandevuPage() {
               {/* Konu Etiketleri */}
               <div>
                 <label className="text-xs font-medium text-slate-600 mb-1 block">Konu Etiketleri</label>
-                
-                {/* Özel etiket ekleme */}
                 <div className="flex gap-2 mb-2">
                   <input
                     type="text"
@@ -1044,9 +916,7 @@ export default function RandevuPage() {
                         const newTag = customTag.trim();
                         if (!formData.topic_tags.includes(newTag) && !(TOPIC_TAGS as readonly string[]).includes(newTag)) {
                           setFormData({ ...formData, topic_tags: [...formData.topic_tags, newTag] });
-                          if (!customTags.includes(newTag)) {
-                            setCustomTags([...customTags, newTag]);
-                          }
+                          if (!customTags.includes(newTag)) setCustomTags([...customTags, newTag]);
                         }
                         setCustomTag("");
                       }
@@ -1063,9 +933,7 @@ export default function RandevuPage() {
                         const newTag = customTag.trim();
                         if (!formData.topic_tags.includes(newTag) && !(TOPIC_TAGS as readonly string[]).includes(newTag)) {
                           setFormData({ ...formData, topic_tags: [...formData.topic_tags, newTag] });
-                          if (!customTags.includes(newTag)) {
-                            setCustomTags([...customTags, newTag]);
-                          }
+                          if (!customTags.includes(newTag)) setCustomTags([...customTags, newTag]);
                         }
                         setCustomTag("");
                       }
@@ -1075,21 +943,15 @@ export default function RandevuPage() {
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
-                
-                {/* Seçili etiketler */}
+
                 {formData.topic_tags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-2 p-2 bg-teal-50 rounded-lg border border-teal-200">
                     {formData.topic_tags.map(tag => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-teal-500 text-white"
-                      >
+                      <span key={tag} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-teal-500 text-white">
                         {tag}
                         <button
                           type="button"
-                          onClick={() => {
-                            setFormData({ ...formData, topic_tags: formData.topic_tags.filter(t => t !== tag) });
-                          }}
+                          onClick={() => setFormData({ ...formData, topic_tags: formData.topic_tags.filter(t => t !== tag) })}
                           className="hover:bg-teal-600 rounded-full p-0.5"
                         >
                           <X className="h-3 w-3" />
@@ -1098,8 +960,7 @@ export default function RandevuPage() {
                     ))}
                   </div>
                 )}
-                
-                {/* Önerilen etiketler */}
+
                 <div className="flex flex-wrap gap-2 p-3 border rounded-lg bg-slate-50 max-h-32 overflow-y-auto">
                   {[...TOPIC_TAGS, ...customTags.filter(t => !(TOPIC_TAGS as readonly string[]).includes(t))].map(tag => (
                     <button
@@ -1119,12 +980,10 @@ export default function RandevuPage() {
                             : "bg-white border hover:bg-slate-100"
                       }`}
                     >
-                      {customTags.includes(tag) && !(TOPIC_TAGS as readonly string[]).includes(tag) && "✨ "}
                       {tag}
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-slate-500 mt-1">Önerilen etiketlerden seçin veya kendi etiketinizi yazın</p>
               </div>
 
               {/* Amaç */}
@@ -1151,16 +1010,9 @@ export default function RandevuPage() {
                 />
               </div>
             </div>
-            
-            {/* Footer */}
+
             <div className="sticky bottom-0 bg-slate-50 border-t px-6 py-4 flex justify-end gap-3">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowNewAppointmentModal(false);
-                  resetForm();
-                }}
-              >
+              <Button variant="outline" onClick={() => { setShowNewAppointmentModal(false); resetForm(); }}>
                 İptal
               </Button>
               <Button
@@ -1176,7 +1028,7 @@ export default function RandevuPage() {
         </div>
       )}
 
-      {/* ========== GÖRÜŞME KAPANIŞ MODALI ========== */}
+      {/* GÖRÜŞME KAPANIŞ MODALI */}
       {showClosureModal && selectedAppointment && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -1187,56 +1039,49 @@ export default function RandevuPage() {
                   Görüşme Kapanışı
                 </h2>
                 <p className="text-sm text-teal-100">
-                  {selectedAppointment.participant_name} - {selectedAppointment.start_time.slice(0, 5)}
+                  {selectedAppointment.participant_name} - {selectedAppointment.start_time}
                 </p>
               </div>
-              <button 
-                onClick={() => {
-                  setShowClosureModal(false);
-                  setSelectedAppointment(null);
-                }}
+              <button
+                onClick={() => { setShowClosureModal(false); setSelectedAppointment(null); }}
                 className="p-2 hover:bg-white/20 rounded-lg transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-4">
-              {/* Katılım Durumu */}
               <div>
                 <label className="text-xs font-medium text-slate-600 mb-2 block">Katılım Durumu</label>
                 <div className="flex gap-2">
                   {[
-                    { value: "attended", label: "Geldi", color: "green", icon: CheckCircle2 },
-                    { value: "not_attended", label: "Gelmedi", color: "red", icon: XCircle },
-                    { value: "postponed", label: "Ertelendi", color: "amber", icon: PauseCircle },
-                    { value: "cancelled", label: "İptal", color: "slate", icon: Ban }
-                  ].map((status) => {
-                    const Icon = status.icon;
+                    { value: "attended", label: "Geldi", icon: CheckCircle2 },
+                    { value: "not_attended", label: "Gelmedi", icon: XCircle },
+                    { value: "postponed", label: "Ertelendi", icon: PauseCircle },
+                    { value: "cancelled", label: "İptal", icon: Ban }
+                  ].map((s) => {
+                    const Icon = s.icon;
+                    const isSelected = closureData.status === s.value;
                     return (
                       <button
-                        key={status.value}
-                        onClick={() => setClosureData({ ...closureData, status: status.value as AppointmentStatus })}
+                        key={s.value}
+                        onClick={() => setClosureData({ ...closureData, status: s.value as AppointmentStatus })}
                         className={`flex-1 p-3 rounded-lg border-2 transition-all ${
-                          closureData.status === status.value
-                            ? `border-${status.color}-500 bg-${status.color}-50 text-${status.color}-700`
+                          isSelected
+                            ? "border-teal-500 bg-teal-50 text-teal-700"
                             : "border-slate-200 hover:border-slate-300"
                         }`}
                       >
-                        <Icon className={`h-5 w-5 mx-auto mb-1 ${
-                          closureData.status === status.value ? `text-${status.color}-500` : "text-slate-400"
-                        }`} />
-                        <div className="text-xs font-medium">{status.label}</div>
+                        <Icon className={`h-5 w-5 mx-auto mb-1 ${isSelected ? "text-teal-500" : "text-slate-400"}`} />
+                        <div className="text-xs font-medium">{s.label}</div>
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Sadece "Geldi" durumunda göster */}
               {closureData.status === "attended" && (
                 <>
-                  {/* Kısa Sonuç */}
                   <div>
                     <label className="text-xs font-medium text-slate-600 mb-1 block">
                       Kısa Sonuç <span className="text-slate-400">(1-2 cümle)</span>
@@ -1250,7 +1095,6 @@ export default function RandevuPage() {
                     />
                   </div>
 
-                  {/* Karar / Yönlendirme */}
                   <div>
                     <label className="text-xs font-medium text-slate-600 mb-2 block">Karar / Yönlendirme</label>
                     <div className="flex flex-wrap gap-2 p-3 border rounded-lg bg-slate-50">
@@ -1276,7 +1120,6 @@ export default function RandevuPage() {
                     </div>
                   </div>
 
-                  {/* Bir Sonraki Adım */}
                   <div>
                     <label className="text-xs font-medium text-slate-600 mb-1 block">Bir Sonraki Adım</label>
                     <input
@@ -1288,7 +1131,6 @@ export default function RandevuPage() {
                     />
                   </div>
 
-                  {/* Takip Randevusu */}
                   <div className="p-3 bg-teal-50 rounded-lg border border-teal-200">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
@@ -1305,7 +1147,6 @@ export default function RandevuPage() {
                 </>
               )}
 
-              {/* Gelmedi veya Ertelendi notları */}
               {(closureData.status === "not_attended" || closureData.status === "postponed") && (
                 <div>
                   <label className="text-xs font-medium text-slate-600 mb-1 block">Not</label>
@@ -1319,23 +1160,12 @@ export default function RandevuPage() {
                 </div>
               )}
             </div>
-            
-            {/* Footer */}
+
             <div className="sticky bottom-0 bg-slate-50 border-t px-6 py-4 flex justify-end gap-3">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowClosureModal(false);
-                  setSelectedAppointment(null);
-                }}
-              >
+              <Button variant="outline" onClick={() => { setShowClosureModal(false); setSelectedAppointment(null); }}>
                 İptal
               </Button>
-              <Button
-                onClick={handleCloseAppointment}
-                disabled={loading}
-                className="bg-teal-600 hover:bg-teal-700"
-              >
+              <Button onClick={handleCloseAppointment} disabled={loading} className="bg-teal-600 hover:bg-teal-700">
                 {loading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
                 Kaydet
               </Button>
@@ -1344,25 +1174,21 @@ export default function RandevuPage() {
         </div>
       )}
 
-      {/* ========== DETAY MODALI ========== */}
+      {/* DETAY MODALI */}
       {showDetailModal && selectedAppointment && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
             <div className="px-6 py-4 border-b flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-800">Randevu Detayı</h2>
-              <button 
-                onClick={() => {
-                  setShowDetailModal(false);
-                  setSelectedAppointment(null);
-                }}
+              <button
+                onClick={() => { setShowDetailModal(false); setSelectedAppointment(null); }}
                 className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
               >
                 <X className="h-5 w-5 text-slate-500" />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-4">
-              {/* Temel Bilgiler */}
               <div className="flex items-center gap-3">
                 <Badge className={`${participantColors[selectedAppointment.participant_type].bg} ${participantColors[selectedAppointment.participant_type].text}`}>
                   {getParticipantLabel(selectedAppointment.participant_type)}
@@ -1376,12 +1202,8 @@ export default function RandevuPage() {
                   <span className="ml-2 font-medium">{formatDate(selectedAppointment.appointment_date)}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500">Saat:</span>
-                  <span className="ml-2 font-medium">{selectedAppointment.start_time.slice(0, 5)}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500">Süre:</span>
-                  <span className="ml-2 font-medium">{selectedAppointment.duration} dk</span>
+                  <span className="text-slate-500">Ders:</span>
+                  <span className="ml-2 font-medium">{selectedAppointment.start_time}</span>
                 </div>
                 <div>
                   <span className="text-slate-500">Yer:</span>
@@ -1389,7 +1211,6 @@ export default function RandevuPage() {
                 </div>
               </div>
 
-              {/* Durum */}
               <div className={`p-3 rounded-lg ${statusColors[selectedAppointment.status].bg} ${statusColors[selectedAppointment.status].border} border`}>
                 <div className="flex items-center gap-2">
                   {(() => {
@@ -1402,17 +1223,13 @@ export default function RandevuPage() {
                 </div>
               </div>
 
-              {/* Sonuç */}
               {selectedAppointment.outcome_summary && (
                 <div>
                   <label className="text-xs font-medium text-slate-500 mb-1 block">Sonuç</label>
-                  <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg">
-                    {selectedAppointment.outcome_summary}
-                  </p>
+                  <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg">{selectedAppointment.outcome_summary}</p>
                 </div>
               )}
 
-              {/* Kararlar */}
               {selectedAppointment.outcome_decision && selectedAppointment.outcome_decision.length > 0 && (
                 <div>
                   <label className="text-xs font-medium text-slate-500 mb-1 block">Kararlar</label>
@@ -1424,18 +1241,14 @@ export default function RandevuPage() {
                 </div>
               )}
 
-              {/* Sonraki Adım */}
               {selectedAppointment.next_action && (
                 <div>
                   <label className="text-xs font-medium text-slate-500 mb-1 block">Sonraki Adım</label>
-                  <p className="text-sm text-slate-700 bg-amber-50 p-3 rounded-lg border border-amber-200">
-                    {selectedAppointment.next_action}
-                  </p>
+                  <p className="text-sm text-slate-700 bg-amber-50 p-3 rounded-lg border border-amber-200">{selectedAppointment.next_action}</p>
                 </div>
               )}
             </div>
-            
-            {/* Footer */}
+
             <div className="bg-slate-50 border-t px-6 py-4 flex justify-between gap-3">
               <Button
                 variant="outline"
@@ -1447,21 +1260,13 @@ export default function RandevuPage() {
                     setShowDetailModal(false);
                     setSelectedAppointment(null);
                     const success = await deleteAppointment(appointmentId);
-                    if (success) {
-                      toast.success("Randevu başarıyla silindi");
-                    }
+                    if (success) toast.success("Randevu başarıyla silindi");
                   }
                 }}
               >
                 Sil
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowDetailModal(false);
-                  setSelectedAppointment(null);
-                }}
-              >
+              <Button variant="outline" onClick={() => { setShowDetailModal(false); setSelectedAppointment(null); }}>
                 Kapat
               </Button>
             </div>
@@ -1469,7 +1274,7 @@ export default function RandevuPage() {
         </div>
       )}
 
-      {/* ========== İPUÇLARI ========== */}
+      {/* İPUÇLARI */}
       <Card className="bg-gradient-to-r from-teal-50 to-emerald-50 border-teal-200">
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
@@ -1479,7 +1284,7 @@ export default function RandevuPage() {
             <div className="text-sm">
               <p className="font-medium text-teal-800">Randevu Yönetimi İpuçları</p>
               <ul className="mt-1 space-y-1 text-teal-700 text-xs">
-                <li>• <strong>2 tıklamada randevu:</strong> Yeni Randevu butonuna tıklayın, formu doldurun</li>
+                <li>• <strong>Hızlı randevu:</strong> Yeni Randevu butonuna tıklayın, tarih ve ders saatini seçin</li>
                 <li>• <strong>Görüşme sonrası:</strong> Randevu kartına tıklayarak hızlıca kapanış yapın</li>
                 <li>• <strong>Takip:</strong> Kapanış sırasında "Takip randevusu oluştur" seçeneğini işaretleyin</li>
                 <li>• <strong>Acil durumlar:</strong> Öncelik olarak "Acil" seçin, kart kırmızı çerçeve ile vurgulanır</li>

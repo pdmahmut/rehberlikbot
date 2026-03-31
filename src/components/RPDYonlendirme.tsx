@@ -21,6 +21,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { toast } from "sonner";
 
 import { SinifSube, Ogrenci, YonlendirilenOgrenci, YONLENDIRME_KATEGORILERI } from "@/types";
+import { buildGuidanceKey, groupGuidanceStudents, normalizeGuidanceStudent } from "@/lib/guidance";
 
 const formSchema = z.object({
   ogretmenAdi: z.string().min(2, "Öğretmen adı en az 2 karakter olmalıdır"),
@@ -244,28 +245,33 @@ export default function RPDYonlendirme() {
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     const sinifSubeText = sinifSubeList.find(s => s.value === values.sinifSube)?.text || "";
     const ogrenciAdi = ogrenciList.find(o => o.value === values.ogrenci)?.text || "";
-
-    // Her seçilen neden için ayrı bir öğrenci entry'si oluştur
-    const yeniOgrenciler: YonlendirilenOgrenci[] = values.yonlendirmeNedenleri.map(neden => ({
-      id: `${Date.now()}-${Math.random()}-${neden}`,
+    const yeniKayit = normalizeGuidanceStudent({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       ogretmenAdi: values.ogretmenAdi,
+      ogretmenKey: values.ogretmenAdi,
       sinifSube: sinifSubeText,
-      ogrenciAdi: ogrenciAdi,
-      yonlendirmeNedeni: neden,
+      sinifSubeKey: values.sinifSube,
+      ogrenciAdi,
+      ogrenciKey: values.ogrenci,
+      yonlendirmeNedenleri: values.yonlendirmeNedenleri,
       not: values.not?.trim() ? values.not : undefined,
       tarih: new Date().toLocaleString('tr-TR'),
-    }));
+    });
 
-    setYonlendirilenOgrenciler(prev => [...prev, ...yeniOgrenciler]);
+    const existedBefore = yonlendirilenOgrenciler.some((ogrenci) =>
+      buildGuidanceKey(ogrenci) === buildGuidanceKey(yeniKayit)
+    );
+
+    setYonlendirilenOgrenciler(prev => groupGuidanceStudents([...prev, yeniKayit]));
     
     // Activity log'a ekle
-    addActivity('add', `${ogrenciAdi} listeye eklendi (${values.yonlendirmeNedenleri.length} neden)`);
+    addActivity('add', `${ogrenciAdi} ${existedBefore ? 'güncellendi' : 'listeye eklendi'} (${values.yonlendirmeNedenleri.length} neden)`);
 
     // Formu kısmen sıfırla (öğretmen adı ve öğrenci seçimi korunur)
     form.setValue("yonlendirmeNedenleri", []);
     form.setValue("not", "");
 
-    toast.success(`${ogrenciAdi} ${values.yonlendirmeNedenleri.length} farklı nedenle başarıyla eklendi`);
+    toast.success(`${ogrenciAdi} ${existedBefore ? 'güncellendi' : 'başarıyla eklendi'} (${values.yonlendirmeNedenleri.length} neden)`);
   };
 
   const removeStudent = (id: string) => {
@@ -978,7 +984,7 @@ export default function RPDYonlendirme() {
                           </div>
                           <Badge variant="outline" className="mt-1 sm:mt-2 text-[10px] sm:text-xs bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 text-blue-700 hover:from-blue-100 hover:to-purple-100 transition-all duration-300 shadow-sm">
                             <Target className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5 sm:mr-1" />
-                            <span className="truncate">{ogrenci.yonlendirmeNedeni}</span>
+                            <span className="truncate">{ogrenci.yonlendirmeNedenleri.join(" • ") || ogrenci.yonlendirmeNedeni}</span>
                           </Badge>
                           {ogrenci.not && (
                             <div className="text-[10px] sm:text-xs text-gray-500 mt-1 sm:mt-2 italic flex items-start gap-1 bg-amber-50 p-1.5 sm:p-2 rounded-lg border border-amber-100">

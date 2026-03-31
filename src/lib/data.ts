@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { StudentData, SinifSube, Ogrenci } from '@/types';
+import { formatGuidanceReasons, formatGuidanceReasonsAsBullets, normalizeGuidanceReasons } from '@/lib/guidance';
 
 export function loadStudentData(): StudentData {
   const dataPath = path.join(process.cwd(), 'data.json');
@@ -58,11 +59,13 @@ export function formatTelegramMessage(
   ogretmenAdi: string,
   ogrenciAdi: string, 
   sinifSube: string,
-  yonlendirmeNedeni: string
+  yonlendirmeNedeni: string | string[]
 ): string {
   const now = new Date();
   const tarih = now.toLocaleDateString('tr-TR');
   const saat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  const reasons = normalizeGuidanceReasons(yonlendirmeNedeni);
+  const reasonText = formatGuidanceReasons(reasons);
   
-  return `${tarih} ${saat}\nÖğretmen: ${ogretmenAdi}\nYönlendirilen Öğrenci: ${sinifSube} / ${ogrenciAdi}\nYönlendirilme Nedeni: ${yonlendirmeNedeni}`;
+  return `${tarih} ${saat}\nÖğretmen: ${ogretmenAdi}\nYönlendirilen Öğrenci: ${sinifSube} / ${ogrenciAdi}\nYönlendirilme Nedeni: ${reasonText || formatGuidanceReasonsAsBullets(reasons)}`;
 }

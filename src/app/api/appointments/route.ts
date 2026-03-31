@@ -26,12 +26,10 @@ export async function GET(request: NextRequest) {
       .order("appointment_date", { ascending: true })
       .order("start_time", { ascending: true });
 
-    // Tek gün filtresi
     if (date) {
       query = query.eq("appointment_date", date);
     }
 
-    // Tarih aralığı filtresi
     if (from && to) {
       query = query.gte("appointment_date", from).lte("appointment_date", to);
     } else if (from) {
@@ -40,22 +38,18 @@ export async function GET(request: NextRequest) {
       query = query.lte("appointment_date", to);
     }
 
-    // Durum filtresi
     if (status) {
       query = query.eq("status", status);
     }
 
-    // Katılımcı türü filtresi
     if (participantType) {
       query = query.eq("participant_type", participantType);
     }
 
-    // Öncelik filtresi
     if (priority) {
       query = query.eq("priority", priority);
     }
 
-    // Arama filtresi
     if (search) {
       query = query.ilike("participant_name", `%${search}%`);
     }
@@ -91,11 +85,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    
+
     const {
       appointment_date,
       start_time,
-      duration = 15,
       participant_type,
       participant_name,
       participant_class,
@@ -108,10 +101,9 @@ export async function POST(request: NextRequest) {
       template_type
     } = body;
 
-    // Zorunlu alan kontrolü
     if (!appointment_date || !start_time || !participant_type || !participant_name) {
       return NextResponse.json(
-        { error: "Tarih, saat, katılımcı türü ve isim zorunludur" },
+        { error: "Tarih, ders, katılımcı türü ve isim zorunludur" },
         { status: 400 }
       );
     }
@@ -121,7 +113,6 @@ export async function POST(request: NextRequest) {
       .insert({
         appointment_date,
         start_time,
-        duration,
         participant_type,
         participant_name,
         participant_class,

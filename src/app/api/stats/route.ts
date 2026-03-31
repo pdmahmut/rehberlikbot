@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { normalizeGuidanceReasons } from '@/lib/guidance';
 
 export const runtime = 'nodejs';
 
@@ -64,8 +65,8 @@ export async function GET(request: NextRequest) {
     let weekCount = 0;
     let monthCount = 0;
 
-    const byTeacher: Record<string, number> = {};
-    const byClass: Record<string, number> = {};
+    const teacherStudentKeys = new Map<string, Set<string>>();
+    const classStudentKeys = new Map<string, Set<string>>();
     const byReason: Record<string, number> = {};
     const byReasonToday: Record<string, number> = {};
     const byReasonWeek: Record<string, number> = {};
@@ -73,52 +74,83 @@ export async function GET(request: NextRequest) {
     const todayStudents: { student_name: string; class_display: string; reason?: string; teacher_name?: string; created_at?: string }[] = [];
     const allStudents: { student_name: string; class_display: string; reason?: string; date: string; teacher_name?: string; created_at?: string }[] = [];
 
+    const normalizeKey = (value: string) =>
+      value
+        .trim()
+        .toLocaleLowerCase('tr-TR')
+        .replace(/\s+/g, ' ');
+
     for (const row of data ?? []) {
       const created = row.created_at as string;
       const day = created.slice(0, 10);
       const reason = (row.reason as string) || 'Belirtilmemiş';
+      const teacherName = (row.teacher_name as string) || 'Bilinmiyor';
+      const classDisplay = (row.class_display as string) || 'Bilinmiyor';
+      const studentName = (row.student_name as string) || '';
+      const studentKey = `${normalizeKey(studentName)}||${normalizeKey(classDisplay)}`;
+      const reasonItems = normalizeGuidanceReasons(reason);
 
       // Tüm öğrencileri kaydet
       allStudents.push({
-        student_name: (row.student_name as string) ?? '',
-        class_display: (row.class_display as string) ?? '',
+        student_name: studentName,
+        class_display: classDisplay,
         reason: reason,
         date: day,
-        teacher_name: (row.teacher_name as string) ?? '',
+        teacher_name: teacherName,
         created_at: created,
       });
 
       // Tüm zamanlar için neden sayısı
-      byReason[reason] = (byReason[reason] || 0) + 1;
+      reasonItems.forEach((item) => {
+        byReason[item] = (byReason[item] || 0) + 1;
+      });
 
       if (day === todayStr) {
         todayCount++;
-        byReasonToday[reason] = (byReasonToday[reason] || 0) + 1;
+        reasonItems.forEach((item) => {
+          byReasonToday[item] = (byReasonToday[item] || 0) + 1;
+        });
         todayStudents.push({
-          student_name: (row.student_name as string) ?? '',
-          class_display: (row.class_display as string) ?? '',
+          student_name: studentName,
+          class_display: classDisplay,
           reason: reason,
-          teacher_name: (row.teacher_name as string) ?? '',
+          teacher_name: teacherName,
           created_at: created,
         });
       }
       
       if (day >= weekStr && day <= todayStr) {
         weekCount++;
-        byReasonWeek[reason] = (byReasonWeek[reason] || 0) + 1;
+        reasonItems.forEach((item) => {
+          byReasonWeek[item] = (byReasonWeek[item] || 0) + 1;
+        });
       }
 
       if (day >= monthStr && day <= todayStr) {
         monthCount++;
-        byReasonMonth[reason] = (byReasonMonth[reason] || 0) + 1;
+        reasonItems.forEach((item) => {
+          byReasonMonth[item] = (byReasonMonth[item] || 0) + 1;
+        });
       }
 
-      const teacherName = (row.teacher_name as string) || 'Bilinmiyor';
-      byTeacher[teacherName] = (byTeacher[teacherName] || 0) + 1;
+      if (!teacherStudentKeys.has(teacherName)) {
+        teacherStudentKeys.set(teacherName, new Set());
+      }
+      teacherStudentKeys.get(teacherName)!.add(studentKey);
 
-      const classDisplay = (row.class_display as string) || 'Bilinmiyor';
-      byClass[classDisplay] = (byClass[classDisplay] || 0) + 1;
+      if (!classStudentKeys.has(classDisplay)) {
+        classStudentKeys.set(classDisplay, new Set());
+      }
+      classStudentKeys.get(classDisplay)!.add(studentKey);
     }
+
+    const byTeacher = Object.fromEntries(
+      [...teacherStudentKeys.entries()].map(([teacherName, students]) => [teacherName, students.size])
+    );
+
+    const byClass = Object.fromEntries(
+      [...classStudentKeys.entries()].map(([classDisplay, students]) => [classDisplay, students.size])
+    );
 
     let topTeacher: { name: string; count: number } | null = null;
     for (const [name, count] of Object.entries(byTeacher)) {

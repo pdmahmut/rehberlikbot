@@ -77,16 +77,31 @@ function escapeHtml(s: string) {
     .replace(/>/g, '&gt;');
 }
 
+function normalizeReasonInput(reason: string | string[]) {
+  if (Array.isArray(reason)) {
+    return reason.map((item) => item.trim()).filter(Boolean);
+  }
+
+  return reason
+    .split(/\r?\n|[•·|]/g)
+    .map((item) => item.replace(/^[-*]\s*/, '').trim())
+    .filter(Boolean);
+}
+
 export function formatTelegramMessageHTML(
   ogretmenAdi: string,
   ogrenciAdi: string,
   sinifSube: string,
-  yonlendirmeNedeni: string,
+  yonlendirmeNedeni: string | string[],
   not?: string
 ): string {
   const now = new Date();
   const tarih = now.toLocaleDateString('tr-TR');
   const saat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  const reasons = normalizeReasonInput(yonlendirmeNedeni);
+  const reasonLines = reasons.length > 0
+    ? reasons.map((reason) => `• ${escapeHtml(reason)}`).join('\n')
+    : escapeHtml('Belirtilmemiş');
   
   const lines = [
     `📋 <b>RPD Öğrenci Yönlendirme</b>`,
@@ -95,7 +110,7 @@ export function formatTelegramMessageHTML(
     `👨‍🏫 <b>Öğretmen:</b> ${escapeHtml(ogretmenAdi)}`,
     `🎓 <b>Sınıf:</b> ${escapeHtml(sinifSube)}`,
     `👤 <b>Öğrenci:</b> ${escapeHtml(ogrenciAdi)}`,
-    `⚠️ <b>Neden:</b> ${escapeHtml(yonlendirmeNedeni)}`,
+    `⚠️ <b>Nedenler:</b>\n${reasonLines}`,
   ];
 
   if (not && not.trim().length > 0) {

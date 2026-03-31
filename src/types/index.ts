@@ -23,8 +23,12 @@ export interface YonlendirmeFormu {
 export interface YonlendirilenOgrenci {
   id: string;
   ogretmenAdi: string;
+  ogretmenKey?: string;
   sinifSube: string;
+  sinifSubeKey?: string;
   ogrenciAdi: string;
+  ogrenciKey?: string;
+  yonlendirmeNedenleri: string[];
   yonlendirmeNedeni: string;
   not?: string;
   tarih: string;
@@ -224,14 +228,15 @@ export const APPOINTMENT_LOCATIONS = [
 
 export type AppointmentLocation = 'guidance_office' | 'classroom' | 'admin' | 'phone' | 'online' | 'other';
 
-// Randevu süreleri (dakika)
-export const APPOINTMENT_DURATIONS = [
-  { value: 10, label: '10 dk' },
-  { value: 15, label: '15 dk' },
-  { value: 20, label: '20 dk' },
-  { value: 30, label: '30 dk' },
-  { value: 45, label: '45 dk' },
-  { value: 60, label: '1 saat' }
+// Ders saatleri
+export const LESSON_SLOTS = [
+  { value: '1. Ders', label: '1. Ders' },
+  { value: '2. Ders', label: '2. Ders' },
+  { value: '3. Ders', label: '3. Ders' },
+  { value: '4. Ders', label: '4. Ders' },
+  { value: '5. Ders', label: '5. Ders' },
+  { value: '6. Ders', label: '6. Ders' },
+  { value: '7. Ders', label: '7. Ders' },
 ] as const;
 
 // Konu etiketleri
@@ -281,37 +286,37 @@ export interface Appointment {
   id: string;
   created_at: string;
   updated_at: string;
-  
+
   // Temel randevu bilgileri
   appointment_date: string;
-  start_time: string;
-  duration: number;
-  
+  start_time: string;       // "1. Ders", "2. Ders" vb.
+  duration?: number;        // artık kullanılmıyor, opsiyonel bırakıldı
+
   // Kiminle görüşme
   participant_type: ParticipantType;
   participant_name: string;
   participant_class?: string;
   participant_phone?: string;
-  
+
   // Görüşme detayları
   topic_tags: string[];
   location: AppointmentLocation;
   purpose?: string;
   preparation_note?: string;
-  
+
   // Durum ve öncelik
   status: AppointmentStatus;
   priority: PriorityLevel;
-  
+
   // Görüşme sonrası
   outcome_summary?: string;
   outcome_decision?: string[];
   next_action?: string;
   next_appointment_id?: string;
-  
+
   // Hatırlatma
   reminder_sent: boolean;
-  
+
   // Şablon
   template_type?: ParticipantType;
 }
@@ -319,8 +324,8 @@ export interface Appointment {
 // Randevu oluşturma formu için tip
 export interface AppointmentFormData {
   appointment_date: string;
-  start_time: string;
-  duration: number;
+  start_time: string;       // "1. Ders", "2. Ders" vb.
+  duration?: number;
   participant_type: ParticipantType;
   participant_name: string;
   participant_class?: string;
