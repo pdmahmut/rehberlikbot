@@ -266,6 +266,61 @@ export const TOPIC_TAGS = [
 
 export type TopicTag = typeof TOPIC_TAGS[number];
 
+// Gözlem havuzu seçenekleri
+export const OBSERVATION_TYPES = [
+  { value: 'behavior', label: 'Davranış' },
+  { value: 'academic', label: 'Akademik' },
+  { value: 'social', label: 'Sosyal' },
+  { value: 'emotional', label: 'Duygusal' }
+] as const;
+
+export type ObservationType = 'behavior' | 'academic' | 'social' | 'emotional';
+
+export const OBSERVATION_PRIORITIES = [
+  { value: 'low', label: 'Düşük', color: 'slate' },
+  { value: 'medium', label: 'Orta', color: 'amber' },
+  { value: 'high', label: 'Yüksek', color: 'red' }
+] as const;
+
+export type ObservationPriority = 'low' | 'medium' | 'high';
+
+export const OBSERVATION_STATUSES = [
+  { value: 'pending', label: 'Bekliyor', color: 'amber' },
+  { value: 'completed', label: 'Tamamlandı', color: 'emerald' },
+  { value: 'converted', label: 'Randevuya Dönüştü', color: 'blue' }
+] as const;
+
+export type ObservationStatus = 'pending' | 'completed' | 'converted';
+
+export interface ObservationPoolRecord {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  observed_at: string;
+  student_name: string;
+  student_number?: string | null;
+  class_key?: string | null;
+  class_display?: string | null;
+  observation_type: ObservationType;
+  priority: ObservationPriority;
+  note: string;
+  status: ObservationStatus;
+  completed_at?: string | null;
+  converted_at?: string | null;
+  appointment_id?: string | null;
+}
+
+export interface ObservationPoolFormData {
+  student_name: string;
+  student_number: string;
+  class_key: string;
+  class_display: string;
+  observation_type: ObservationType;
+  priority: ObservationPriority;
+  note: string;
+  observed_at: string;
+}
+
 // Karar/yönlendirme seçenekleri
 export const OUTCOME_DECISIONS = [
   'Bilgilendirme yapıldı',

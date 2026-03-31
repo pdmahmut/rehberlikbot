@@ -149,6 +149,12 @@ const menuCategories: MenuCategory[] = [
         icon: History,
         color: "violet"
       },
+      {
+        href: "/panel/gozlem-havuzu",
+        label: "Gözlem Havuzu",
+        icon: Eye,
+        color: "teal"
+      },
       { 
         href: "/panel/ogrenciler", 
         label: "Öğrenci Yönetimi", 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,7 @@ import {
   GraduationCap,
   X
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useAppointments, useAppointmentTasks, useCalendarHelpers } from "./hooks";
 import { 
@@ -41,6 +42,7 @@ import {
   LESSON_SLOTS,
   TOPIC_TAGS,
   OUTCOME_DECISIONS,
+  ObservationType,
   AppointmentStatus,
   ParticipantType,
   PriorityLevel
@@ -69,7 +71,15 @@ const statusIcons: Record<AppointmentStatus, typeof CheckCircle2> = {
   cancelled: Ban
 };
 
+const poolObservationTagMap: Record<ObservationType, string> = {
+  behavior: "Davranış gözlemi",
+  academic: "Akademik durum",
+  social: "Sosyal uyum",
+  emotional: "Duygu-durum"
+};
+
 export default function RandevuPage() {
+  const searchParams = useSearchParams();
   const { 
     appointments, 
     loading, 
@@ -96,6 +106,10 @@ export default function RandevuPage() {
   const [teachers, setTeachers] = useState<{ value: string; label: string }[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [selectedClass, setSelectedClass] = useState("");
+  const [sourceObservationIds, setSourceObservationIds] = useState<string[]>([]);
+  const [poolPrefillStudentName, setPoolPrefillStudentName] = useState("");
+  const [poolPrefillClassDisplay, setPoolPrefillClassDisplay] = useState("");
+  const hasAppliedPoolPrefill = useRef(false);
 
   const [showNewAppointmentModal, setShowNewAppointmentModal] = useState(false);
   const [showClosureModal, setShowClosureModal] = useState(false);
@@ -151,6 +165,51 @@ export default function RandevuPage() {
     };
     fetchClassesAndTeachers();
   }, []);
+
+  useEffect(() => {
+    const poolIdsParam = searchParams.get("poolIds");
+    if (!poolIdsParam || hasAppliedPoolPrefill.current) return;
+
+    const studentName = searchParams.get("studentName") || "";
+    const classKey = searchParams.get("classKey") || "";
+    const classDisplay = searchParams.get("classDisplay") || "";
+    const note = searchParams.get("note") || "";
+    const observationType = searchParams.get("observationType") as ObservationType | null;
+    const priority = searchParams.get("priority");
+
+    const parsedIds = poolIdsParam
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+
+    if (parsedIds.length === 0) return;
+
+    hasAppliedPoolPrefill.current = true;
+    setSourceObservationIds(parsedIds);
+    setPoolPrefillStudentName(studentName);
+    setPoolPrefillClassDisplay(classDisplay);
+    setSelectedClass(classKey);
+    setShowNewAppointmentModal(true);
+
+    setFormData((prev) => {
+      const nextTags = observationType && poolObservationTagMap[observationType]
+        ? Array.from(new Set([...prev.topic_tags, poolObservationTagMap[observationType]]))
+        : prev.topic_tags;
+
+      return {
+        ...prev,
+        participant_type: "student",
+        participant_name: studentName || prev.participant_name,
+        participant_class: classDisplay || prev.participant_class,
+        topic_tags: nextTags,
+        purpose: note ? "Gözlem havuzundan aktarıldı" : prev.purpose,
+        preparation_note: note
+          ? `Gözlem havuzu notu:\n${note}`
+          : prev.preparation_note,
+        priority: priority === "high" ? "urgent" : prev.priority
+      };
+    });
+  }, [searchParams]);
 
   const fetchStudentsByClass = async (classKey: string) => {
     if (!classKey) {
@@ -236,13 +295,50 @@ export default function RandevuPage() {
 
   const handleCreateAppointment = async () => {
     if (!formData.participant_name) {
-      toast.error("Katılımcı adı zorunludur");
-      return;
+      if (poolPrefillStudentName) {
+        setFormData((prev) => ({
+          ...prev,
+          participant_name: poolPrefillStudentName,
+          participant_class: poolPrefillClassDisplay || prev.participant_class
+        }));
+      } else {
+        toast.error("Katılımcı adı zorunludur");
+        return;
+      }
     }
-    const result = await createAppointment(formData);
+    const result = await createAppointment({
+      ...formData,
+      participant_name: formData.participant_name || poolPrefillStudentName,
+      participant_class: formData.participant_class || poolPrefillClassDisplay
+    });
     if (result) {
+      if (sourceObservationIds.length > 0) {
+        try {
+          const res = await fetch("/api/gozlem-havuzu", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "convert",
+              ids: sourceObservationIds,
+              appointment_id: result.id
+            })
+          });
+
+          if (!res.ok) {
+            throw new Error("Gözlem kaydı güncellenemedi");
+          }
+        } catch (error) {
+          console.error("Observation pool convert error:", error);
+          toast.error("Randevu oluşturuldu ama gözlem havuzu güncellenemedi");
+        }
+      }
+
       setShowNewAppointmentModal(false);
       resetForm();
+      setSourceObservationIds([]);
+      setPoolPrefillStudentName("");
+      setPoolPrefillClassDisplay("");
+      hasAppliedPoolPrefill.current = false;
       const today = new Date().toISOString().slice(0, 10);
       const weekEnd = new Date();
       weekEnd.setDate(weekEnd.getDate() + 7);
@@ -266,6 +362,15 @@ export default function RandevuPage() {
     setSelectedClass("");
     setStudents([]);
     setCustomTag("");
+  };
+
+  const closeNewAppointmentModal = () => {
+    setShowNewAppointmentModal(false);
+    resetForm();
+    setSourceObservationIds([]);
+    setPoolPrefillStudentName("");
+    setPoolPrefillClassDisplay("");
+    hasAppliedPoolPrefill.current = false;
   };
 
   const handleCloseAppointment = async () => {
@@ -728,7 +833,7 @@ export default function RandevuPage() {
                 Yeni Randevu
               </h2>
               <button
-                onClick={() => { setShowNewAppointmentModal(false); resetForm(); }}
+                onClick={closeNewAppointmentModal}
                 className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
               >
                 <X className="h-5 w-5 text-slate-500" />
@@ -1012,7 +1117,7 @@ export default function RandevuPage() {
             </div>
 
             <div className="sticky bottom-0 bg-slate-50 border-t px-6 py-4 flex justify-end gap-3">
-              <Button variant="outline" onClick={() => { setShowNewAppointmentModal(false); resetForm(); }}>
+              <Button variant="outline" onClick={closeNewAppointmentModal}>
                 İptal
               </Button>
               <Button
