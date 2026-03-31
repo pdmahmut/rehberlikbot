@@ -78,6 +78,13 @@ const poolObservationTagMap: Record<ObservationType, string> = {
   emotional: "Duygu-durum"
 };
 
+const normalizeStudentText = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/^[0-9]+\s+/, "")
+    .trim();
+
 export default function RandevuPage() {
   const searchParams = useSearchParams();
   const { 
@@ -110,6 +117,9 @@ export default function RandevuPage() {
   const [poolPrefillStudentName, setPoolPrefillStudentName] = useState("");
   const [poolPrefillClassDisplay, setPoolPrefillClassDisplay] = useState("");
   const hasAppliedPoolPrefill = useRef(false);
+  const poolStudentName = searchParams.get("studentName") || poolPrefillStudentName;
+  const poolClassDisplay = searchParams.get("classDisplay") || poolPrefillClassDisplay;
+  const hasPoolPrefill = Boolean(poolStudentName);
 
   const [showNewAppointmentModal, setShowNewAppointmentModal] = useState(false);
   const [showClosureModal, setShowClosureModal] = useState(false);
@@ -175,8 +185,6 @@ export default function RandevuPage() {
     const classDisplay = searchParams.get("classDisplay") || "";
     const note = searchParams.get("note") || "";
     const observationType = searchParams.get("observationType") as ObservationType | null;
-    const priority = searchParams.get("priority");
-
     const parsedIds = poolIdsParam
       .split(",")
       .map((id) => id.trim())
@@ -206,7 +214,7 @@ export default function RandevuPage() {
         preparation_note: note
           ? `Gözlem havuzu notu:\n${note}`
           : prev.preparation_note,
-        priority: priority === "high" ? "urgent" : prev.priority
+        priority: "normal"
       };
     });
   }, [searchParams]);
@@ -221,7 +229,30 @@ export default function RandevuPage() {
       const res = await fetch(`/api/students?sinifSube=${encodeURIComponent(classKey)}`);
       if (res.ok) {
         const data = await res.json();
-        setStudents(Array.isArray(data) ? data : []);
+        const nextStudents = Array.isArray(data) ? data : [];
+        setStudents(nextStudents);
+
+        if (poolPrefillStudentName) {
+          const prefillText = normalizeStudentText(poolPrefillStudentName);
+          const matchedStudent = nextStudents.find((student: { value: string; text: string }) => {
+            const normalizedText = normalizeStudentText(student.text);
+            return (
+              normalizedText === prefillText ||
+              normalizedText.includes(prefillText) ||
+              prefillText.includes(normalizedText)
+            );
+          });
+
+          if (matchedStudent) {
+            setFormData((prev) => ({
+              ...prev,
+              participant_type: "student",
+              participant_name: matchedStudent.text,
+              participant_class: classes.find((item) => item.value === classKey)?.text || prev.participant_class,
+              priority: prev.priority || "normal"
+            }));
+          }
+        }
       }
     } catch (error) {
       console.error("Öğrenci listesi hatası:", error);
@@ -294,6 +325,9 @@ export default function RandevuPage() {
   };
 
   const handleCreateAppointment = async () => {
+    const resolvedParticipantName = formData.participant_name || poolStudentName;
+    const resolvedParticipantClass = formData.participant_class || poolClassDisplay;
+
     if (!formData.participant_name) {
       if (poolPrefillStudentName) {
         setFormData((prev) => ({
@@ -308,8 +342,10 @@ export default function RandevuPage() {
     }
     const result = await createAppointment({
       ...formData,
-      participant_name: formData.participant_name || poolPrefillStudentName,
-      participant_class: formData.participant_class || poolPrefillClassDisplay
+      participant_name: resolvedParticipantName,
+      participant_class: resolvedParticipantClass,
+      participant_type: "student",
+      priority: formData.priority || "normal"
     });
     if (result) {
       if (sourceObservationIds.length > 0) {
@@ -885,7 +921,11 @@ export default function RandevuPage() {
                         const classKey = e.target.value;
                         setSelectedClass(classKey);
                         const classText = classes.find(c => c.value === classKey)?.text || "";
-                        setFormData({ ...formData, participant_class: classText, participant_name: "" });
+                        setFormData({
+                          ...formData,
+                          participant_class: classText,
+                          participant_name: poolStudentName || formData.participant_name || ""
+                        });
                       }}
                       className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
                     >
@@ -900,7 +940,14 @@ export default function RandevuPage() {
                     <label className="text-xs font-medium text-slate-600 mb-1 block">
                       {formData.participant_type === "student" ? "Öğrenci Seçin *" : "Velisi Olduğu Öğrenci *"}
                     </label>
-                    {loadingStudents ? (
+                    {hasPoolPrefill ? (
+                      <div className="rounded-lg border bg-teal-50 px-3 py-2 text-sm text-teal-800">
+                        <div className="font-medium">{poolStudentName}</div>
+                        <div className="text-xs text-teal-600">
+                          {poolClassDisplay || formData.participant_class || "Sınıf bilgisi yok"}
+                        </div>
+                      </div>
+                    ) : loadingStudents ? (
                       <div className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-slate-50">
                         <RefreshCw className="h-4 w-4 animate-spin text-teal-500" />
                         <span className="text-sm text-slate-500">Öğrenciler yükleniyor...</span>
