@@ -2,13 +2,20 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
-import { 
+import {
   Appointment, 
   AppointmentFormData, 
   AppointmentClosureData,
   AppointmentTask,
   AppointmentStatus 
 } from "@/types";
+
+const getLocalDateString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 // Randevu yönetimi hook'u
 export function useAppointments() {
@@ -151,7 +158,7 @@ export function useAppointments() {
           nextDate.setDate(nextDate.getDate() + 7);
           
           const followUpData: AppointmentFormData = {
-            appointment_date: nextDate.toISOString().slice(0, 10),
+            appointment_date: getLocalDateString(nextDate),
             start_time: currentAppointment.start_time,
             duration: currentAppointment.duration,
             participant_type: currentAppointment.participant_type,
@@ -208,7 +215,7 @@ export function useAppointments() {
 
   // Bugünkü randevuları getir
   const getTodayAppointments = useCallback(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalDateString(new Date());
     return appointments.filter(apt => apt.appointment_date === today);
   }, [appointments]);
 
@@ -220,8 +227,8 @@ export function useAppointments() {
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6); // Pazar
 
-    const start = startOfWeek.toISOString().slice(0, 10);
-    const end = endOfWeek.toISOString().slice(0, 10);
+    const start = getLocalDateString(startOfWeek);
+    const end = getLocalDateString(endOfWeek);
 
     return appointments.filter(apt => 
       apt.appointment_date >= start && apt.appointment_date <= end

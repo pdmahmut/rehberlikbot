@@ -55,6 +55,7 @@ interface Task {
 const CATEGORIES = [
   { value: 'genel', label: 'Genel', color: 'slate', icon: '📋' },
   { value: 'randevu', label: 'Randevu', color: 'blue', icon: '📅' },
+  { value: 'toplanti', label: 'Toplantı', color: 'purple', icon: '🗓️' },
   { value: 'veli', label: 'Veli', color: 'teal', icon: '👨‍👩‍👧' },
   { value: 'ogretmen', label: 'Öğretmen', color: 'amber', icon: '👨‍🏫' },
   { value: 'rapor', label: 'Rapor', color: 'purple', icon: '📊' },
@@ -71,6 +72,13 @@ const PRIORITIES = [
 
 // Filtre tipi
 type FilterType = 'all' | 'today' | 'week' | 'overdue' | 'completed';
+
+const getLocalDateString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 export default function YapilacaklarPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -201,15 +209,14 @@ export default function YapilacaklarPage() {
   // Filtrelenmiş görevler
   const filteredTasks = useMemo(() => {
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    const today = getLocalDateString(now);
     const weekEnd = new Date(now);
     weekEnd.setDate(weekEnd.getDate() + 7);
-    const weekEndStr = weekEnd.toISOString().split('T')[0];
+    const weekEndStr = getLocalDateString(weekEnd);
     
     return tasks.filter(task => {
       // Durum filtresi
       if (filter === 'completed' && task.status !== 'completed') return false;
-      if (filter === 'all' && task.status === 'completed') return false;
       if (filter === 'today' && task.due_date !== today) return false;
       if (filter === 'week' && (!task.due_date || task.due_date > weekEndStr)) return false;
       if (filter === 'overdue' && (!task.due_date || task.due_date >= today || task.status === 'completed')) return false;
@@ -233,7 +240,7 @@ export default function YapilacaklarPage() {
   // İstatistikler
   const stats = useMemo(() => {
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    const today = getLocalDateString(now);
     
     const pending = tasks.filter(t => t.status === 'pending');
     const completed = tasks.filter(t => t.status === 'completed');
@@ -253,16 +260,16 @@ export default function YapilacaklarPage() {
   
   // Renk haritası
   const colorMap: Record<string, { bg: string; text: string; border: string }> = {
-    slate: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
-    blue: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
-    teal: { bg: 'bg-teal-100', text: 'text-teal-700', border: 'border-teal-200' },
-    amber: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200' },
-    purple: { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
-    orange: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' },
-    red: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200' },
-    gray: { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-200' },
-    green: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' }
-  };
+  slate: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
+  blue: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
+  teal: { bg: 'bg-teal-100', text: 'text-teal-700', border: 'border-teal-200' },
+  amber: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200' },
+  purple: { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
+  orange: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' },
+  red: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200' },
+  gray: { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-200' },
+  green: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' }
+};
   
   // Tarih formatla
   const formatDate = (dateStr: string) => {
@@ -272,8 +279,8 @@ export default function YapilacaklarPage() {
     tomorrow.setDate(tomorrow.getDate() + 1);
     
     const dateOnly = dateStr.split('T')[0];
-    const todayOnly = today.toISOString().split('T')[0];
-    const tomorrowOnly = tomorrow.toISOString().split('T')[0];
+    const todayOnly = getLocalDateString(today);
+    const tomorrowOnly = getLocalDateString(tomorrow);
     
     if (dateOnly === todayOnly) return 'Bugün';
     if (dateOnly === tomorrowOnly) return 'Yarın';
@@ -284,7 +291,7 @@ export default function YapilacaklarPage() {
   // Gecikmiş mi kontrol et
   const isOverdue = (task: Task) => {
     if (!task.due_date || task.status === 'completed') return false;
-    return task.due_date < new Date().toISOString().split('T')[0];
+    return task.due_date < getLocalDateString(new Date());
   };
 
   return (
@@ -343,11 +350,11 @@ export default function YapilacaklarPage() {
             }`}>
               <Calendar className={`h-6 w-6 ${filter === 'week' ? 'text-white' : 'text-purple-600'}`} />
             </div>
-            <p className="text-2xl font-bold text-slate-800">{tasks.filter(t => {
-              const weekEnd = new Date();
-              weekEnd.setDate(weekEnd.getDate() + 7);
-              return t.due_date && t.due_date <= weekEnd.toISOString().split('T')[0] && t.status !== 'completed';
-            }).length}</p>
+              <p className="text-2xl font-bold text-slate-800">{tasks.filter(t => {
+                const weekEnd = new Date();
+                weekEnd.setDate(weekEnd.getDate() + 7);
+                return t.due_date && t.due_date <= getLocalDateString(weekEnd) && t.status !== 'completed';
+              }).length}</p>
             <p className="text-xs text-slate-500">Bu Hafta</p>
           </CardContent>
         </Card>
@@ -557,12 +564,12 @@ export default function YapilacaklarPage() {
             return (
               <Card 
                 key={task.id} 
-                className={`hover:shadow-md transition-all ${
+                className={`group relative hover:shadow-md transition-all ${
                   task.status === 'completed' ? 'bg-slate-50 opacity-75' : ''
                 } ${overdue ? 'border-red-300 bg-red-50/50' : ''}`}
               >
                 <CardContent className="p-4">
-                  <div className="flex items-start gap-4">
+                  <div className="flex items-start gap-4 pr-10">
                     {/* Checkbox */}
                     <button
                       onClick={() => toggleTaskStatus(task)}
@@ -629,17 +636,14 @@ export default function YapilacaklarPage() {
                       </div>
                     </div>
                     
-                    {/* Aksiyonlar */}
-                    <div className="flex items-center gap-1">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => deleteTask(task.id)}
-                        className="text-slate-400 hover:text-red-500"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => deleteTask(task.id)}
+                      className="absolute right-3 top-3 rounded-full p-2 text-slate-300 opacity-0 transition-all hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                      aria-label="Görevi sil"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
                 </CardContent>
               </Card>

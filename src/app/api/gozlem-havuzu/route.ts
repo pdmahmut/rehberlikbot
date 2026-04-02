@@ -213,7 +213,8 @@ export async function PUT(request: NextRequest) {
       const updatePayload: Record<string, unknown> = {
         status,
         completed_at: status === "completed" ? new Date().toISOString() : null,
-        converted_at: status === "converted" ? new Date().toISOString() : null
+        converted_at: status === "converted" ? new Date().toISOString() : null,
+        appointment_id: status === "converted" ? (body.appointment_id || null) : null
       };
 
       if (status !== "completed") {

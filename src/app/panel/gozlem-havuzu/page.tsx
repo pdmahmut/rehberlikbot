@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { ObservationPoolRecord, ObservationPoolFormData, ObservationPriority, ObservationStatus, ObservationType, OBSERVATION_PRIORITIES, OBSERVATION_STATUSES, OBSERVATION_TYPES } from "@/types";
 
-type StudentOption = { value: string; text: string };
+type StudentOption = { value: string; text: string; class_key?: string; class_display?: string };
 type ClassOption = { value: string; text: string };
 
 type ObservationGroup = {
@@ -105,6 +105,14 @@ function formatDate(value: string) {
   });
 }
 
+function normalizeText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
 export default function GozlemHavuzuPage() {
   const router = useRouter();
   const [observations, setObservations] = useState<ObservationPoolRecord[]>([]);
@@ -158,15 +166,20 @@ export default function GozlemHavuzuPage() {
     }
   };
 
-  const loadStudentsByClass = async (classKey: string) => {
-    if (!classKey) {
+  const loadStudents = async (classKey: string, query = "") => {
+    const trimmedQuery = query.trim();
+
+    if (!classKey && !trimmedQuery) {
       setStudents([]);
       return;
     }
 
     try {
       setLoadingStudents(true);
-      const res = await fetch(`/api/students?sinifSube=${encodeURIComponent(classKey)}`);
+      const endpoint = classKey
+        ? `/api/students?sinifSube=${encodeURIComponent(classKey)}`
+        : `/api/students?query=${encodeURIComponent(trimmedQuery)}`;
+      const res = await fetch(endpoint);
       if (!res.ok) throw new Error("Öğrenci listesi alınamadı");
       const json = await res.json();
       setStudents(Array.isArray(json) ? json : []);
@@ -184,13 +197,30 @@ export default function GozlemHavuzuPage() {
   }, []);
 
   useEffect(() => {
-    loadStudentsByClass(selectedClass);
+    if (selectedClass) {
+      loadStudents(selectedClass);
+    } else {
+      loadStudents("", studentQuery);
+    }
+
     setFormData((prev) => ({
       ...prev,
       class_key: selectedClass,
       class_display: classes.find((item) => item.value === selectedClass)?.text || selectedClass
     }));
-  }, [selectedClass]);
+  }, [selectedClass, classes]);
+
+  useEffect(() => {
+    if (selectedClass) return;
+
+    const trimmedQuery = studentQuery.trim();
+    const timer = window.setTimeout(() => {
+      loadStudents("", trimmedQuery);
+      setShowStudentDropdown(Boolean(trimmedQuery));
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [studentQuery, selectedClass]);
 
   const resetForm = () => {
     setFormData({
@@ -233,10 +263,11 @@ export default function GozlemHavuzuPage() {
   };
 
   const filteredStudentOptions = useMemo(() => {
-    if (!studentQuery.trim()) return students;
-    const query = studentQuery.toLowerCase();
-    return students.filter((item) => item.text.toLowerCase().includes(query));
-  }, [students, studentQuery]);
+    const query = normalizeText(studentQuery);
+    if (!selectedClass) return students;
+    if (!query) return students;
+    return students.filter((item) => normalizeText(item.text).includes(query));
+  }, [students, studentQuery, selectedClass]);
 
   const groupedObservations = useMemo(() => {
     const map = new Map<string, ObservationGroup>();
@@ -315,12 +346,15 @@ export default function GozlemHavuzuPage() {
 
   const handleStudentSelect = (option: StudentOption) => {
     const parsed = parseStudentLabel(option.text);
-    const classDisplay = classes.find((item) => item.value === selectedClass)?.text || selectedClass;
+    const nextClassKey = option.class_key || selectedClass;
+    const classDisplay = option.class_display || classes.find((item) => item.value === nextClassKey)?.text || nextClassKey;
+
+    setSelectedClass(nextClassKey || "");
     setFormData((prev) => ({
       ...prev,
       student_name: parsed.studentName || option.text,
       student_number: parsed.studentNumber,
-      class_key: selectedClass,
+      class_key: nextClassKey || "",
       class_display: classDisplay
     }));
     setStudentQuery(option.text);
@@ -396,6 +430,22 @@ export default function GozlemHavuzuPage() {
     } catch (error) {
       console.error("Gözlem tamamlanamadı:", error);
       toast.error("Gözlem tamamlanamadı");
+    }
+  };
+
+  const handleRestoreToPool = async (id: string) => {
+    try {
+      const res = await fetch("/api/gozlem-havuzu", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "status", ids: [id], status: "pending" })
+      });
+      if (!res.ok) throw new Error("Havuza alma başarısız");
+      toast.success("Gözlem yeniden havuza alındı");
+      await loadObservations();
+    } catch (error) {
+      console.error("Gözlem havuza alınamadı:", error);
+      toast.error("Gözlem havuza alınamadı");
     }
   };
 
@@ -545,35 +595,8 @@ export default function GozlemHavuzuPage() {
           </CardHeader>
 
           <CardContent className="space-y-6">
-            <div className="grid gap-4 lg:grid-cols-3">
+            <div className="space-y-4">
               <div className="space-y-2">
-                <Label>Sınıf</Label>
-                <select
-                  value={selectedClass}
-                  onChange={(e) => {
-                    setSelectedClass(e.target.value);
-                    setStudentQuery("");
-                    setShowStudentDropdown(Boolean(e.target.value));
-                    setFormData((prev) => ({
-                      ...prev,
-                      student_name: "",
-                      student_number: "",
-                      class_key: e.target.value,
-                      class_display: classes.find((item) => item.value === e.target.value)?.text || e.target.value
-                    }));
-                  }}
-                  className="w-full rounded-lg border bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500"
-                >
-                  <option value="">Sınıf seçin</option>
-                  {classes.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.text}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2 lg:col-span-2">
                 <Label>Öğrenci Ara</Label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -586,14 +609,15 @@ export default function GozlemHavuzuPage() {
                     }}
                     placeholder="Ad veya numara yazın"
                     className="pl-9"
-                    disabled={!selectedClass}
                   />
                 </div>
                 {!selectedClass && (
-                  <p className="text-xs text-slate-500">Öğrenci aramak için önce sınıf seçin.</p>
+                  <p className="text-xs text-slate-500">
+                    Sınıfı bilmiyorsanız öğrencinin adını yazın, eşleşen sonuçtan seçince sınıf otomatik gelir.
+                  </p>
                 )}
 
-                {selectedClass && showStudentDropdown && filteredStudentOptions.length > 0 && (
+                {showStudentDropdown && filteredStudentOptions.length > 0 && (
                   <div className="max-h-56 overflow-y-auto rounded-xl border bg-white shadow-sm">
                     {filteredStudentOptions.map((student) => (
                       <button
@@ -607,15 +631,53 @@ export default function GozlemHavuzuPage() {
                         </div>
                         <div>
                           <p className="font-medium text-slate-800">{student.text}</p>
+                          {student.class_display && <p className="text-xs text-slate-500">{student.class_display}</p>}
                         </div>
                       </button>
                     ))}
                   </div>
                 )}
 
-                {selectedClass && loadingStudents && (
+                {loadingStudents && (
                   <p className="text-xs text-slate-500">Öğrenciler yükleniyor...</p>
                 )}
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+                <div className="space-y-2">
+                  <Label>Sınıf <span className="text-slate-400">(isteğe bağlı)</span></Label>
+                  <select
+                    value={selectedClass}
+                    onChange={(e) => {
+                      const nextClass = e.target.value;
+                      setSelectedClass(nextClass);
+                      setStudentQuery("");
+                      setShowStudentDropdown(Boolean(nextClass));
+                      setFormData((prev) => ({
+                        ...prev,
+                        student_name: "",
+                        student_number: "",
+                        class_key: nextClass,
+                        class_display: classes.find((item) => item.value === nextClass)?.text || nextClass
+                      }));
+                    }}
+                    className="w-full rounded-lg border bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500"
+                  >
+                    <option value="">Sonradan seçebilirsiniz</option>
+                    {classes.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.text}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="opacity-0">Bilgi</Label>
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-500">
+                    Öğrenci adıyla başlayabilir, sınıfı sonra ekleyebilirsiniz.
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -736,9 +798,10 @@ export default function GozlemHavuzuPage() {
             const hasActive = group.pendingItems.length > 0;
             const leadItem = group.latestItem;
             const activeType = leadItem ? typeStyleMap[leadItem.observation_type] : typeStyleMap.behavior;
+            const historyItems = group.items.slice(1);
 
             return (
-              <Card key={group.key} className={`overflow-hidden border-l-4 ${hasActive ? "border-l-cyan-500" : "border-l-slate-300"}`}>
+              <Card key={group.key} className={`overflow-hidden border-l-4 ${hasActive ? "border-l-cyan-500" : "border-l-slate-300"} shadow-sm`}>
                 <CardContent className="p-4">
                   <div className="flex items-start gap-4">
                     <div className={`rounded-2xl p-3 ${activeType.bg}`}>
@@ -746,121 +809,167 @@ export default function GozlemHavuzuPage() {
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-lg font-semibold text-slate-800">{group.student_name}</h3>
-                        {group.student_number && <Badge variant="outline">{group.student_number}</Badge>}
-                        {group.class_display && <Badge variant="outline">{group.class_display}</Badge>}
-                        <Badge className={`${statusStyleMap[hasActive ? "pending" : "converted"].bg} ${statusStyleMap[hasActive ? "pending" : "converted"].text}`}>
-                          {hasActive ? "Aktif havuz" : "Arşiv"}
-                        </Badge>
-                        <Badge className={`${priorityStyleMap[leadItem?.priority || "medium"].bg} ${priorityStyleMap[leadItem?.priority || "medium"].text}`}>
-                          {leadItem ? OBSERVATION_PRIORITIES.find((item) => item.value === leadItem.priority)?.label : "Orta"}
-                        </Badge>
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-4 w-4" />
-                          {leadItem ? formatDateTime(leadItem.created_at) : "-"}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <CheckCircle2 className="h-4 w-4" />
-                          {group.items.length} kayıt
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Filter className="h-4 w-4" />
-                          {leadItem ? OBSERVATION_STATUSES.find((item) => item.value === leadItem.status)?.label : "-"}
-                        </span>
-                      </div>
-
-                      {leadItem && (
-                        <div className="mt-3 rounded-xl border bg-slate-50 p-3">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <Badge className={`${typeStyleMap[leadItem.observation_type].bg} ${typeStyleMap[leadItem.observation_type].text}`}>
-                              {observationTypeLabelMap[leadItem.observation_type]}
+                            <h3 className="text-lg font-semibold text-slate-800">{group.student_name}</h3>
+                            {group.student_number && <Badge variant="outline">{group.student_number}</Badge>}
+                            {group.class_display && <Badge variant="outline">{group.class_display}</Badge>}
+                            <Badge className={`${statusStyleMap[hasActive ? "pending" : "converted"].bg} ${statusStyleMap[hasActive ? "pending" : "converted"].text}`}>
+                              {hasActive ? "Aktif havuz" : "Arşiv"}
                             </Badge>
-                            <Badge className={`${priorityStyleMap[leadItem.priority].bg} ${priorityStyleMap[leadItem.priority].text}`}>
-                              {OBSERVATION_PRIORITIES.find((item) => item.value === leadItem.priority)?.label}
-                            </Badge>
-                            <Badge className={`${statusStyleMap[leadItem.status].bg} ${statusStyleMap[leadItem.status].text}`}>
-                              {OBSERVATION_STATUSES.find((item) => item.value === leadItem.status)?.label}
+                            <Badge className={`${priorityStyleMap[leadItem?.priority || "medium"].bg} ${priorityStyleMap[leadItem?.priority || "medium"].text}`}>
+                              {leadItem ? OBSERVATION_PRIORITIES.find((item) => item.value === leadItem.priority)?.label : "Orta"}
                             </Badge>
                           </div>
-                          <p className="mt-2 text-sm text-slate-700">{leadItem.note || "Not eklenmedi"}</p>
-                        </div>
-                      )}
 
-                      <div className="mt-4 flex flex-wrap items-center gap-2">
-                        {hasActive && (
-                          <Button size="sm" className="bg-cyan-600 hover:bg-cyan-700" onClick={() => handleConvertToAppointment(group)}>
-                            <ArrowRight className="mr-2 h-4 w-4" />
-                            Randevuya dönüştür
-                          </Button>
-                        )}
-                        <Button size="sm" variant="outline" onClick={() => toggleExpandedGroup(group.key)}>
-                          {isExpanded ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
-                          {isExpanded ? "Geçmişi gizle" : "Geçmişi göster"}
-                        </Button>
-                      </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-4 w-4" />
+                              {leadItem ? formatDateTime(leadItem.created_at) : "-"}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <CheckCircle2 className="h-4 w-4" />
+                              {group.items.length} kayıt
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Filter className="h-4 w-4" />
+                              {leadItem ? OBSERVATION_STATUSES.find((item) => item.value === leadItem.status)?.label : "-"}
+                            </span>
+                          </div>
 
-                      <div className={`mt-4 space-y-3 ${isExpanded ? "" : "max-h-64 overflow-y-auto pr-1"}`}>
-                        {group.items.map((item) => (
-                          <div key={item.id} className="rounded-xl border bg-white p-3 shadow-sm">
-                            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Badge className={`${typeStyleMap[item.observation_type].bg} ${typeStyleMap[item.observation_type].text}`}>
-                                    {observationTypeLabelMap[item.observation_type]}
-                                  </Badge>
-                                  <Badge className={`${priorityStyleMap[item.priority].bg} ${priorityStyleMap[item.priority].text}`}>
-                                    {OBSERVATION_PRIORITIES.find((entry) => entry.value === item.priority)?.label}
-                                  </Badge>
-                                  <Badge className={`${statusStyleMap[item.status].bg} ${statusStyleMap[item.status].text}`}>
-                                    {OBSERVATION_STATUSES.find((entry) => entry.value === item.status)?.label}
-                                  </Badge>
-                                </div>
-
-                                <p className="mt-2 text-sm text-slate-700">{item.note || "Not eklenmedi"}</p>
-
-                                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                                  <span className="flex items-center gap-1">
-                                    <Clock className="h-3.5 w-3.5" />
-                                    {formatDateTime(item.created_at)}
-                                  </span>
-                                  {item.observed_at && (
-                                    <span className="flex items-center gap-1">
-                                      <Calendar className="h-3.5 w-3.5" />
-                                      {formatDate(item.observed_at)}
-                                    </span>
-                                  )}
-                                </div>
+                          {leadItem && (
+                            <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge className={`${typeStyleMap[leadItem.observation_type].bg} ${typeStyleMap[leadItem.observation_type].text}`}>
+                                  {observationTypeLabelMap[leadItem.observation_type]}
+                                </Badge>
+                                <Badge className={`${priorityStyleMap[leadItem.priority].bg} ${priorityStyleMap[leadItem.priority].text}`}>
+                                  {OBSERVATION_PRIORITIES.find((item) => item.value === leadItem.priority)?.label}
+                                </Badge>
+                                <Badge className={`${statusStyleMap[leadItem.status].bg} ${statusStyleMap[leadItem.status].text}`}>
+                                  {OBSERVATION_STATUSES.find((item) => item.value === leadItem.status)?.label}
+                                </Badge>
                               </div>
-
-                              <div className="flex flex-wrap gap-2">
-                                {item.status === "pending" && (
-                                  <Button size="sm" variant="outline" onClick={() => handleComplete(item.id)}>
-                                    <CheckCircle2 className="mr-1 h-4 w-4" />
-                                    Tamamlandı
-                                  </Button>
+                              <p className="mt-2 text-sm leading-6 text-slate-700">{leadItem.note || "Not eklenmedi"}</p>
+                              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3.5 w-3.5" />
+                                  {formatDateTime(leadItem.created_at)}
+                                </span>
+                                {leadItem.observed_at && (
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="h-3.5 w-3.5" />
+                                    {formatDate(leadItem.observed_at)}
+                                  </span>
                                 )}
-                                <Button size="sm" variant="outline" onClick={() => openEditForm(item)}>
-                                  <Edit className="mr-1 h-4 w-4" />
-                                  Düzenle
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleDelete(item.id)}
-                                  className="text-red-600 hover:bg-red-50"
-                                >
-                                  <Trash2 className="mr-1 h-4 w-4" />
-                                  Sil
-                                </Button>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 lg:justify-end">
+                          {leadItem?.status === "converted" ? (
+                            <Button size="sm" variant="outline" onClick={() => handleRestoreToPool(leadItem.id)}>
+                              <ArrowRight className="mr-2 h-4 w-4 rotate-180" />
+                              Havuza al
+                            </Button>
+                          ) : hasActive ? (
+                            <Button size="sm" className="bg-cyan-600 hover:bg-cyan-700" onClick={() => handleConvertToAppointment(group)}>
+                              <ArrowRight className="mr-2 h-4 w-4" />
+                              Randevuya dönüştür
+                            </Button>
+                          ) : null}
+
+                          {leadItem && (
+                            <>
+                              <Button size="sm" variant="outline" onClick={() => openEditForm(leadItem)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Düzenle
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleDelete(leadItem.id)}
+                                className="text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Sil
+                              </Button>
+                            </>
+                          )}
+
+                          <Button size="sm" variant="outline" onClick={() => toggleExpandedGroup(group.key)}>
+                            {isExpanded ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
+                            {isExpanded ? "Geçmişi gizle" : `Geçmiş (${historyItems.length})`}
+                          </Button>
+                        </div>
                       </div>
+
+                      {historyItems.length > 0 && (
+                        <div className={`mt-4 space-y-2 ${isExpanded ? "" : "hidden"}`}>
+                          {historyItems.map((item) => (
+                            <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Badge className={`${typeStyleMap[item.observation_type].bg} ${typeStyleMap[item.observation_type].text}`}>
+                                      {observationTypeLabelMap[item.observation_type]}
+                                    </Badge>
+                                    <Badge className={`${priorityStyleMap[item.priority].bg} ${priorityStyleMap[item.priority].text}`}>
+                                      {OBSERVATION_PRIORITIES.find((entry) => entry.value === item.priority)?.label}
+                                    </Badge>
+                                    <Badge className={`${statusStyleMap[item.status].bg} ${statusStyleMap[item.status].text}`}>
+                                      {OBSERVATION_STATUSES.find((entry) => entry.value === item.status)?.label}
+                                    </Badge>
+                                  </div>
+                                  <p className="mt-2 text-sm text-slate-700">{item.note || "Not eklenmedi"}</p>
+                                  <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                                    <span className="flex items-center gap-1">
+                                      <Clock className="h-3.5 w-3.5" />
+                                      {formatDateTime(item.created_at)}
+                                    </span>
+                                    {item.observed_at && (
+                                      <span className="flex items-center gap-1">
+                                        <Calendar className="h-3.5 w-3.5" />
+                                        {formatDate(item.observed_at)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                  {item.status === "pending" && (
+                                    <Button size="sm" variant="outline" onClick={() => handleComplete(item.id)}>
+                                      <CheckCircle2 className="mr-1 h-4 w-4" />
+                                      Tamamlandı
+                                    </Button>
+                                  )}
+                                  {item.status === "converted" && (
+                                    <Button size="sm" variant="outline" onClick={() => handleRestoreToPool(item.id)}>
+                                      <ArrowRight className="mr-1 h-4 w-4 rotate-180" />
+                                      Havuza al
+                                    </Button>
+                                  )}
+                                  <Button size="sm" variant="outline" onClick={() => openEditForm(item)}>
+                                    <Edit className="mr-1 h-4 w-4" />
+                                    Düzenle
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleDelete(item.id)}
+                                    className="text-red-600 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="mr-1 h-4 w-4" />
+                                    Sil
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -872,3 +981,4 @@ export default function GozlemHavuzuPage() {
     </div>
   );
 }
+

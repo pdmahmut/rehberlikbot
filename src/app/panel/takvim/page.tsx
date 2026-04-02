@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +24,8 @@ import {
   MoreHorizontal,
   CheckCircle2,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
@@ -40,6 +41,13 @@ const MONTHS_TR = [
 // Türkçe gün isimleri
 const DAYS_TR = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 const DAYS_FULL_TR = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+
+const getLocalDateString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 // Sınıf etkinliği tipi
 interface ClassActivity {
@@ -104,8 +112,8 @@ export default function TakvimPage() {
       const endDate = new Date(endOfMonth);
       endDate.setDate(endDate.getDate() + 7); // Sonraki haftaya kadar
       
-      const startStr = startDate.toISOString().split('T')[0];
-      const endStr = endDate.toISOString().split('T')[0];
+      const startStr = getLocalDateString(startDate);
+      const endStr = getLocalDateString(endDate);
       
       const [appResult, actResult, taskResult, followResult] = await Promise.all([
         supabase.from('appointments')
@@ -141,8 +149,46 @@ export default function TakvimPage() {
       setIsLoading(false);
     }
   };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!confirm('Bu görevi silmek istediğinize emin misiniz?')) return;
+
+    try {
+      const res = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId);
+
+      if (res.error) throw res.error;
+
+      toast.success('Görev silindi');
+      await loadData();
+    } catch (error) {
+      console.error('Görev silinemedi:', error);
+      toast.error('Görev silinemedi');
+    }
+  };
   
   // Tüm etkinlikleri birleştir
+  const handleDeleteAppointment = async (appointmentId: string) => {
+    if (!confirm('Bu iptal edilen randevuyu silmek istediğinize emin misiniz?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .delete()
+        .eq('id', appointmentId);
+
+      if (error) throw error;
+
+      toast.success('Randevu silindi');
+      await loadData();
+    } catch (error) {
+      console.error('Randevu silinemedi:', error);
+      toast.error('Randevu silinemedi');
+    }
+  };
+
   const events = useMemo<CalendarEvent[]>(() => {
     const allEvents: CalendarEvent[] = [];
     
@@ -222,8 +268,11 @@ export default function TakvimPage() {
   }, [appointments, activities, tasks, followUps, showAppointments, showActivities, showTasks]);
   
   // Belirli bir gün için etkinlikleri getir
+  const shouldShowInOverview = (event: CalendarEvent) =>
+    !(event.type === 'appointment' && event.status === 'cancelled');
+
   const getEventsForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = getLocalDateString(date);
     return events.filter(e => e.date === dateStr);
   };
   
@@ -508,7 +557,7 @@ export default function TakvimPage() {
                         
                         {/* Etkinlikler */}
                         <div className="mt-1 space-y-1">
-                          {dayEvents.slice(0, 3).map(event => (
+                          {dayEvents.filter(shouldShowInOverview).slice(0, 3).map(event => (
                             <div
                               key={event.id}
                               className={`text-xs px-1.5 py-0.5 rounded truncate ${colorMap[event.color].bg} ${colorMap[event.color].text}`}
@@ -517,9 +566,9 @@ export default function TakvimPage() {
                               {event.title}
                             </div>
                           ))}
-                          {dayEvents.length > 3 && (
+                          {dayEvents.filter(shouldShowInOverview).length > 3 && (
                             <div className="text-xs text-slate-500 px-1.5">
-                              +{dayEvents.length - 3} daha
+                              +{dayEvents.filter(shouldShowInOverview).length - 3} daha
                             </div>
                           )}
                         </div>
@@ -552,19 +601,43 @@ export default function TakvimPage() {
                         </div>
                         
                         <div className="space-y-1 min-h-[300px]">
-                          {dayEvents.map(event => (
+                          {dayEvents.filter(shouldShowInOverview).map(event => (
                             <div
                               key={event.id}
-                              className={`p-2 rounded-lg border ${colorMap[event.color].bg} ${colorMap[event.color].border}`}
+                              className={`group relative p-2 rounded-lg border ${colorMap[event.color].bg} ${colorMap[event.color].border}`}
                             >
-                              {event.time && (
-                                <div className={`text-xs font-medium ${colorMap[event.color].text}`}>
-                                  {event.time.slice(0, 5)}
+                              <div className="flex items-start justify-between gap-2 pr-6">
+                                <div className="min-w-0 flex-1">
+                                  {event.time && (
+                                    <div className={`text-xs font-medium ${colorMap[event.color].text}`}>
+                                      {event.time.slice(0, 5)}
+                                    </div>
+                                  )}
+                                  <div className={`text-sm ${colorMap[event.color].text}`}>
+                                    {event.title}
+                                  </div>
                                 </div>
-                              )}
-                              <div className={`text-sm ${colorMap[event.color].text}`}>
-                                {event.title}
-                              </div>
+                          {event.type === 'task' && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTask(event.id)}
+                              className="absolute right-1 top-1 rounded-full p-1 text-slate-300 opacity-0 transition-all hover:bg-white/80 hover:text-red-600 group-hover:opacity-100"
+                              aria-label="Görevi sil"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          {event.type === 'appointment' && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAppointment(event.id)}
+                              className="absolute right-1 top-1 rounded-full p-1 text-slate-300 opacity-0 transition-all hover:bg-white/80 hover:text-red-600 group-hover:opacity-100"
+                              aria-label="Randevuyu sil"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
                               {event.status && (
                                 <Badge variant="outline" className="text-xs mt-1">
                                   {event.status === 'attended' ? 'Geldi' : 
@@ -608,23 +681,45 @@ export default function TakvimPage() {
                             <div className="text-sm text-slate-300 italic">—</div>
                           ) : (
                             <div className="space-y-2">
-                              {hourEvents.map(event => (
+                          {hourEvents.filter(shouldShowInOverview).map(event => (
                                 <div
                                   key={event.id}
-                                  className={`p-3 rounded-lg border ${colorMap[event.color].bg} ${colorMap[event.color].border}`}
+                                  className={`group relative p-3 rounded-lg border ${colorMap[event.color].bg} ${colorMap[event.color].border}`}
                                 >
-                                  <div className="flex items-center justify-between">
+                                  <div className="flex items-start justify-between gap-2 pr-6">
                                     <div className={`font-medium ${colorMap[event.color].text}`}>
                                       {event.title}
                                     </div>
-                                    {event.status && (
-                                      <Badge variant="outline" className={colorMap[event.color].text}>
-                                        {event.status === 'attended' ? 'Geldi' : 
-                                         event.status === 'not_attended' ? 'Gelmedi' :
-                                         event.status === 'planned' ? 'Planlandı' :
-                                         event.status}
-                                      </Badge>
-                                    )}
+                                    <div className="flex items-center gap-2">
+                                      {event.status && (
+                                        <Badge variant="outline" className={colorMap[event.color].text}>
+                                          {event.status === 'attended' ? 'Geldi' : 
+                                           event.status === 'not_attended' ? 'Gelmedi' :
+                                           event.status === 'planned' ? 'Planlandı' :
+                                           event.status}
+                                        </Badge>
+                                      )}
+                                      {event.type === 'task' && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteTask(event.id)}
+                                          className="absolute right-2 top-2 rounded-full p-1 text-slate-300 opacity-0 transition-all hover:bg-white/80 hover:text-red-600 group-hover:opacity-100"
+                                          aria-label="Görevi sil"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                      )}
+                                      {event.type === 'appointment' && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteAppointment(event.id)}
+                                          className="absolute right-2 top-2 rounded-full p-1 text-slate-300 opacity-0 transition-all hover:bg-white/80 hover:text-red-600 group-hover:opacity-100"
+                                          aria-label="Randevuyu sil"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
                                   {event.time && (
                                     <div className="text-sm text-slate-500 mt-1">
@@ -669,9 +764,9 @@ export default function TakvimPage() {
                     {getEventsForDate(selectedDate).map(event => (
                       <div
                         key={event.id}
-                        className={`p-4 rounded-xl border-2 ${colorMap[event.color].bg} ${colorMap[event.color].border}`}
+                        className={`group relative p-4 rounded-xl border-2 ${colorMap[event.color].bg} ${colorMap[event.color].border}`}
                       >
-                        <div className="flex items-start justify-between">
+                        <div className="flex items-start justify-between gap-3 pr-8">
                           <div>
                             <div className="flex items-center gap-2">
                               <span className={`w-3 h-3 rounded-full ${colorMap[event.color].dot}`}></span>
@@ -691,6 +786,26 @@ export default function TakvimPage() {
                               </p>
                             )}
                           </div>
+                          {event.type === 'task' && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTask(event.id)}
+                              className="absolute right-3 top-3 rounded-full p-1 text-slate-300 opacity-0 transition-all hover:bg-white/80 hover:text-red-600 group-hover:opacity-100"
+                              aria-label="Görevi sil"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                          {event.type === 'appointment' && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAppointment(event.id)}
+                              className="absolute right-3 top-3 z-10 rounded-full border border-red-200 bg-white/90 p-1.5 text-slate-400 shadow-sm transition-all hover:bg-red-50 hover:text-red-600"
+                              aria-label="Randevuyu sil"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
                           {event.status && (
                             <Badge className={`${colorMap[event.color].bg} ${colorMap[event.color].text} border ${colorMap[event.color].border}`}>
                               {event.status === 'attended' ? '✓ Geldi' : 
@@ -754,3 +869,4 @@ export default function TakvimPage() {
     </div>
   );
 }
+

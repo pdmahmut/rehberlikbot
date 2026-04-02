@@ -26,6 +26,7 @@ import {
   Ban,
   Sparkles,
   GraduationCap,
+  Trash2,
   X
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
@@ -85,6 +86,69 @@ const normalizeStudentText = (value: string) =>
     .replace(/^[0-9]+\s+/, "")
     .trim();
 
+const getLocalDateString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const POOL_LINK_STORAGE_KEY = "rehberlikbot:appointmentPoolLinks";
+
+type AppointmentPoolLinkMap = Record<string, string[]>;
+
+function readAppointmentPoolLinks(): AppointmentPoolLinkMap {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem(POOL_LINK_STORAGE_KEY);
+    return raw ? JSON.parse(raw) as AppointmentPoolLinkMap : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeAppointmentPoolLinks(value: AppointmentPoolLinkMap) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(POOL_LINK_STORAGE_KEY, JSON.stringify(value));
+}
+
+function saveAppointmentPoolLinks(appointmentId: string, observationIds: string[]) {
+  if (!appointmentId || observationIds.length === 0) return;
+  const next = readAppointmentPoolLinks();
+  next[appointmentId] = observationIds;
+  writeAppointmentPoolLinks(next);
+}
+
+function consumeAppointmentPoolLinks(appointmentId: string) {
+  const next = readAppointmentPoolLinks();
+  const observationIds = next[appointmentId] || [];
+  if (observationIds.length > 0) {
+    delete next[appointmentId];
+    writeAppointmentPoolLinks(next);
+  }
+  return observationIds;
+}
+
+async function restoreObservationPoolStatus(observationIds: string[]) {
+  if (observationIds.length === 0) return false;
+
+  const res = await fetch("/api/gozlem-havuzu", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "status",
+      ids: observationIds,
+      status: "pending",
+      appointment_id: null,
+      completed_at: null,
+      converted_at: null
+    })
+  });
+
+  return res.ok;
+}
+
 export default function RandevuPage() {
   const searchParams = useSearchParams();
   const { 
@@ -125,12 +189,13 @@ export default function RandevuPage() {
   const [showClosureModal, setShowClosureModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showPlannedListModal, setShowPlannedListModal] = useState(false);
 
   const [customTag, setCustomTag] = useState("");
   const [customTags, setCustomTags] = useState<string[]>([]);
 
   const [formData, setFormData] = useState<AppointmentFormData>({
-    appointment_date: new Date().toISOString().slice(0, 10),
+    appointment_date: getLocalDateString(new Date()),
     start_time: "1. Ders",
     participant_type: "student",
     participant_name: "",
@@ -269,22 +334,27 @@ export default function RandevuPage() {
   }, [selectedClass, formData.participant_type]);
 
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    const weekEnd = new Date();
-    weekEnd.setDate(weekEnd.getDate() + 7);
-    fetchAppointments({ from: today, to: weekEnd.toISOString().slice(0, 10) });
-  }, [fetchAppointments]);
+    const startDate = new Date(currentDate);
+    startDate.setDate(startDate.getDate() - 30);
+    const endDate = new Date(currentDate);
+    endDate.setDate(endDate.getDate() + 30);
+
+    fetchAppointments({
+      from: getLocalDateString(startDate),
+      to: getLocalDateString(endDate)
+    });
+  }, [fetchAppointments, currentDate]);
 
   const filteredAppointments = useMemo(() => {
     let filtered = [...appointments];
 
     if (viewMode === "day") {
-      const dateStr = currentDate.toISOString().slice(0, 10);
+      const dateStr = getLocalDateString(currentDate);
       filtered = filtered.filter(apt => apt.appointment_date === dateStr);
     } else {
       const weekDays = getWeekDays(currentDate);
-      const start = weekDays[0].toISOString().slice(0, 10);
-      const end = weekDays[6].toISOString().slice(0, 10);
+      const start = getLocalDateString(weekDays[0]);
+      const end = getLocalDateString(weekDays[6]);
       filtered = filtered.filter(apt =>
         apt.appointment_date >= start && apt.appointment_date <= end
       );
@@ -349,6 +419,7 @@ export default function RandevuPage() {
     });
     if (result) {
       if (sourceObservationIds.length > 0) {
+        saveAppointmentPoolLinks(result.id, sourceObservationIds);
         try {
           const res = await fetch("/api/gozlem-havuzu", {
             method: "PUT",
@@ -375,16 +446,16 @@ export default function RandevuPage() {
       setPoolPrefillStudentName("");
       setPoolPrefillClassDisplay("");
       hasAppliedPoolPrefill.current = false;
-      const today = new Date().toISOString().slice(0, 10);
+      const today = getLocalDateString(new Date());
       const weekEnd = new Date();
       weekEnd.setDate(weekEnd.getDate() + 7);
-      fetchAppointments({ from: today, to: weekEnd.toISOString().slice(0, 10) });
+      fetchAppointments({ from: today, to: getLocalDateString(weekEnd) });
     }
   };
 
   const resetForm = () => {
     setFormData({
-      appointment_date: new Date().toISOString().slice(0, 10),
+      appointment_date: getLocalDateString(new Date()),
       start_time: "1. Ders",
       participant_type: "student",
       participant_name: "",
@@ -413,6 +484,21 @@ export default function RandevuPage() {
     if (!selectedAppointment) return;
     const result = await closeAppointment(selectedAppointment.id, closureData);
     if (result) {
+      if (closureData.status === "cancelled") {
+        const linkedIds = readAppointmentPoolLinks()[selectedAppointment.id] || [];
+        if (linkedIds.length > 0) {
+          try {
+            const restored = await restoreObservationPoolStatus(linkedIds);
+            if (restored) {
+              consumeAppointmentPoolLinks(selectedAppointment.id);
+              toast.success("İptal edilen randevuya bağlı gözlemler yeniden havuza alındı");
+            }
+          } catch (error) {
+            console.error("Observation pool restore error:", error);
+            toast.error("Randevu iptal edildi ama gözlemler havuza geri alınamadı");
+          }
+        }
+      }
       setShowClosureModal(false);
       setSelectedAppointment(null);
       setClosureData({
@@ -423,6 +509,35 @@ export default function RandevuPage() {
         create_follow_up: false
       });
     }
+  };
+
+  const handleDeleteAppointment = async (appointmentId: string) => {
+    const confirmDelete = window.confirm("Bu randevuyu silmek istediğinize emin misiniz?");
+    if (!confirmDelete) return;
+
+    const linkedIds = readAppointmentPoolLinks()[appointmentId] || [];
+    if (linkedIds.length > 0) {
+      try {
+        const restored = await restoreObservationPoolStatus(linkedIds);
+        if (restored) {
+          consumeAppointmentPoolLinks(appointmentId);
+        }
+      } catch (error) {
+        console.error("Observation pool restore error on delete:", error);
+      }
+    }
+
+    setShowClosureModal(false);
+    setShowDetailModal(false);
+    setSelectedAppointment(null);
+
+    const success = await deleteAppointment(appointmentId);
+    if (success) toast.success("Randevu başarıyla silindi");
+  };
+
+  const handleDeleteSelectedAppointment = async () => {
+    if (!selectedAppointment) return;
+    await handleDeleteAppointment(selectedAppointment.id);
   };
 
   const handleAppointmentClick = (appointment: Appointment) => {
@@ -449,6 +564,17 @@ export default function RandevuPage() {
 
   const statusCounts = getStatusCounts();
   const weekDays = getWeekDays(currentDate);
+  const plannedAppointments = useMemo(
+    () =>
+      appointments
+        .filter((appointment) => appointment.status === "planned")
+        .sort((a, b) => {
+          const dateCompare = a.appointment_date.localeCompare(b.appointment_date);
+          if (dateCompare !== 0) return dateCompare;
+          return a.start_time.localeCompare(b.start_time);
+        }),
+    [appointments]
+  );
 
   const getLocationLabel = (location: string) =>
     APPOINTMENT_LOCATIONS.find(l => l.value === location)?.label || location;
@@ -477,13 +603,17 @@ export default function RandevuPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <div className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-3 py-2 border border-white/10">
+              <button
+                type="button"
+                onClick={() => setShowPlannedListModal(true)}
+                className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-3 py-2 border border-white/10 text-left transition-all hover:bg-white/20 hover:border-white/30 hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-white/40"
+              >
                 <Clock className="h-4 w-4 text-teal-200" />
                 <div>
                   <p className="text-[10px] text-teal-200 uppercase tracking-wider">Planlandı</p>
                   <p className="text-lg font-bold leading-none">{statusCounts.planned}</p>
                 </div>
-              </div>
+              </button>
               <div className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-3 py-2 border border-white/10">
                 <CheckCircle2 className="h-4 w-4 text-green-300" />
                 <div>
@@ -543,8 +673,8 @@ export default function RandevuPage() {
               <Badge className="bg-white/20 text-white border-0">
                 <CalendarDays className="h-3 w-3 mr-1" />
                 {viewMode === "day"
-                  ? formatDate(currentDate.toISOString().slice(0, 10))
-                  : `${formatShortDate(weekDays[0].toISOString().slice(0, 10))} - ${formatShortDate(weekDays[6].toISOString().slice(0, 10))}`
+                  ? formatDate(getLocalDateString(currentDate))
+                  : `${formatShortDate(getLocalDateString(weekDays[0]))} - ${formatShortDate(getLocalDateString(weekDays[6]))}`
                 }
               </Badge>
             </div>
@@ -563,10 +693,10 @@ export default function RandevuPage() {
                 variant="secondary"
                 size="sm"
                 onClick={() => {
-                  const today = new Date().toISOString().slice(0, 10);
+                  const today = getLocalDateString(new Date());
                   const weekEnd = new Date();
                   weekEnd.setDate(weekEnd.getDate() + 7);
-                  fetchAppointments({ from: today, to: weekEnd.toISOString().slice(0, 10) });
+                  fetchAppointments({ from: today, to: getLocalDateString(weekEnd) });
                 }}
                 disabled={loading}
                 className="bg-white/10 hover:bg-white/20 text-white border-0"
@@ -666,7 +796,7 @@ export default function RandevuPage() {
           <CardHeader className="pb-2 border-b">
             <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
               <CalendarDays className="h-5 w-5 text-teal-600" />
-              {formatDate(currentDate.toISOString().slice(0, 10))}
+              {formatDate(getLocalDateString(currentDate))}
               {isToday(currentDate) && (
                 <Badge className="bg-teal-100 text-teal-700 text-xs">Bugün</Badge>
               )}
@@ -706,7 +836,7 @@ export default function RandevuPage() {
                     <div
                       key={appointment.id}
                       onClick={() => handleAppointmentClick(appointment)}
-                      className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-lg hover:scale-[1.01] ${colors.bg} ${colors.border} ${
+                      className={`group relative p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-lg hover:scale-[1.01] ${colors.bg} ${colors.border} ${
                         appointment.priority === "urgent" ? "ring-2 ring-red-400 ring-offset-2" : ""
                       }`}
                     >
@@ -775,6 +905,24 @@ export default function RandevuPage() {
                           </span>
                         </div>
                       </div>
+
+                      <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/50 pt-3">
+                        <div className="text-xs text-slate-500">
+                          Randevu kaydı
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteAppointment(appointment.id);
+                          }}
+                          className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-white/80 px-3 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 hover:border-red-300"
+                          aria-label="Randevuyu sil"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Sil
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -791,7 +939,7 @@ export default function RandevuPage() {
                 <div className="h-12"></div>
               </div>
               {weekDays.map((day, idx) => {
-                const dayStr = day.toISOString().slice(0, 10);
+                const dayStr = getLocalDateString(day);
                 const dayAppointments = appointments.filter(a => a.appointment_date === dayStr);
                 return (
                   <div
@@ -821,7 +969,7 @@ export default function RandevuPage() {
                     {slot.label}
                   </div>
                   {weekDays.map((day, dayIdx) => {
-                    const dayStr = day.toISOString().slice(0, 10);
+                    const dayStr = getLocalDateString(day);
                     const slotAppointments = filteredAppointments.filter(a =>
                       a.appointment_date === dayStr &&
                       a.start_time === slot.value
@@ -838,7 +986,7 @@ export default function RandevuPage() {
                             <div
                               key={apt.id}
                               onClick={() => handleAppointmentClick(apt)}
-                              className={`text-[10px] p-1.5 rounded cursor-pointer ${pColors.bg} ${pColors.text} hover:opacity-80 transition-opacity ${
+                              className={`group relative text-[10px] p-1.5 rounded cursor-pointer ${pColors.bg} ${pColors.text} hover:opacity-80 transition-opacity ${
                                 apt.priority === "urgent" ? "ring-1 ring-red-400" : ""
                               }`}
                             >
@@ -846,6 +994,17 @@ export default function RandevuPage() {
                               {apt.topic_tags[0] && (
                                 <div className="truncate opacity-80">{apt.topic_tags[0]}</div>
                               )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteAppointment(apt.id);
+                                }}
+                                className="absolute right-1 top-1 rounded-full p-0.5 text-slate-300 opacity-0 transition-all hover:bg-white/80 hover:text-red-600 group-hover:opacity-100"
+                                aria-label="Randevuyu sil"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
                             </div>
                           );
                         })}
@@ -857,6 +1016,125 @@ export default function RandevuPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* AKTIF RANDEVULAR MODALI */}
+      {showPlannedListModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="sticky top-0 bg-gradient-to-r from-teal-500 to-emerald-500 text-white px-6 py-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  Aktif Randevular
+                </h2>
+                <p className="text-sm text-teal-100">
+                  Planlanan randevuların listesi
+                </p>
+              </div>
+              <button
+                onClick={() => setShowPlannedListModal(false)}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                aria-label="Modali kapat"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto">
+              {plannedAppointments.length === 0 ? (
+                <div className="py-12 text-center">
+                  <Clock className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+                  <p className="text-slate-500 font-medium">Aktif randevu bulunmuyor</p>
+                  <p className="text-sm text-slate-400 mt-1">
+                    Planlanan bir randevu oluşturulduğunda burada görünecek
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {plannedAppointments.map((appointment) => {
+                    const participantColor = participantColors[appointment.participant_type];
+                    return (
+                      <button
+                        key={appointment.id}
+                        type="button"
+                        onClick={() => {
+                          setShowPlannedListModal(false);
+                          handleAppointmentClick(appointment);
+                        }}
+                        className="w-full text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-teal-300 hover:shadow-md transition-all"
+                      >
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <div className="min-w-0 flex items-start gap-3">
+                            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${participantColor.bg} ${participantColor.text}`}>
+                              <Users className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="font-semibold text-slate-800 truncate">
+                                  {appointment.participant_name}
+                                </h3>
+                                <Badge className={`${participantColor.bg} ${participantColor.text} border-0`}>
+                                  {getParticipantLabel(appointment.participant_type)}
+                                </Badge>
+                                {appointment.priority === "urgent" && (
+                                  <Badge variant="destructive" className="text-[10px]">
+                                    Acil
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
+                                <span className="flex items-center gap-1">
+                                  <CalendarDays className="h-3.5 w-3.5" />
+                                  {formatDate(appointment.appointment_date)}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3.5 w-3.5" />
+                                  {appointment.start_time}
+                                </span>
+                                {appointment.participant_class && (
+                                  <span className="truncate">
+                                    {appointment.participant_class}
+                                  </span>
+                                )}
+                              </div>
+                              {appointment.topic_tags.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {appointment.topic_tags.slice(0, 4).map((tag) => (
+                                    <span
+                                      key={tag}
+                                      className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600"
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                  {appointment.topic_tags.length > 4 && (
+                                    <span className="text-[10px] text-slate-400">
+                                      +{appointment.topic_tags.length - 4}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 self-start md:self-center">
+                            <Badge variant="outline" className="text-teal-700 border-teal-200 bg-teal-50">
+                              Planlandı
+                            </Badge>
+                            <span className="text-xs text-slate-400">
+                              Açmak için tıkla
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* YENİ RANDEVU MODALI */}
@@ -1317,6 +1595,15 @@ export default function RandevuPage() {
               <Button variant="outline" onClick={() => { setShowClosureModal(false); setSelectedAppointment(null); }}>
                 İptal
               </Button>
+              {closureData.status === "cancelled" && (
+                <Button
+                  variant="outline"
+                  className="border-red-200 text-red-600 hover:bg-red-50"
+                  onClick={handleDeleteSelectedAppointment}
+                >
+                  Sil
+                </Button>
+              )}
               <Button onClick={handleCloseAppointment} disabled={loading} className="bg-teal-600 hover:bg-teal-700">
                 {loading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
                 Kaydet
@@ -1401,23 +1688,16 @@ export default function RandevuPage() {
               )}
             </div>
 
-            <div className="bg-slate-50 border-t px-6 py-4 flex justify-between gap-3">
-              <Button
-                variant="outline"
-                className="text-red-600 border-red-200 hover:bg-red-50"
-                onClick={async () => {
-                  const confirmDelete = window.confirm("Bu randevuyu silmek istediğinize emin misiniz?");
-                  if (confirmDelete && selectedAppointment) {
-                    const appointmentId = selectedAppointment.id;
-                    setShowDetailModal(false);
-                    setSelectedAppointment(null);
-                    const success = await deleteAppointment(appointmentId);
-                    if (success) toast.success("Randevu başarıyla silindi");
-                  }
-                }}
-              >
-                Sil
-              </Button>
+            <div className="bg-slate-50 border-t px-6 py-4 flex items-center justify-end gap-3">
+              {selectedAppointment.status === "cancelled" && (
+                <Button
+                  variant="outline"
+                  className="text-red-600 border-red-200 hover:bg-red-50"
+                  onClick={handleDeleteSelectedAppointment}
+                >
+                  Sil
+                </Button>
+              )}
               <Button variant="outline" onClick={() => { setShowDetailModal(false); setSelectedAppointment(null); }}>
                 Kapat
               </Button>
