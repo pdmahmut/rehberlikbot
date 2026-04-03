@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabase";
 import { MessageSquare, Users, Eye, Search, RefreshCw, Calendar, Clock, ArrowRight, Loader2, PhoneCall, Edit2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
+  Appointment,
   ReferralRecord,
   ObservationPoolRecord,
   StudentIncidentRecord,
@@ -43,6 +44,48 @@ const normalizeText = (value: string) =>
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
+
+const normalizeStudentName = (value?: string | null) =>
+  normalizeText((value || "").replace(/\s+/g, " "));
+
+const normalizeClassText = (value?: string | null) =>
+  (value || "")
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/[\/\-_.()]/g, "")
+    .trim();
+
+const matchesAttendedAppointment = (
+  appointment: Appointment,
+  studentName?: string | null,
+  classDisplay?: string | null,
+  classKey?: string | null
+) => {
+  const appointmentName = normalizeStudentName(appointment.participant_name);
+  const sourceName = normalizeStudentName(studentName);
+
+  if (!appointmentName || !sourceName) return false;
+
+  const nameMatches =
+    appointmentName === sourceName ||
+    appointmentName.includes(sourceName) ||
+    sourceName.includes(appointmentName);
+
+  if (!nameMatches) return false;
+
+  const appointmentClass = normalizeClassText(appointment.participant_class);
+  const sourceClass = normalizeClassText(classDisplay || classKey);
+
+  if (!appointmentClass || !sourceClass) return true;
+
+  return (
+    appointmentClass === sourceClass ||
+    appointmentClass.includes(sourceClass) ||
+    sourceClass.includes(appointmentClass)
+  );
+};
 
 const matchesQuery = (fields: Array<string | null | undefined>, query: string) => {
   if (!query) return true;
@@ -75,6 +118,7 @@ export default function PotansiyelGorusmelerPage() {
   const [activeTab, setActiveTab] = useState<SourceTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [attendedAppointments, setAttendedAppointments] = useState<Appointment[]>([]);
   const [referrals, setReferrals] = useState<ReferralRecord[]>([]);
   const [observations, setObservations] = useState<ObservationPoolRecord[]>([]);
   const [incidents, setIncidents] = useState<StudentIncidentRecord[]>([]);
@@ -86,7 +130,7 @@ export default function PotansiyelGorusmelerPage() {
       setLoading(true);
       setLoadError(null);
 
-      const [referralResult, observationResult, incidentResult, requestResult] = await Promise.all([
+      const [referralResult, observationResult, incidentResult, requestResult, attendedResult] = await Promise.all([
         supabase.from("referrals").select("*").order("created_at", { ascending: false }),
         fetch("/api/gozlem-havuzu?status=pending"),
         supabase
@@ -98,16 +142,25 @@ export default function PotansiyelGorusmelerPage() {
         supabase
           .from("parent_meeting_requests")
           .select("*")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("appointments")
+          .select("*")
+          .eq("status", "attended")
+          .eq("participant_type", "student")
+          .order("appointment_date", { ascending: false })
           .order("created_at", { ascending: false })
       ]);
 
       if (referralResult.error) throw referralResult.error;
       if (incidentResult.error) throw incidentResult.error;
       if (requestResult.error) throw requestResult.error;
+      if (attendedResult.error) throw attendedResult.error;
 
       setReferrals((referralResult.data || []) as ReferralRecord[]);
       setIncidents((incidentResult.data || []) as StudentIncidentRecord[]);
       setRequests((requestResult.data || []) as ParentMeetingRequestRecord[]);
+      setAttendedAppointments((attendedResult.data || []) as Appointment[]);
 
       if (observationResult.ok) {
         const json = await observationResult.json();
@@ -131,8 +184,14 @@ export default function PotansiyelGorusmelerPage() {
 
   const query = normalizeText(searchQuery);
 
+  const isAlreadyAttended = (studentName: string, classDisplay?: string | null, classKey?: string | null) =>
+    attendedAppointments.some((appointment) =>
+      matchesAttendedAppointment(appointment, studentName, classDisplay, classKey)
+    );
+
   const filteredIncidents = useMemo(() => {
     return incidents.filter((incident) =>
+      !isAlreadyAttended(incident.target_student_name, incident.target_class_display, incident.target_class_key) &&
       matchesQuery(
         [
           incident.target_student_name,
@@ -144,16 +203,18 @@ export default function PotansiyelGorusmelerPage() {
         query
       )
     );
-  }, [incidents, query]);
+  }, [incidents, query, attendedAppointments]);
 
   const filteredReferrals = useMemo(() => {
     return referrals.filter((referral) =>
+      !isAlreadyAttended(referral.student_name, referral.class_display, referral.class_key) &&
       matchesQuery([referral.student_name, referral.teacher_name, referral.class_display, referral.reason, referral.note], query)
     );
-  }, [referrals, query]);
+  }, [referrals, query, attendedAppointments]);
 
   const filteredObservations = useMemo(() => {
     return observations.filter((observation) =>
+      !isAlreadyAttended(observation.student_name, observation.class_display, observation.class_key) &&
       matchesQuery(
         [
           observation.student_name,
@@ -167,10 +228,11 @@ export default function PotansiyelGorusmelerPage() {
         query
       )
     );
-  }, [observations, query]);
+  }, [observations, query, attendedAppointments]);
 
   const filteredRequests = useMemo(() => {
     return requests.filter((request) =>
+      !isAlreadyAttended(request.student_name, request.class_display, request.class_key) &&
       matchesQuery(
         [
           request.student_name,
@@ -183,7 +245,7 @@ export default function PotansiyelGorusmelerPage() {
         query
       )
     );
-  }, [requests, query]);
+  }, [requests, query, attendedAppointments]);
 
   const totalVisible =
     filteredIncidents.length + filteredReferrals.length + filteredObservations.length + filteredRequests.length;
