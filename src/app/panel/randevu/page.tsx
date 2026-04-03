@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
+import {
   CalendarDays, 
   CalendarCheck,
   Plus,
@@ -26,6 +26,7 @@ import {
   Ban,
   Sparkles,
   GraduationCap,
+  Edit2,
   Trash2,
   X
 } from "lucide-react";
@@ -86,69 +87,100 @@ const normalizeStudentText = (value: string) =>
     .replace(/^[0-9]+\s+/, "")
     .trim();
 
-const getLocalDateString = (date: Date) => {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
+const normalizeClassText = (value: string) =>
+  value
+    .toLocaleLowerCase("tr-TR")
+    .replace(/\s+/g, " ")
+    .replace(/[\/\-_.()]/g, "")
+    .replace(/ş/g, "s")
+    .replace(/ç/g, "c")
+    .replace(/ğ/g, "g")
+    .replace(/ı/g, "i")
+    .replace(/ö/g, "o")
+    .replace(/ü/g, "u")
+    .trim();
 
-const POOL_LINK_STORAGE_KEY = "rehberlikbot:appointmentPoolLinks";
+const resolveClassKeyFromDisplay = (
+  classDisplay: string,
+  classes: { value: string; text: string }[]
+) => {
+  const normalizedDisplay = normalizeClassText(classDisplay);
+  if (!normalizedDisplay) return "";
 
-type AppointmentPoolLinkMap = Record<string, string[]>;
+  const exactMatch = classes.find(
+    (item) =>
+      normalizeClassText(item.text) === normalizedDisplay ||
+      normalizeClassText(item.value) === normalizedDisplay
+  );
+  if (exactMatch) return exactMatch.value;
 
-function readAppointmentPoolLinks(): AppointmentPoolLinkMap {
-  if (typeof window === "undefined") return {};
-
-  try {
-    const raw = window.localStorage.getItem(POOL_LINK_STORAGE_KEY);
-    return raw ? JSON.parse(raw) as AppointmentPoolLinkMap : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeAppointmentPoolLinks(value: AppointmentPoolLinkMap) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(POOL_LINK_STORAGE_KEY, JSON.stringify(value));
-}
-
-function saveAppointmentPoolLinks(appointmentId: string, observationIds: string[]) {
-  if (!appointmentId || observationIds.length === 0) return;
-  const next = readAppointmentPoolLinks();
-  next[appointmentId] = observationIds;
-  writeAppointmentPoolLinks(next);
-}
-
-function consumeAppointmentPoolLinks(appointmentId: string) {
-  const next = readAppointmentPoolLinks();
-  const observationIds = next[appointmentId] || [];
-  if (observationIds.length > 0) {
-    delete next[appointmentId];
-    writeAppointmentPoolLinks(next);
-  }
-  return observationIds;
-}
-
-async function restoreObservationPoolStatus(observationIds: string[]) {
-  if (observationIds.length === 0) return false;
-
-  const res = await fetch("/api/gozlem-havuzu", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: "status",
-      ids: observationIds,
-      status: "pending",
-      appointment_id: null,
-      completed_at: null,
-      converted_at: null
-    })
+  const looseMatch = classes.find((item) => {
+    const normalizedText = normalizeClassText(item.text);
+    const normalizedValue = normalizeClassText(item.value);
+    return (
+      normalizedText.includes(normalizedDisplay) ||
+      normalizedDisplay.includes(normalizedText) ||
+      normalizedValue.includes(normalizedDisplay) ||
+      normalizedDisplay.includes(normalizedValue)
+    );
   });
 
-  return res.ok;
-}
+  return looseMatch?.value || "";
+};
 
+const resolveStudentPrefill = async (studentName: string) => {
+  const normalizedName = normalizeStudentText(studentName);
+  if (!normalizedName) {
+    return {
+      studentText: studentName,
+      classKey: "",
+      classDisplay: ""
+    };
+  }
+
+  try {
+    const res = await fetch(`/api/students?query=${encodeURIComponent(studentName)}`);
+    if (!res.ok) {
+      return {
+        studentText: studentName,
+        classKey: "",
+        classDisplay: ""
+      };
+    }
+
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      return {
+        studentText: studentName,
+        classKey: "",
+        classDisplay: ""
+      };
+    }
+
+    const bestMatch =
+      data.find((student: { value?: string; text?: string; class_key?: string; class_display?: string }) => {
+        const candidate = normalizeStudentText(student.value || student.text || "");
+        return (
+          candidate === normalizedName ||
+          candidate.includes(normalizedName) ||
+          normalizedName.includes(candidate)
+        );
+      }) || data[0];
+
+    return {
+      studentText: String(bestMatch.text || bestMatch.value || studentName).trim(),
+      classKey: String(bestMatch.class_key || ""),
+      classDisplay: String(bestMatch.class_display || "")
+    };
+  } catch (error) {
+    console.error("Öğrenci ön bilgisi çözülemedi:", error);
+    return {
+      studentText: studentName,
+      classKey: "",
+      classDisplay: ""
+    };
+  }
+};
 export default function RandevuPage() {
   const searchParams = useSearchParams();
   const { 
@@ -186,16 +218,16 @@ export default function RandevuPage() {
   const hasPoolPrefill = Boolean(poolStudentName);
 
   const [showNewAppointmentModal, setShowNewAppointmentModal] = useState(false);
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [showClosureModal, setShowClosureModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showPlannedListModal, setShowPlannedListModal] = useState(false);
 
   const [customTag, setCustomTag] = useState("");
   const [customTags, setCustomTags] = useState<string[]>([]);
 
   const [formData, setFormData] = useState<AppointmentFormData>({
-    appointment_date: getLocalDateString(new Date()),
+    appointment_date: new Date().toISOString().slice(0, 10),
     start_time: "1. Ders",
     participant_type: "student",
     participant_name: "",
@@ -216,6 +248,34 @@ export default function RandevuPage() {
   });
 
   const [newTaskDescription, setNewTaskDescription] = useState("");
+
+  const createEmptyFormData = (): AppointmentFormData => ({
+    appointment_date: new Date().toISOString().slice(0, 10),
+    start_time: "1. Ders",
+    participant_type: "student",
+    participant_name: "",
+    participant_class: "",
+    topic_tags: [],
+    location: "guidance_office",
+    purpose: "",
+    preparation_note: "",
+    priority: "normal"
+  });
+
+  const getAppointmentFormData = (appointment: Appointment): AppointmentFormData => ({
+    appointment_date: appointment.appointment_date,
+    start_time: appointment.start_time,
+    duration: appointment.duration,
+    participant_type: appointment.participant_type,
+    participant_name: appointment.participant_name,
+    participant_class: appointment.participant_class || "",
+    participant_phone: appointment.participant_phone,
+    topic_tags: [...appointment.topic_tags],
+    location: appointment.location,
+    purpose: appointment.purpose || "",
+    preparation_note: appointment.preparation_note || "",
+    priority: appointment.priority
+  });
 
   useEffect(() => {
     const fetchClassesAndTeachers = async () => {
@@ -241,48 +301,98 @@ export default function RandevuPage() {
     fetchClassesAndTeachers();
   }, []);
 
+  const searchParamsString = searchParams.toString();
+  const classesSignature = useMemo(
+    () => classes.map((item) => `${item.value}|${item.text}`).join(";;"),
+    [classes]
+  );
+
   useEffect(() => {
-    const poolIdsParam = searchParams.get("poolIds");
-    if (!poolIdsParam || hasAppliedPoolPrefill.current) return;
+    const params = new URLSearchParams(searchParamsString);
+    const poolIdsParam = params.get("poolIds");
+    const studentName = params.get("studentName") || "";
+    const classKey = params.get("classKey") || "";
+    const classDisplay = params.get("classDisplay") || "";
+    const note = params.get("note") || "";
+    const observationType = params.get("observationType") as ObservationType | null;
 
-    const studentName = searchParams.get("studentName") || "";
-    const classKey = searchParams.get("classKey") || "";
-    const classDisplay = searchParams.get("classDisplay") || "";
-    const note = searchParams.get("note") || "";
-    const observationType = searchParams.get("observationType") as ObservationType | null;
-    const parsedIds = poolIdsParam
-      .split(",")
-      .map((id) => id.trim())
-      .filter(Boolean);
+    if (!studentName && !poolIdsParam) return;
+    if (hasAppliedPoolPrefill.current) return;
 
-    if (parsedIds.length === 0) return;
+    let cancelled = false;
 
-    hasAppliedPoolPrefill.current = true;
-    setSourceObservationIds(parsedIds);
-    setPoolPrefillStudentName(studentName);
-    setPoolPrefillClassDisplay(classDisplay);
-    setSelectedClass(classKey);
-    setShowNewAppointmentModal(true);
+    const applyPrefill = async () => {
+      const parsedIds = poolIdsParam
+        ? poolIdsParam
+            .split(",")
+            .map((id) => id.trim())
+            .filter(Boolean)
+        : [];
 
-    setFormData((prev) => {
-      const nextTags = observationType && poolObservationTagMap[observationType]
-        ? Array.from(new Set([...prev.topic_tags, poolObservationTagMap[observationType]]))
-        : prev.topic_tags;
+      let resolvedClassKey =
+        classKey ||
+        resolveClassKeyFromDisplay(classDisplay, classes) ||
+        "";
+      let resolvedClassDisplay = classDisplay;
+      let resolvedStudentText = studentName;
 
-      return {
-        ...prev,
-        participant_type: "student",
-        participant_name: studentName || prev.participant_name,
-        participant_class: classDisplay || prev.participant_class,
-        topic_tags: nextTags,
-        purpose: note ? "Gözlem havuzundan aktarıldı" : prev.purpose,
-        preparation_note: note
-          ? `Gözlem havuzu notu:\n${note}`
-          : prev.preparation_note,
-        priority: "normal"
-      };
-    });
-  }, [searchParams]);
+      if ((!resolvedClassKey || !resolvedClassDisplay) && studentName) {
+        const studentPrefill = await resolveStudentPrefill(studentName);
+        if (cancelled) return;
+
+        resolvedStudentText = studentPrefill.studentText || resolvedStudentText;
+        resolvedClassKey = resolvedClassKey || studentPrefill.classKey || "";
+        resolvedClassDisplay = resolvedClassDisplay || studentPrefill.classDisplay || "";
+      }
+
+      if ((classDisplay || classKey) && !resolvedClassKey) return;
+      if (studentName && !resolvedStudentText) return;
+
+      hasAppliedPoolPrefill.current = true;
+      setSourceObservationIds(parsedIds);
+      setPoolPrefillStudentName(resolvedStudentText);
+      setPoolPrefillClassDisplay(resolvedClassDisplay);
+      setSelectedClass(resolvedClassKey);
+      setShowNewAppointmentModal(true);
+
+      setFormData((prev) => {
+        const nextTags = observationType && poolObservationTagMap[observationType]
+          ? Array.from(new Set([...prev.topic_tags, poolObservationTagMap[observationType]]))
+          : prev.topic_tags;
+
+        return {
+          ...prev,
+          participant_type: "student",
+          participant_name: resolvedStudentText || prev.participant_name,
+          participant_class: resolvedClassDisplay || prev.participant_class,
+          topic_tags: nextTags,
+          purpose: note && poolIdsParam ? "Gözlem havuzundan aktarıldı" : prev.purpose,
+          preparation_note: note
+            ? `Bildirim notu:\n${note}`
+            : prev.preparation_note,
+          priority: "normal"
+        };
+      });
+    };
+
+    applyPrefill();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParamsString, classesSignature]);
+
+  useEffect(() => {
+    if (!showNewAppointmentModal) return;
+    if (selectedClass) return;
+    if (!formData.participant_class) return;
+    if (!(formData.participant_type === "student" || formData.participant_type === "parent")) return;
+
+    const resolved = resolveClassKeyFromDisplay(formData.participant_class, classes);
+    if (resolved) {
+      setSelectedClass(resolved);
+    }
+  }, [showNewAppointmentModal, selectedClass, formData.participant_class, formData.participant_type, classesSignature]);
 
   const fetchStudentsByClass = async (classKey: string) => {
     if (!classKey) {
@@ -334,27 +444,22 @@ export default function RandevuPage() {
   }, [selectedClass, formData.participant_type]);
 
   useEffect(() => {
-    const startDate = new Date(currentDate);
-    startDate.setDate(startDate.getDate() - 30);
-    const endDate = new Date(currentDate);
-    endDate.setDate(endDate.getDate() + 30);
-
-    fetchAppointments({
-      from: getLocalDateString(startDate),
-      to: getLocalDateString(endDate)
-    });
-  }, [fetchAppointments, currentDate]);
+    const today = new Date().toISOString().slice(0, 10);
+    const weekEnd = new Date();
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    fetchAppointments({ from: today, to: weekEnd.toISOString().slice(0, 10) });
+  }, [fetchAppointments]);
 
   const filteredAppointments = useMemo(() => {
     let filtered = [...appointments];
 
     if (viewMode === "day") {
-      const dateStr = getLocalDateString(currentDate);
+      const dateStr = currentDate.toISOString().slice(0, 10);
       filtered = filtered.filter(apt => apt.appointment_date === dateStr);
     } else {
       const weekDays = getWeekDays(currentDate);
-      const start = getLocalDateString(weekDays[0]);
-      const end = getLocalDateString(weekDays[6]);
+      const start = weekDays[0].toISOString().slice(0, 10);
+      const end = weekDays[6].toISOString().slice(0, 10);
       filtered = filtered.filter(apt =>
         apt.appointment_date >= start && apt.appointment_date <= end
       );
@@ -394,11 +499,67 @@ export default function RandevuPage() {
     setCurrentDate(newDate);
   };
 
-  const handleCreateAppointment = async () => {
-    const resolvedParticipantName = formData.participant_name || poolStudentName;
-    const resolvedParticipantClass = formData.participant_class || poolClassDisplay;
+  const resetForm = () => {
+    setFormData(createEmptyFormData());
+    setSelectedClass("");
+    setStudents([]);
+    setCustomTag("");
+    setEditingAppointment(null);
+  };
 
-    if (!formData.participant_name) {
+  const closeNewAppointmentModal = () => {
+    setShowNewAppointmentModal(false);
+    resetForm();
+    setSourceObservationIds([]);
+    setPoolPrefillStudentName("");
+    setPoolPrefillClassDisplay("");
+    hasAppliedPoolPrefill.current = false;
+  };
+
+  const openNewAppointmentModal = () => {
+    setEditingAppointment(null);
+    resetForm();
+    setShowNewAppointmentModal(true);
+  };
+
+  const openEditAppointmentModal = (appointment: Appointment) => {
+    setEditingAppointment(appointment);
+    setShowDetailModal(false);
+    setShowClosureModal(false);
+    setSelectedAppointment(null);
+    setFormData(getAppointmentFormData(appointment));
+    setSelectedClass(
+      resolveClassKeyFromDisplay(appointment.participant_class || "", classes) ||
+      resolveClassKeyFromDisplay(appointment.participant_class || poolClassDisplay, classes) ||
+      ""
+    );
+    setStudents([]);
+    setCustomTag("");
+    setShowNewAppointmentModal(true);
+  };
+
+  const handleDeleteAppointment = async (appointment: Appointment) => {
+    const confirmDelete = window.confirm("Bu randevuyu silmek istediğinize emin misiniz?");
+    if (!confirmDelete) return;
+
+    const success = await deleteAppointment(appointment.id);
+    if (success) {
+      if (selectedAppointment?.id === appointment.id) {
+        setShowDetailModal(false);
+        setShowClosureModal(false);
+        setSelectedAppointment(null);
+      }
+      if (editingAppointment?.id === appointment.id) {
+        closeNewAppointmentModal();
+      }
+    }
+  };
+
+  const handleSaveAppointment = async () => {
+    const resolvedParticipantName = formData.participant_name || poolStudentName || poolPrefillStudentName;
+    const resolvedParticipantClass = formData.participant_class || poolClassDisplay || poolPrefillClassDisplay;
+
+    if (!resolvedParticipantName) {
       if (poolPrefillStudentName) {
         setFormData((prev) => ({
           ...prev,
@@ -410,16 +571,21 @@ export default function RandevuPage() {
         return;
       }
     }
-    const result = await createAppointment({
+
+    const payload: AppointmentFormData = {
       ...formData,
       participant_name: resolvedParticipantName,
       participant_class: resolvedParticipantClass,
-      participant_type: "student",
+      participant_type: formData.participant_type,
       priority: formData.priority || "normal"
-    });
+    };
+
+    const result = editingAppointment
+      ? await updateAppointment(editingAppointment.id, payload as Partial<Appointment>)
+      : await createAppointment(payload);
+
     if (result) {
-      if (sourceObservationIds.length > 0) {
-        saveAppointmentPoolLinks(result.id, sourceObservationIds);
+      if (!editingAppointment && sourceObservationIds.length > 0) {
         try {
           const res = await fetch("/api/gozlem-havuzu", {
             method: "PUT",
@@ -446,59 +612,17 @@ export default function RandevuPage() {
       setPoolPrefillStudentName("");
       setPoolPrefillClassDisplay("");
       hasAppliedPoolPrefill.current = false;
-      const today = getLocalDateString(new Date());
+      const today = new Date().toISOString().slice(0, 10);
       const weekEnd = new Date();
       weekEnd.setDate(weekEnd.getDate() + 7);
-      fetchAppointments({ from: today, to: getLocalDateString(weekEnd) });
+      fetchAppointments({ from: today, to: weekEnd.toISOString().slice(0, 10) });
     }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      appointment_date: getLocalDateString(new Date()),
-      start_time: "1. Ders",
-      participant_type: "student",
-      participant_name: "",
-      participant_class: "",
-      topic_tags: [],
-      location: "guidance_office",
-      purpose: "",
-      preparation_note: "",
-      priority: "normal"
-    });
-    setSelectedClass("");
-    setStudents([]);
-    setCustomTag("");
-  };
-
-  const closeNewAppointmentModal = () => {
-    setShowNewAppointmentModal(false);
-    resetForm();
-    setSourceObservationIds([]);
-    setPoolPrefillStudentName("");
-    setPoolPrefillClassDisplay("");
-    hasAppliedPoolPrefill.current = false;
   };
 
   const handleCloseAppointment = async () => {
     if (!selectedAppointment) return;
     const result = await closeAppointment(selectedAppointment.id, closureData);
     if (result) {
-      if (closureData.status === "cancelled") {
-        const linkedIds = readAppointmentPoolLinks()[selectedAppointment.id] || [];
-        if (linkedIds.length > 0) {
-          try {
-            const restored = await restoreObservationPoolStatus(linkedIds);
-            if (restored) {
-              consumeAppointmentPoolLinks(selectedAppointment.id);
-              toast.success("İptal edilen randevuya bağlı gözlemler yeniden havuza alındı");
-            }
-          } catch (error) {
-            console.error("Observation pool restore error:", error);
-            toast.error("Randevu iptal edildi ama gözlemler havuza geri alınamadı");
-          }
-        }
-      }
       setShowClosureModal(false);
       setSelectedAppointment(null);
       setClosureData({
@@ -509,35 +633,6 @@ export default function RandevuPage() {
         create_follow_up: false
       });
     }
-  };
-
-  const handleDeleteAppointment = async (appointmentId: string) => {
-    const confirmDelete = window.confirm("Bu randevuyu silmek istediğinize emin misiniz?");
-    if (!confirmDelete) return;
-
-    const linkedIds = readAppointmentPoolLinks()[appointmentId] || [];
-    if (linkedIds.length > 0) {
-      try {
-        const restored = await restoreObservationPoolStatus(linkedIds);
-        if (restored) {
-          consumeAppointmentPoolLinks(appointmentId);
-        }
-      } catch (error) {
-        console.error("Observation pool restore error on delete:", error);
-      }
-    }
-
-    setShowClosureModal(false);
-    setShowDetailModal(false);
-    setSelectedAppointment(null);
-
-    const success = await deleteAppointment(appointmentId);
-    if (success) toast.success("Randevu başarıyla silindi");
-  };
-
-  const handleDeleteSelectedAppointment = async () => {
-    if (!selectedAppointment) return;
-    await handleDeleteAppointment(selectedAppointment.id);
   };
 
   const handleAppointmentClick = (appointment: Appointment) => {
@@ -564,17 +659,6 @@ export default function RandevuPage() {
 
   const statusCounts = getStatusCounts();
   const weekDays = getWeekDays(currentDate);
-  const plannedAppointments = useMemo(
-    () =>
-      appointments
-        .filter((appointment) => appointment.status === "planned")
-        .sort((a, b) => {
-          const dateCompare = a.appointment_date.localeCompare(b.appointment_date);
-          if (dateCompare !== 0) return dateCompare;
-          return a.start_time.localeCompare(b.start_time);
-        }),
-    [appointments]
-  );
 
   const getLocationLabel = (location: string) =>
     APPOINTMENT_LOCATIONS.find(l => l.value === location)?.label || location;
@@ -582,56 +666,170 @@ export default function RandevuPage() {
   const getParticipantLabel = (type: ParticipantType) =>
     PARTICIPANT_TYPES.find(p => p.value === type)?.label || type;
 
+  const AppointmentCard = ({
+    appointment,
+    compact = false
+  }: {
+    appointment: Appointment;
+    compact?: boolean;
+  }) => {
+    const StatusIcon = statusIcons[appointment.status];
+    const ParticipantIcon = participantColors[appointment.participant_type].icon;
+    const colors = statusColors[appointment.status];
+    const pColors = participantColors[appointment.participant_type];
+
+    return (
+      <div
+        onClick={() => handleAppointmentClick(appointment)}
+        className={`group relative overflow-hidden rounded-2xl border bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${
+          compact ? "p-3" : "p-4"
+        } ${appointment.priority === "urgent" ? "ring-2 ring-red-400 ring-offset-1" : "border-slate-200"}`}
+      >
+        <div className={`absolute left-0 top-0 h-full w-1 ${colors.bg}`} />
+        {appointment.priority === "urgent" && (
+          <div className="absolute right-3 top-3 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">
+            ACİL
+          </div>
+        )}
+
+        <div className={`flex items-start justify-between gap-3 ${compact ? "pl-2" : "pl-3"}`}>
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100">
+                <span className={`text-sm font-bold ${colors.text}`}>{appointment.start_time}</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className={`${pColors.bg} ${pColors.text} border-0 text-xs gap-1`}>
+                    <ParticipantIcon className="h-3 w-3" />
+                    {getParticipantLabel(appointment.participant_type)}
+                  </Badge>
+                  <span className="font-semibold text-slate-800">{appointment.participant_name}</span>
+                  {appointment.participant_class && (
+                    <span className="text-xs text-slate-500">({appointment.participant_class})</span>
+                  )}
+                </div>
+
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  <span className="flex items-center gap-1">
+                    <MapPin className="h-3 w-3" />
+                    {getLocationLabel(appointment.location)}
+                  </span>
+                  <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 ${colors.bg} ${colors.text}`}>
+                    <StatusIcon className="h-3.5 w-3.5" />
+                    {APPOINTMENT_STATUS.find(s => s.value === appointment.status)?.label}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {appointment.topic_tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {appointment.topic_tags.slice(0, compact ? 2 : 3).map((tag, idx) => (
+                  <span
+                    key={`${tag}-${idx}`}
+                    className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-600"
+                  >
+                    {tag}
+                  </span>
+                ))}
+                {appointment.topic_tags.length > (compact ? 2 : 3) && (
+                  <span className="text-[10px] text-slate-400">
+                    +{appointment.topic_tags.length - (compact ? 2 : 3)}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <div className={`rounded-xl px-2 py-1 text-right ${colors.bg} ${colors.text}`}>
+              <div className="text-[10px] uppercase tracking-wide text-current/70">Ders</div>
+              <div className="text-sm font-bold leading-none">{appointment.start_time}</div>
+            </div>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openEditAppointmentModal(appointment);
+                }}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-teal-600"
+                aria-label="Randevuyu düzenle"
+              >
+                <Edit2 className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleDeleteAppointment(appointment);
+                }}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 transition-colors hover:bg-red-50"
+                aria-label="Randevuyu sil"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* HEADER */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-500 via-emerald-500 to-cyan-600 p-6 text-white shadow-xl">
-        <div className="absolute inset-0 bg-grid-white/10 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.5))]" />
-        <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-teal-300/20 blur-3xl animate-float-slow" />
-        <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-emerald-400/20 blur-3xl animate-float-reverse" />
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-cyan-900 to-teal-700 p-6 text-white shadow-xl">
+        <div className="absolute inset-0 bg-grid-white/10" />
+        <div className="absolute -top-20 -right-20 h-56 w-56 rounded-full bg-cyan-300/20 blur-3xl animate-float-slow" />
+        <div className="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-teal-400/20 blur-3xl animate-float-reverse" />
 
         <div className="relative">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm shadow-lg">
+              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm shadow-lg">
                 <CalendarCheck className="h-7 w-7" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold">Randevular</h1>
-                <p className="text-teal-100">Görüşme planlama ve takip sistemi</p>
+                <p className="text-slate-200">Görüşme planlama ve takip sistemi</p>
               </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setShowPlannedListModal(true)}
-                className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-3 py-2 border border-white/10 text-left transition-all hover:bg-white/20 hover:border-white/30 hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-white/40"
-              >
-                <Clock className="h-4 w-4 text-teal-200" />
+              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/10 px-3 py-2 backdrop-blur-sm">
+                <Clock className="h-4 w-4 text-cyan-200" />
                 <div>
-                  <p className="text-[10px] text-teal-200 uppercase tracking-wider">Planlandı</p>
+                  <p className="text-[10px] uppercase tracking-wider text-cyan-100">Planlandı</p>
                   <p className="text-lg font-bold leading-none">{statusCounts.planned}</p>
                 </div>
-              </button>
-              <div className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-3 py-2 border border-white/10">
+              </div>
+              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/10 px-3 py-2 backdrop-blur-sm">
                 <CheckCircle2 className="h-4 w-4 text-green-300" />
                 <div>
-                  <p className="text-[10px] text-teal-200 uppercase tracking-wider">Geldi</p>
+                  <p className="text-[10px] uppercase tracking-wider text-cyan-100">Geldi</p>
                   <p className="text-lg font-bold leading-none">{statusCounts.attended}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-3 py-2 border border-white/10">
+              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/10 px-3 py-2 backdrop-blur-sm">
                 <XCircle className="h-4 w-4 text-red-300" />
                 <div>
-                  <p className="text-[10px] text-teal-200 uppercase tracking-wider">Gelmedi</p>
+                  <p className="text-[10px] uppercase tracking-wider text-cyan-100">Gelmedi</p>
                   <p className="text-lg font-bold leading-none">{statusCounts.not_attended}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/10 px-3 py-2 backdrop-blur-sm">
+                <Sparkles className="h-4 w-4 text-amber-300" />
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-cyan-100">Toplam</p>
+                  <p className="text-lg font-bold leading-none">{appointments.length}</p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="mt-4 pt-4 border-t border-white/20 flex flex-wrap items-center justify-between gap-3">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/15 pt-4">
             <div className="flex items-center gap-2">
               <div className="flex items-center bg-white/10 rounded-lg p-1">
                 <button
@@ -673,8 +871,8 @@ export default function RandevuPage() {
               <Badge className="bg-white/20 text-white border-0">
                 <CalendarDays className="h-3 w-3 mr-1" />
                 {viewMode === "day"
-                  ? formatDate(getLocalDateString(currentDate))
-                  : `${formatShortDate(getLocalDateString(weekDays[0]))} - ${formatShortDate(getLocalDateString(weekDays[6]))}`
+                  ? formatDate(currentDate.toISOString().slice(0, 10))
+                  : `${formatShortDate(weekDays[0].toISOString().slice(0, 10))} - ${formatShortDate(weekDays[6].toISOString().slice(0, 10))}`
                 }
               </Badge>
             </div>
@@ -693,20 +891,20 @@ export default function RandevuPage() {
                 variant="secondary"
                 size="sm"
                 onClick={() => {
-                  const today = getLocalDateString(new Date());
+                  const today = new Date().toISOString().slice(0, 10);
                   const weekEnd = new Date();
                   weekEnd.setDate(weekEnd.getDate() + 7);
-                  fetchAppointments({ from: today, to: getLocalDateString(weekEnd) });
+                  fetchAppointments({ from: today, to: weekEnd.toISOString().slice(0, 10) });
                 }}
                 disabled={loading}
                 className="bg-white/10 hover:bg-white/20 text-white border-0"
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               </Button>
-              <Button
-                onClick={() => setShowNewAppointmentModal(true)}
-                className="bg-white text-teal-600 hover:bg-white/90 shadow-lg"
-              >
+                <Button
+                  onClick={openNewAppointmentModal}
+                  className="bg-white text-teal-600 hover:bg-white/90 shadow-lg"
+                >
                 <Plus className="h-4 w-4 mr-1" />
                 Yeni Randevu
               </Button>
@@ -796,7 +994,7 @@ export default function RandevuPage() {
           <CardHeader className="pb-2 border-b">
             <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
               <CalendarDays className="h-5 w-5 text-teal-600" />
-              {formatDate(getLocalDateString(currentDate))}
+              {formatDate(currentDate.toISOString().slice(0, 10))}
               {isToday(currentDate) && (
                 <Badge className="bg-teal-100 text-teal-700 text-xs">Bugün</Badge>
               )}
@@ -817,7 +1015,7 @@ export default function RandevuPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setShowNewAppointmentModal(true)}
+                  onClick={openNewAppointmentModal}
                   className="mt-3"
                 >
                   <Plus className="h-4 w-4 mr-1" />
@@ -827,103 +1025,8 @@ export default function RandevuPage() {
             ) : (
               <div className="space-y-3">
                 {filteredAppointments.map((appointment) => {
-                  const StatusIcon = statusIcons[appointment.status];
-                  const ParticipantIcon = participantColors[appointment.participant_type].icon;
-                  const colors = statusColors[appointment.status];
-                  const pColors = participantColors[appointment.participant_type];
-
                   return (
-                    <div
-                      key={appointment.id}
-                      onClick={() => handleAppointmentClick(appointment)}
-                      className={`group relative p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-lg hover:scale-[1.01] ${colors.bg} ${colors.border} ${
-                        appointment.priority === "urgent" ? "ring-2 ring-red-400 ring-offset-2" : ""
-                      }`}
-                    >
-                      {appointment.priority === "urgent" && (
-                        <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
-                          ACİL
-                        </div>
-                      )}
-
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3">
-                          {/* Ders bilgisi */}
-                          <div className="text-center min-w-[60px]">
-                            <div className={`text-base font-bold ${colors.text}`}>
-                              {appointment.start_time}
-                            </div>
-                          </div>
-
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Badge className={`${pColors.bg} ${pColors.text} text-xs gap-1`}>
-                                <ParticipantIcon className="h-3 w-3" />
-                                {getParticipantLabel(appointment.participant_type)}
-                              </Badge>
-                              <span className="font-semibold text-slate-800">
-                                {appointment.participant_name}
-                              </span>
-                              {appointment.participant_class && (
-                                <span className="text-xs text-slate-500">
-                                  ({appointment.participant_class})
-                                </span>
-                              )}
-                            </div>
-
-                            {appointment.topic_tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mb-2">
-                                {appointment.topic_tags.slice(0, 3).map((tag, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="text-[10px] px-2 py-0.5 rounded-full bg-white/80 text-slate-600 border"
-                                  >
-                                    {tag}
-                                  </span>
-                                ))}
-                                {appointment.topic_tags.length > 3 && (
-                                  <span className="text-[10px] text-slate-400">
-                                    +{appointment.topic_tags.length - 3}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-
-                            <div className="flex items-center gap-3 text-xs text-slate-500">
-                              <span className="flex items-center gap-1">
-                                <MapPin className="h-3 w-3" />
-                                {getLocationLabel(appointment.location)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className={`flex items-center gap-1 px-2 py-1 rounded-lg ${colors.bg} ${colors.text}`}>
-                          <StatusIcon className="h-4 w-4" />
-                          <span className="text-xs font-medium">
-                            {APPOINTMENT_STATUS.find(s => s.value === appointment.status)?.label}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/50 pt-3">
-                        <div className="text-xs text-slate-500">
-                          Randevu kaydı
-                        </div>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteAppointment(appointment.id);
-                          }}
-                          className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-white/80 px-3 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 hover:border-red-300"
-                          aria-label="Randevuyu sil"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Sil
-                        </button>
-                      </div>
-                    </div>
+                    <AppointmentCard key={appointment.id} appointment={appointment} />
                   );
                 })}
               </div>
@@ -939,7 +1042,7 @@ export default function RandevuPage() {
                 <div className="h-12"></div>
               </div>
               {weekDays.map((day, idx) => {
-                const dayStr = getLocalDateString(day);
+                const dayStr = day.toISOString().slice(0, 10);
                 const dayAppointments = appointments.filter(a => a.appointment_date === dayStr);
                 return (
                   <div
@@ -969,7 +1072,7 @@ export default function RandevuPage() {
                     {slot.label}
                   </div>
                   {weekDays.map((day, dayIdx) => {
-                    const dayStr = getLocalDateString(day);
+                    const dayStr = day.toISOString().slice(0, 10);
                     const slotAppointments = filteredAppointments.filter(a =>
                       a.appointment_date === dayStr &&
                       a.start_time === slot.value
@@ -981,31 +1084,8 @@ export default function RandevuPage() {
                         className={`min-h-[48px] p-1 border-r ${isToday(day) ? "bg-teal-50/30" : ""} hover:bg-slate-50 transition-colors`}
                       >
                         {slotAppointments.map((apt) => {
-                          const pColors = participantColors[apt.participant_type];
                           return (
-                            <div
-                              key={apt.id}
-                              onClick={() => handleAppointmentClick(apt)}
-                              className={`group relative text-[10px] p-1.5 rounded cursor-pointer ${pColors.bg} ${pColors.text} hover:opacity-80 transition-opacity ${
-                                apt.priority === "urgent" ? "ring-1 ring-red-400" : ""
-                              }`}
-                            >
-                              <div className="font-semibold truncate">{apt.participant_name}</div>
-                              {apt.topic_tags[0] && (
-                                <div className="truncate opacity-80">{apt.topic_tags[0]}</div>
-                              )}
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteAppointment(apt.id);
-                                }}
-                                className="absolute right-1 top-1 rounded-full p-0.5 text-slate-300 opacity-0 transition-all hover:bg-white/80 hover:text-red-600 group-hover:opacity-100"
-                                aria-label="Randevuyu sil"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            </div>
+                            <AppointmentCard key={apt.id} appointment={apt} compact />
                           );
                         })}
                       </div>
@@ -1018,125 +1098,6 @@ export default function RandevuPage() {
         </Card>
       )}
 
-      {/* AKTIF RANDEVULAR MODALI */}
-      {showPlannedListModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="sticky top-0 bg-gradient-to-r from-teal-500 to-emerald-500 text-white px-6 py-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  Aktif Randevular
-                </h2>
-                <p className="text-sm text-teal-100">
-                  Planlanan randevuların listesi
-                </p>
-              </div>
-              <button
-                onClick={() => setShowPlannedListModal(false)}
-                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-                aria-label="Modali kapat"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto">
-              {plannedAppointments.length === 0 ? (
-                <div className="py-12 text-center">
-                  <Clock className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-                  <p className="text-slate-500 font-medium">Aktif randevu bulunmuyor</p>
-                  <p className="text-sm text-slate-400 mt-1">
-                    Planlanan bir randevu oluşturulduğunda burada görünecek
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {plannedAppointments.map((appointment) => {
-                    const participantColor = participantColors[appointment.participant_type];
-                    return (
-                      <button
-                        key={appointment.id}
-                        type="button"
-                        onClick={() => {
-                          setShowPlannedListModal(false);
-                          handleAppointmentClick(appointment);
-                        }}
-                        className="w-full text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-teal-300 hover:shadow-md transition-all"
-                      >
-                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                          <div className="min-w-0 flex items-start gap-3">
-                            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${participantColor.bg} ${participantColor.text}`}>
-                              <Users className="h-5 w-5" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <h3 className="font-semibold text-slate-800 truncate">
-                                  {appointment.participant_name}
-                                </h3>
-                                <Badge className={`${participantColor.bg} ${participantColor.text} border-0`}>
-                                  {getParticipantLabel(appointment.participant_type)}
-                                </Badge>
-                                {appointment.priority === "urgent" && (
-                                  <Badge variant="destructive" className="text-[10px]">
-                                    Acil
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
-                                <span className="flex items-center gap-1">
-                                  <CalendarDays className="h-3.5 w-3.5" />
-                                  {formatDate(appointment.appointment_date)}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <Clock className="h-3.5 w-3.5" />
-                                  {appointment.start_time}
-                                </span>
-                                {appointment.participant_class && (
-                                  <span className="truncate">
-                                    {appointment.participant_class}
-                                  </span>
-                                )}
-                              </div>
-                              {appointment.topic_tags.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-1.5">
-                                  {appointment.topic_tags.slice(0, 4).map((tag) => (
-                                    <span
-                                      key={tag}
-                                      className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600"
-                                    >
-                                      {tag}
-                                    </span>
-                                  ))}
-                                  {appointment.topic_tags.length > 4 && (
-                                    <span className="text-[10px] text-slate-400">
-                                      +{appointment.topic_tags.length - 4}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 self-start md:self-center">
-                            <Badge variant="outline" className="text-teal-700 border-teal-200 bg-teal-50">
-                              Planlandı
-                            </Badge>
-                            <span className="text-xs text-slate-400">
-                              Açmak için tıkla
-                            </span>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* YENİ RANDEVU MODALI */}
       {showNewAppointmentModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -1144,7 +1105,7 @@ export default function RandevuPage() {
             <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                 <Plus className="h-5 w-5 text-teal-600" />
-                Yeni Randevu
+                {editingAppointment ? "Randevu Düzenle" : "Yeni Randevu"}
               </h2>
               <button
                 onClick={closeNewAppointmentModal}
@@ -1446,12 +1407,12 @@ export default function RandevuPage() {
                 İptal
               </Button>
               <Button
-                onClick={handleCreateAppointment}
+                onClick={handleSaveAppointment}
                 disabled={loading || !formData.participant_name}
                 className="bg-teal-600 hover:bg-teal-700"
               >
                 {loading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                Randevu Oluştur
+                {editingAppointment ? "Randevu Güncelle" : "Randevu Oluştur"}
               </Button>
             </div>
           </div>
@@ -1595,15 +1556,6 @@ export default function RandevuPage() {
               <Button variant="outline" onClick={() => { setShowClosureModal(false); setSelectedAppointment(null); }}>
                 İptal
               </Button>
-              {closureData.status === "cancelled" && (
-                <Button
-                  variant="outline"
-                  className="border-red-200 text-red-600 hover:bg-red-50"
-                  onClick={handleDeleteSelectedAppointment}
-                >
-                  Sil
-                </Button>
-              )}
               <Button onClick={handleCloseAppointment} disabled={loading} className="bg-teal-600 hover:bg-teal-700">
                 {loading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
                 Kaydet
@@ -1688,16 +1640,23 @@ export default function RandevuPage() {
               )}
             </div>
 
-            <div className="bg-slate-50 border-t px-6 py-4 flex items-center justify-end gap-3">
-              {selectedAppointment.status === "cancelled" && (
-                <Button
-                  variant="outline"
-                  className="text-red-600 border-red-200 hover:bg-red-50"
-                  onClick={handleDeleteSelectedAppointment}
-                >
-                  Sil
-                </Button>
-              )}
+            <div className="bg-slate-50 border-t px-6 py-4 flex justify-between gap-3">
+              <Button
+                variant="outline"
+                className="text-red-600 border-red-200 hover:bg-red-50"
+                onClick={async () => {
+                  const confirmDelete = window.confirm("Bu randevuyu silmek istediğinize emin misiniz?");
+                  if (confirmDelete && selectedAppointment) {
+                    const appointmentId = selectedAppointment.id;
+                    setShowDetailModal(false);
+                    setSelectedAppointment(null);
+                    const success = await deleteAppointment(appointmentId);
+                    if (success) toast.success("Randevu başarıyla silindi");
+                  }
+                }}
+              >
+                Sil
+              </Button>
               <Button variant="outline" onClick={() => { setShowDetailModal(false); setSelectedAppointment(null); }}>
                 Kapat
               </Button>

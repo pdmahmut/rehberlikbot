@@ -47,6 +47,42 @@ export interface ReferralRecord {
   source?: string;
 }
 
+export const PARENT_REQUEST_TYPES = [
+  { value: "gorusme", label: "Gorusme Talebi" },
+  { value: "bilgilendirme", label: "Bilgilendirme Istegi" },
+  { value: "destek", label: "Destek Talebi" },
+  { value: "acil", label: "Acil Ihtiyac" },
+  { value: "diger", label: "Diger" }
+] as const;
+
+export type ParentRequestType = "gorusme" | "bilgilendirme" | "destek" | "acil" | "diger";
+
+export const PARENT_REQUEST_STATUSES = [
+  { value: "new", label: "Yeni" },
+  { value: "reviewing", label: "Inceleniyor" },
+  { value: "scheduled", label: "Planlandi" },
+  { value: "closed", label: "Kapatildi" }
+] as const;
+
+export type ParentRequestStatus = "new" | "reviewing" | "scheduled" | "closed";
+
+export interface ParentMeetingRequestRecord {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+  student_name: string;
+  class_key?: string | null;
+  class_display?: string | null;
+  parent_name?: string | null;
+  parent_relation?: string | null;
+  parent_phone?: string | null;
+  request_type: ParentRequestType;
+  subject: string;
+  detail: string;
+  status: ParentRequestStatus;
+  preferred_contact?: string | null;
+}
+
 // Yönlendirme Kategorileri ve Alt Nedenler (Hiyerarşik Yapı)
 export interface YonlendirmeKategori {
   id: string;
@@ -182,6 +218,73 @@ export interface DisiplinRecord {
   reason: string;
   penalty_type: DisiplinCezasi;
   notes?: string | null;
+}
+
+// Öğrenci bildirimi / akran şikayeti kaydı
+export const INCIDENT_REPORTER_TYPES = [
+  { value: 'student', label: 'Öğrenci' },
+  { value: 'teacher', label: 'Öğretmen' },
+  { value: 'parent', label: 'Veli' },
+  { value: 'anonymous', label: 'Anonim' }
+] as const;
+
+export type IncidentReporterType = 'student' | 'teacher' | 'parent' | 'anonymous';
+
+export const INCIDENT_TYPES = [
+  { value: 'bullying', label: 'Zorbalık' },
+  { value: 'conflict', label: 'Akran Çatışması' },
+  { value: 'threat', label: 'Tehdit' },
+  { value: 'verbal', label: 'Sözlü Saldırı' },
+  { value: 'physical', label: 'Fiziksel Müdahale' },
+  { value: 'damage', label: 'Eşya Zarar Verme' },
+  { value: 'theft', label: 'Eşya Alma / Kaybetme' },
+  { value: 'other', label: 'Diğer' }
+] as const;
+
+export type IncidentType = 'bullying' | 'conflict' | 'threat' | 'verbal' | 'physical' | 'damage' | 'theft' | 'other';
+
+export const INCIDENT_SEVERITIES = [
+  { value: 'low', label: 'Düşük' },
+  { value: 'medium', label: 'Orta' },
+  { value: 'high', label: 'Yüksek' },
+  { value: 'critical', label: 'Kritik' }
+] as const;
+
+export type IncidentSeverity = 'low' | 'medium' | 'high' | 'critical';
+
+export const INCIDENT_STATUSES = [
+  { value: 'new', label: 'Yeni' },
+  { value: 'reviewing', label: 'İnceleniyor' },
+  { value: 'resolved', label: 'Çözüldü' },
+  { value: 'dismissed', label: 'Kapatıldı' }
+] as const;
+
+export type IncidentStatus = 'new' | 'reviewing' | 'resolved' | 'dismissed';
+
+export interface StudentIncidentRecord {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+  case_group_id?: string | null;
+  record_role?: 'main' | 'linked_reporter';
+  linked_from_id?: string | null;
+  incident_date: string;
+  reporter_type: IncidentReporterType;
+  reporter_student_name?: string | null;
+  reporter_class_key?: string | null;
+  reporter_class_display?: string | null;
+  target_student_name: string;
+  target_class_key?: string | null;
+  target_class_display?: string | null;
+  incident_type: IncidentType;
+  severity: IncidentSeverity;
+  description: string;
+  location?: string | null;
+  status: IncidentStatus;
+  action_taken?: string | null;
+  follow_up_date?: string | null;
+  notes?: string | null;
+  is_confidential: boolean;
 }
 
 // =============================================

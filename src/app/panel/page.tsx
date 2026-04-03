@@ -53,7 +53,15 @@ import {
   useNewReferralNotification 
 } from "@/components/NotificationSystem";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Appointment, PARTICIPANT_TYPES, APPOINTMENT_LOCATIONS } from "@/types";
+
+type ReferralConvertibleStudent = {
+  student_name: string;
+  class_display: string;
+  reason?: string;
+  teacher_name?: string;
+};
 
 // Canlı Saat Komponenti - Geliştirilmiş
 function LiveClock() {
@@ -123,13 +131,15 @@ function ReferralListModal({
   onOpenChange, 
   title, 
   students,
-  gradient
+  gradient,
+  onConvertToAppointment
 }: { 
   open: boolean; 
   onOpenChange: (open: boolean) => void; 
   title: string; 
   students: ReferralStudent[];
   gradient: string;
+  onConvertToAppointment: (student: ReferralConvertibleStudent) => void;
 }) {
   const formatDateTime = (dateStr?: string) => {
     if (!dateStr) return "-";
@@ -147,7 +157,7 @@ function ReferralListModal({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-        <Dialog.Content className="fixed left-[50%] top-[50%] z-50 max-h-[85vh] w-[90vw] max-w-[900px] translate-x-[-50%] translate-y-[-50%] rounded-2xl bg-white shadow-2xl focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]">
+        <Dialog.Content className="fixed left-[50%] top-[50%] z-50 max-h-[90vh] w-[96vw] max-w-[1280px] translate-x-[-50%] translate-y-[-50%] rounded-2xl bg-white shadow-2xl focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]">
           {/* Header */}
           <div className={`bg-gradient-to-r ${gradient} p-6 rounded-t-2xl`}>
             <div className="flex items-center justify-between">
@@ -173,7 +183,7 @@ function ReferralListModal({
           </div>
 
           {/* Content */}
-          <div className="p-6 max-h-[60vh] overflow-y-auto">
+          <div className="p-6 max-h-[72vh] overflow-y-auto">
             {students.length === 0 ? (
               <div className="text-center py-12">
                 <div className="mx-auto w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
@@ -185,12 +195,13 @@ function ReferralListModal({
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-slate-200">
+                  <tr className="border-b border-slate-200">
                       <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Öğrenci</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Sınıf</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Yönlendiren</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Neden</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Tarih/Saat</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">İşlem</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -214,6 +225,16 @@ function ReferralListModal({
                         </td>
                         <td className="py-3 px-4 text-slate-500 text-sm whitespace-nowrap">
                           {formatDateTime(student.created_at)}
+                        </td>
+                        <td className="py-3 px-4">
+                          <Button
+                            size="sm"
+                            onClick={() => onConvertToAppointment(student)}
+                            className="bg-cyan-600 hover:bg-cyan-700 text-white whitespace-nowrap"
+                          >
+                            <CalendarDays className="mr-2 h-4 w-4" />
+                            Randevuya dönüştür
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -528,7 +549,13 @@ function TopTeachersPodium({ byTeacher }: { byTeacher?: Record<string, number> }
 }
 
 // Son Aktiviteler - Animated & Live
-function RecentActivities({ todayStudents }: { todayStudents?: Array<{ student_name: string; class_display: string; reason?: string }> }) {
+function RecentActivities({ 
+  todayStudents,
+  onConvertToAppointment
+}: { 
+  todayStudents?: Array<{ student_name: string; class_display: string; reason?: string }>;
+  onConvertToAppointment: (student: ReferralConvertibleStudent) => void;
+}) {
   const [visibleItems, setVisibleItems] = useState<number[]>([]);
 
   // Staggered entry animation
@@ -634,7 +661,16 @@ function RecentActivities({ todayStudents }: { todayStudents?: Array<{ student_n
                   )}
                 </div>
               </div>
-              <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  onClick={() => onConvertToAppointment(student)}
+                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity bg-blue-600 hover:bg-blue-700 text-white text-[11px] px-3 py-1.5 h-8 whitespace-nowrap"
+                >
+                  Randevuya dönüştür
+                </Button>
+                <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
+              </div>
             </div>
           ))}
         </div>
@@ -1223,6 +1259,7 @@ function UpcomingAppointmentsWidget() {
 }
 
 export default function PanelOzetPage() {
+  const router = useRouter();
   const { stats, loadingStats, statsError, fetchStats } = usePanelData();
   const [showCharts, setShowCharts] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -1279,6 +1316,16 @@ export default function PanelOzetPage() {
     setModalStudents(students);
     setModalGradient(gradient);
     setModalOpen(true);
+  };
+
+  const handleConvertReferralToAppointment = (student: ReferralConvertibleStudent) => {
+    const params = new URLSearchParams();
+    params.set("studentName", student.student_name);
+    if (student.class_display) params.set("classDisplay", student.class_display);
+    if (student.reason) params.set("note", student.reason);
+    if (student.teacher_name) params.set("teacherName", student.teacher_name);
+    setModalOpen(false);
+    router.push(`/panel/randevu?${params.toString()}`);
   };
 
   const handleRefresh = async () => {
@@ -1405,8 +1452,64 @@ export default function PanelOzetPage() {
         </div>
       </div>
 
-      {/* Yaklaşan Randevular - En Üstte */}
-      <UpcomingAppointmentsWidget />
+      {/* Öğrenci Takip - En Üstte */}
+      <Card className="bg-gradient-to-br from-slate-800 via-slate-850 to-slate-900 border-0 shadow-xl text-white overflow-hidden relative group">
+        {/* Background Grid */}
+        <div className="absolute inset-0 bg-grid-white/5 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.3))]" />
+        
+        {/* Animated Background Orbs */}
+        <div className="absolute -top-12 -right-12 w-32 h-32 rounded-full bg-blue-500/10 blur-2xl animate-float-slow" />
+        <div className="absolute -bottom-12 -left-12 w-28 h-28 rounded-full bg-violet-500/10 blur-2xl animate-float-reverse" />
+        
+        {/* Sparkle Particles */}
+        <div className="absolute top-4 right-8 h-1 w-1 rounded-full bg-white/40 animate-sparkle animation-delay-100" />
+        <div className="absolute bottom-8 left-12 h-1 w-1 rounded-full bg-blue-300/40 animate-sparkle animation-delay-500" />
+        
+        <CardContent className="p-5 relative">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-white/20 to-white/10 backdrop-blur-sm group-hover:scale-110 transition-transform duration-300 shadow-lg">
+              <BookOpen className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold flex items-center gap-2">
+                Öğrenci Takip
+                <span className="flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400">Rehberlik ve yönlendirme sistemi</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-center">
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/5 hover:bg-white/15 hover:border-white/10 transition-all duration-300 cursor-default group/stat">
+              <p className="text-2xl font-bold tabular-nums group-hover/stat:scale-110 transition-transform">{Object.keys(stats?.byClass || {}).length}</p>
+              <p className="text-xs text-slate-400 flex items-center justify-center gap-1">
+                <GraduationCap className="h-3 w-3" />
+                Aktif Sınıf
+              </p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/5 hover:bg-white/15 hover:border-white/10 transition-all duration-300 cursor-default group/stat">
+              <p className="text-2xl font-bold tabular-nums group-hover/stat:scale-110 transition-transform">{Object.keys(stats?.byTeacher || {}).length}</p>
+              <p className="text-xs text-slate-400 flex items-center justify-center gap-1">
+                <Users className="h-3 w-3" />
+                Öğretmen
+              </p>
+            </div>
+          </div>
+          
+          {/* Mini Progress Footer */}
+          <div className="mt-4 pt-3 border-t border-white/10">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span>Sistem Durumu</span>
+              <span className="flex items-center gap-1 text-emerald-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Aktif
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {statsError && (
         <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
@@ -1460,6 +1563,7 @@ export default function PanelOzetPage() {
         title={modalTitle}
         students={modalStudents}
         gradient={modalGradient}
+        onConvertToAppointment={handleConvertReferralToAppointment}
       />
 
       {/* 3 Sütunlu Grid */}
@@ -1535,7 +1639,10 @@ export default function PanelOzetPage() {
 
         {/* Orta Sütun - Son Aktiviteler */}
         <div className="space-y-4">
-          <RecentActivities todayStudents={stats?.todayStudents} />
+          <RecentActivities
+            todayStudents={stats?.todayStudents}
+            onConvertToAppointment={handleConvertReferralToAppointment}
+          />
           <ReasonsMiniWidget byReason={stats?.byReason} />
         </div>
 
@@ -1544,64 +1651,8 @@ export default function PanelOzetPage() {
           {/* Performans Widget - Live & Animated */}
           <PerformanceSummary stats={stats} />
           
-          {/* Ek Bilgi Kartı - Modern & Animated */}
-          <Card className="bg-gradient-to-br from-slate-800 via-slate-850 to-slate-900 border-0 shadow-xl text-white overflow-hidden relative group">
-            {/* Background Grid */}
-            <div className="absolute inset-0 bg-grid-white/5 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.3))]" />
-            
-            {/* Animated Background Orbs */}
-            <div className="absolute -top-12 -right-12 w-32 h-32 rounded-full bg-blue-500/10 blur-2xl animate-float-slow" />
-            <div className="absolute -bottom-12 -left-12 w-28 h-28 rounded-full bg-violet-500/10 blur-2xl animate-float-reverse" />
-            
-            {/* Sparkle Particles */}
-            <div className="absolute top-4 right-8 h-1 w-1 rounded-full bg-white/40 animate-sparkle animation-delay-100" />
-            <div className="absolute bottom-8 left-12 h-1 w-1 rounded-full bg-blue-300/40 animate-sparkle animation-delay-500" />
-            
-            <CardContent className="p-5 relative">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2.5 rounded-xl bg-gradient-to-br from-white/20 to-white/10 backdrop-blur-sm group-hover:scale-110 transition-transform duration-300 shadow-lg">
-                  <BookOpen className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="font-semibold flex items-center gap-2">
-                    Öğrenci Takip
-                    <span className="flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-400">Rehberlik ve yönlendirme sistemi</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3 text-center">
-                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/5 hover:bg-white/15 hover:border-white/10 transition-all duration-300 cursor-default group/stat">
-                  <p className="text-2xl font-bold tabular-nums group-hover/stat:scale-110 transition-transform">{Object.keys(stats?.byClass || {}).length}</p>
-                  <p className="text-xs text-slate-400 flex items-center justify-center gap-1">
-                    <GraduationCap className="h-3 w-3" />
-                    Aktif Sınıf
-                  </p>
-                </div>
-                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/5 hover:bg-white/15 hover:border-white/10 transition-all duration-300 cursor-default group/stat">
-                  <p className="text-2xl font-bold tabular-nums group-hover/stat:scale-110 transition-transform">{Object.keys(stats?.byTeacher || {}).length}</p>
-                  <p className="text-xs text-slate-400 flex items-center justify-center gap-1">
-                    <Users className="h-3 w-3" />
-                    Öğretmen
-                  </p>
-                </div>
-              </div>
-              
-              {/* Mini Progress Footer */}
-              <div className="mt-4 pt-3 border-t border-white/10">
-                <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span>Sistem Durumu</span>
-                  <span className="flex items-center gap-1 text-emerald-400">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Aktif
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Yaklaşan Randevular */}
+          <UpcomingAppointmentsWidget />
         </div>
       </div>
 

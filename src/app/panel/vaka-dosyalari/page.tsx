@@ -44,7 +44,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
-import { ReferralRecord, DisiplinRecord, Appointment } from "@/types";
+import { ReferralRecord, DisiplinRecord, Appointment, StudentIncidentRecord } from "@/types";
 
 // Vaka notu tipi
 interface CaseNote {
@@ -64,13 +64,13 @@ interface CaseNote {
 interface TimelineItem {
   id: string;
   date: string;
-  type: 'referral' | 'appointment' | 'discipline' | 'note' | 'parent_contact' | 'ram';
+  type: 'referral' | 'appointment' | 'discipline' | 'note' | 'parent_contact' | 'ram' | 'incident';
   title: string;
   description: string;
   status?: string;
   color: string;
   icon: React.ReactNode;
-  data: ReferralRecord | DisiplinRecord | Appointment | CaseNote | Record<string, unknown>;
+  data: ReferralRecord | DisiplinRecord | Appointment | CaseNote | StudentIncidentRecord | Record<string, unknown>;
 }
 
 // Not tipi etiketleri
@@ -81,6 +81,17 @@ const NOTE_TYPES = [
   { value: 'plan', label: 'Plan', color: 'orange' },
   { value: 'diger', label: 'Diğer', color: 'slate' }
 ];
+
+const INCIDENT_LABELS: Record<string, string> = {
+  bullying: 'Zorbalık',
+  conflict: 'Akran Çatışması',
+  threat: 'Tehdit',
+  verbal: 'Sözel Saldırı',
+  physical: 'Fiziksel Müdahale',
+  damage: 'Eşya Zarar Verme',
+  theft: 'Eşya Alma / Kaybetme',
+  other: 'Diğer'
+};
 
 export default function VakaDosyalariPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -95,6 +106,7 @@ export default function VakaDosyalariPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [disciplines, setDisciplines] = useState<DisiplinRecord[]>([]);
   const [caseNotes, setCaseNotes] = useState<CaseNote[]>([]);
+  const [studentIncidents, setStudentIncidents] = useState<StudentIncidentRecord[]>([]);
   const [parentContacts, setParentContacts] = useState<Record<string, unknown>[]>([]);
   const [ramReferrals, setRamReferrals] = useState<Record<string, unknown>[]>([]);
   
@@ -115,10 +127,11 @@ export default function VakaDosyalariPage() {
     const loadStudents = async () => {
       try {
         // Tüm kaynaklardan benzersiz öğrenci listesi oluştur
-        const [refResult, appResult, discResult] = await Promise.all([
+        const [refResult, appResult, discResult, incidentResult] = await Promise.all([
           supabase.from('referrals').select('student_name, class_display, class_key'),
           supabase.from('appointments').select('participant_name, participant_class'),
-          supabase.from('discipline_records').select('student_name, class_display, class_key')
+          supabase.from('discipline_records').select('student_name, class_display, class_key'),
+          supabase.from('student_incidents').select('target_student_name, reporter_student_name, target_class_display, reporter_class_display, target_class_key, reporter_class_key')
         ]);
         
         const studentMap = new Map<string, { name: string; class_display: string; class_key: string }>();
@@ -152,6 +165,24 @@ export default function VakaDosyalariPage() {
             });
           }
         });
+
+        incidentResult.data?.forEach((incident) => {
+          if (incident.reporter_student_name && !studentMap.has(incident.reporter_student_name)) {
+            studentMap.set(incident.reporter_student_name, {
+              name: incident.reporter_student_name,
+              class_display: incident.reporter_class_display || '',
+              class_key: incident.reporter_class_key || ''
+            });
+          }
+
+          if (incident.target_student_name && !studentMap.has(incident.target_student_name)) {
+            studentMap.set(incident.target_student_name, {
+              name: incident.target_student_name,
+              class_display: incident.target_class_display || '',
+              class_key: incident.target_class_key || ''
+            });
+          }
+        });
         
         setStudents(Array.from(studentMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'tr')));
       } catch (error) {
@@ -180,13 +211,15 @@ export default function VakaDosyalariPage() {
   const loadStudentData = async (studentName: string) => {
     setIsLoading(true);
     try {
-      const [refResult, appResult, discResult, noteResult, contactResult, ramResult] = await Promise.all([
+      const [refResult, appResult, discResult, noteResult, contactResult, ramResult, incidentTargetResult, incidentReporterResult] = await Promise.all([
         supabase.from('referrals').select('*').eq('student_name', studentName).order('created_at', { ascending: false }),
         supabase.from('appointments').select('*').eq('participant_name', studentName).order('appointment_date', { ascending: false }),
         supabase.from('discipline_records').select('*').eq('student_name', studentName).order('created_at', { ascending: false }),
         supabase.from('case_notes').select('*').eq('student_name', studentName).order('note_date', { ascending: false }),
         supabase.from('parent_contacts').select('*').eq('student_name', studentName).order('contact_date', { ascending: false }),
-        supabase.from('ram_referrals').select('*').eq('student_name', studentName).order('created_at', { ascending: false })
+        supabase.from('ram_referrals').select('*').eq('student_name', studentName).order('created_at', { ascending: false }),
+        supabase.from('student_incidents').select('*').eq('target_student_name', studentName).order('incident_date', { ascending: false }),
+        supabase.from('student_incidents').select('*').eq('reporter_student_name', studentName).order('incident_date', { ascending: false })
       ]);
       
       setReferrals(refResult.data || []);
@@ -195,6 +228,13 @@ export default function VakaDosyalariPage() {
       setCaseNotes(noteResult.data || []);
       setParentContacts(contactResult.data || []);
       setRamReferrals(ramResult.data || []);
+      const incidentMap = new Map<string, StudentIncidentRecord>();
+      [...(incidentTargetResult.data || []), ...(incidentReporterResult.data || [])].forEach((incident) => {
+        if (incident.id && !incidentMap.has(incident.id)) {
+          incidentMap.set(incident.id, incident as StudentIncidentRecord);
+        }
+      });
+      setStudentIncidents(Array.from(incidentMap.values()));
       
       // Sınıf bilgisini al
       const student = students.find(s => s.name === studentName);
@@ -318,6 +358,35 @@ export default function VakaDosyalariPage() {
         data: r
       });
     });
+
+    // Öğrenci bildirimleri / şikayetler
+    studentIncidents.forEach(incident => {
+      const severityColor = incident.severity === 'critical'
+        ? 'red'
+        : incident.severity === 'high'
+          ? 'rose'
+          : incident.severity === 'medium'
+            ? 'amber'
+            : 'blue';
+
+      const description = selectedStudent === incident.target_student_name
+        ? `${incident.reporter_student_name || 'Bir öğrenci'} tarafından bildirildi: ${incident.description}`
+        : selectedStudent === incident.reporter_student_name
+          ? `Şikayet bildirimi: ${incident.target_student_name} hakkında ${incident.description}`
+          : incident.description;
+
+      items.push({
+        id: incident.id || `${incident.incident_date}-${incident.target_student_name}`,
+        date: incident.incident_date,
+        type: 'incident',
+        title: INCIDENT_LABELS[incident.incident_type] || 'Bildirim',
+        description,
+        status: incident.status,
+        color: severityColor,
+        icon: <MessageSquare className="h-4 w-4" />,
+        data: incident
+      });
+    });
     
     // Tarihe göre sırala (en yeni en üstte)
     items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -333,7 +402,7 @@ export default function VakaDosyalariPage() {
       if (timeFilter === 'year') return diffDays <= 365;
       return true;
     });
-  }, [selectedStudent, referrals, appointments, disciplines, caseNotes, parentContacts, ramReferrals, timeFilter]);
+  }, [selectedStudent, referrals, appointments, disciplines, caseNotes, studentIncidents, parentContacts, ramReferrals, timeFilter]);
   
   // Yeni not ekle
   const handleAddNote = async () => {
@@ -374,9 +443,10 @@ export default function VakaDosyalariPage() {
     completedAppointments: appointments.filter(a => a.status === 'attended').length,
     totalDiscipline: disciplines.length,
     totalNotes: caseNotes.length,
+    totalIncidents: studentIncidents.length,
     totalParentContacts: parentContacts.length,
     ramStatus: ramReferrals.length > 0 ? (ramReferrals[0] as { status?: string }).status : null
-  }), [referrals, appointments, disciplines, caseNotes, parentContacts, ramReferrals]);
+  }), [referrals, appointments, disciplines, caseNotes, studentIncidents, parentContacts, ramReferrals]);
   
   // Renk haritası
   const colorMap: Record<string, string> = {
@@ -427,6 +497,7 @@ export default function VakaDosyalariPage() {
               setAppointments([]);
               setDisciplines([]);
               setCaseNotes([]);
+              setStudentIncidents([]);
               setParentContacts([]);
               setRamReferrals([]);
             }}
@@ -553,7 +624,7 @@ export default function VakaDosyalariPage() {
               </div>
               
               {/* İstatistikler */}
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mt-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mt-6">
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-center">
                   <p className="text-2xl font-bold">{stats.totalReferrals}</p>
                   <p className="text-xs text-white/70">Yönlendirme</p>
@@ -573,6 +644,10 @@ export default function VakaDosyalariPage() {
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-center">
                   <p className="text-2xl font-bold">{stats.totalNotes}</p>
                   <p className="text-xs text-white/70">Not</p>
+                </div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold">{stats.totalIncidents}</p>
+                  <p className="text-xs text-white/70">Bildirim</p>
                 </div>
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-center">
                   <p className="text-2xl font-bold">{stats.totalParentContacts}</p>

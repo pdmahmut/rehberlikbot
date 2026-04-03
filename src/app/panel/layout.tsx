@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -46,8 +46,10 @@ import {
   ExternalLink,
   BellRing,
   Phone,
+  PhoneCall,
   PieChart,
-  Bot
+  Bot,
+  MessageSquare
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -105,37 +107,31 @@ const menuCategories: MenuCategory[] = [
     ]
   },
   {
-    title: "Randevular",
-    items: [
-      { 
-        href: "/panel/randevu", 
-        label: "Randevular", 
-        icon: CalendarCheck,
-        exact: true,
-        color: "indigo"
-      },
-      { 
-        href: "/panel/randevu/raporlar", 
-        label: "Randevu Raporları", 
-        icon: FileText,
-        color: "purple"
-      },
-      { 
-        href: "/panel/randevu/bildirimler", 
-        label: "Randevu Bildirimleri", 
-        icon: Bell,
-        color: "amber"
-      },
-    ]
-  },
-  {
     title: "Öğrenci Takip",
     items: [
       {
-        href: "/panel/vaka-dosyalari",
-        label: "Vaka Dosyaları",
-        icon: FolderOpen,
-        color: "cyan"
+        href: "/panel/potansiyel-gorusmeler",
+        label: "Potansiyel Görüşmeler",
+        icon: MessageSquare,
+        color: "indigo"
+      },
+      {
+        href: "/panel/gozlem-havuzu",
+        label: "Gözlem Havuzu",
+        icon: Eye,
+        color: "teal"
+      },
+      {
+        href: "/panel/veli-talepleri",
+        label: "Veli Talepleri",
+        icon: PhoneCall,
+        color: "rose"
+      },
+      {
+        href: "/panel/ogrenci-bildirimleri",
+        label: "Öğrenci Bildirimleri",
+        icon: MessageSquare,
+        color: "rose"
       },
       {
         href: "/panel/ogrenci-listesi",
@@ -150,12 +146,12 @@ const menuCategories: MenuCategory[] = [
         color: "violet"
       },
       {
-        href: "/panel/gozlem-havuzu",
-        label: "Gözlem Havuzu",
-        icon: Eye,
-        color: "teal"
+        href: "/panel/vaka-dosyalari",
+        label: "Vaka Dosyaları",
+        icon: FolderOpen,
+        color: "cyan"
       },
-      { 
+      {
         href: "/panel/ogrenciler", 
         label: "Öğrenci Yönetimi", 
         icon: Users,
@@ -166,6 +162,30 @@ const menuCategories: MenuCategory[] = [
         label: "Risk Takip",
         icon: AlertTriangle,
         color: "red"
+      },
+    ]
+  },
+  {
+    title: "Randevular",
+    items: [
+      {
+        href: "/panel/randevu",
+        label: "Randevular",
+        icon: CalendarCheck,
+        exact: true,
+        color: "indigo"
+      },
+      {
+        href: "/panel/randevu/raporlar",
+        label: "Randevu Raporları",
+        icon: FileText,
+        color: "purple"
+      },
+      {
+        href: "/panel/randevu/bildirimler",
+        label: "Randevu Bildirimleri",
+        icon: Bell,
+        color: "amber"
       },
     ]
   },
@@ -267,7 +287,7 @@ const menuCategories: MenuCategory[] = [
 // Tüm menü öğelerini düz liste olarak al
 const allMenuItems = menuCategories.flatMap(cat => cat.items);
 
-// Renk haritası
+// Renk haritasÄ±
 const colorMap: Record<string, { gradient: string; bg: string; text: string; border: string }> = {
   blue: { gradient: "from-blue-500 to-blue-600", bg: "bg-blue-50", text: "text-blue-600", border: "border-blue-200" },
   amber: { gradient: "from-amber-500 to-orange-600", bg: "bg-amber-50", text: "text-amber-600", border: "border-amber-200" },
@@ -296,7 +316,7 @@ export default function PanelLayout({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
-  const [expandedCategories, setExpandedCategories] = useState<string[]>(["Genel", "Randevular", "Öğrenci Takip", "Süreç Yönetimi", "Analiz & Raporlar", "İşlemler"]);
+  const [expandedCategories, setExpandedCategories] = useState<string[]>(["Genel", "Öğrenci Takip", "Randevular", "Süreç Yönetimi", "Analiz & Raporlar", "İşlemler"]);
   
   // Şifre koruması state'leri
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -480,7 +500,7 @@ export default function PanelLayout({
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder="********"
                     className="w-full px-4 py-3.5 pr-12 bg-white/10 border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-white placeholder-slate-500"
                     autoFocus
                     required
@@ -730,7 +750,7 @@ export default function PanelLayout({
             >
               <Search className="h-4 w-4" />
               <span className="text-sm">Ara...</span>
-              <kbd className="ml-auto text-[10px] bg-slate-700 px-1.5 py-0.5 rounded">⌘K</kbd>
+              <kbd className="ml-auto text-[10px] bg-slate-700 px-1.5 py-0.5 rounded">Ctrl+K</kbd>
             </button>
           </div>
         )}
@@ -859,3 +879,4 @@ export default function PanelLayout({
     </div>
   );
 }
+

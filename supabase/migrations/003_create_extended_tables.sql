@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   
   title TEXT NOT NULL,
   description TEXT,
-  category TEXT DEFAULT 'genel' CHECK (category IN ('genel', 'randevu', 'veli', 'ogretmen', 'rapor', 'diger')),
+  category TEXT DEFAULT 'genel' CHECK (category IN ('genel', 'randevu', 'toplanti', 'veli', 'ogretmen', 'rapor', 'diger')),
   priority TEXT DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'cancelled')),
   due_date DATE,
@@ -44,7 +44,41 @@ CREATE TABLE IF NOT EXISTS case_notes (
 );
 
 -- =============================================
--- 3. RİSK TAKİP TABLOSU
+-- 3. ÖĞRENCİ BİLDİRİMLERİ TABLOSU
+-- =============================================
+CREATE TABLE IF NOT EXISTS student_incidents (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  case_group_id UUID,
+  record_role TEXT DEFAULT 'main' CHECK (record_role IN ('main', 'linked_reporter')),
+  linked_from_id UUID REFERENCES student_incidents(id) ON DELETE SET NULL,
+
+  incident_date DATE DEFAULT CURRENT_DATE,
+
+  reporter_type TEXT DEFAULT 'student' CHECK (reporter_type IN ('student', 'teacher', 'parent', 'anonymous')),
+  reporter_student_name TEXT,
+  reporter_class_key TEXT,
+  reporter_class_display TEXT,
+
+  target_student_name TEXT NOT NULL,
+  target_class_key TEXT,
+  target_class_display TEXT,
+
+  incident_type TEXT DEFAULT 'conflict' CHECK (incident_type IN ('bullying', 'conflict', 'threat', 'verbal', 'physical', 'damage', 'theft', 'other')),
+  severity TEXT DEFAULT 'medium' CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+  status TEXT DEFAULT 'new' CHECK (status IN ('new', 'reviewing', 'resolved', 'dismissed')),
+
+  description TEXT NOT NULL,
+  location TEXT,
+  action_taken TEXT,
+  follow_up_date DATE,
+  notes TEXT,
+  is_confidential BOOLEAN DEFAULT FALSE
+);
+
+-- =============================================
+-- 4. RİSK TAKİP TABLOSU
 -- =============================================
 CREATE TABLE IF NOT EXISTS risk_students (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -69,7 +103,7 @@ CREATE TABLE IF NOT EXISTS risk_students (
 );
 
 -- =============================================
--- 4. TAKİP HATIRLATICILARI TABLOSU
+-- 5. TAKİP HATIRLATICILARI TABLOSU
 -- =============================================
 CREATE TABLE IF NOT EXISTS follow_ups (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -91,7 +125,7 @@ CREATE TABLE IF NOT EXISTS follow_ups (
 );
 
 -- =============================================
--- 5. RAM YÖNLENDİRME TABLOSU
+-- 6. RAM YÖNLENDİRME TABLOSU
 -- =============================================
 CREATE TABLE IF NOT EXISTS ram_referrals (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -127,7 +161,7 @@ CREATE TABLE IF NOT EXISTS ram_referrals (
 );
 
 -- =============================================
--- 6. SINIF ETKİNLİKLERİ TABLOSU
+-- 7. SINIF ETKİNLİKLERİ TABLOSU
 -- =============================================
 CREATE TABLE IF NOT EXISTS class_activities (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -291,6 +325,12 @@ DROP POLICY IF EXISTS "Allow all for anon case_notes" ON case_notes;
 CREATE POLICY "Allow all for anon case_notes" ON case_notes
   FOR ALL TO anon USING (true) WITH CHECK (true);
 
+-- Student incidents tablosu için RLS
+ALTER TABLE student_incidents ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all for anon student_incidents" ON student_incidents;
+CREATE POLICY "Allow all for anon student_incidents" ON student_incidents
+  FOR ALL TO anon USING (true) WITH CHECK (true);
+
 -- Risk students tablosu için RLS
 ALTER TABLE risk_students ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow all for anon risk_students" ON risk_students;
@@ -351,6 +391,12 @@ CREATE POLICY "Allow all for anon settings" ON settings
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
 CREATE INDEX IF NOT EXISTS idx_case_notes_student ON case_notes(student_name);
+CREATE INDEX IF NOT EXISTS idx_student_incidents_target ON student_incidents(target_student_name);
+CREATE INDEX IF NOT EXISTS idx_student_incidents_reporter ON student_incidents(reporter_student_name);
+CREATE INDEX IF NOT EXISTS idx_student_incidents_group ON student_incidents(case_group_id);
+CREATE INDEX IF NOT EXISTS idx_student_incidents_role ON student_incidents(record_role);
+CREATE INDEX IF NOT EXISTS idx_student_incidents_status ON student_incidents(status);
+CREATE INDEX IF NOT EXISTS idx_student_incidents_date ON student_incidents(incident_date);
 CREATE INDEX IF NOT EXISTS idx_risk_students_status ON risk_students(status);
 CREATE INDEX IF NOT EXISTS idx_risk_students_level ON risk_students(risk_level);
 CREATE INDEX IF NOT EXISTS idx_follow_ups_date ON follow_ups(follow_up_date);

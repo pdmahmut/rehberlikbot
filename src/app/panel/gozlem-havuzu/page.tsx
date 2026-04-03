@@ -778,14 +778,14 @@ export default function GozlemHavuzuPage() {
       )}
 
       {loading ? (
-        <Card>
+        <Card className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <CardContent className="flex items-center justify-center py-14">
             <Loader2 className="h-8 w-8 animate-spin text-cyan-600" />
             <span className="ml-3 text-slate-600">Gözlem havuzu yükleniyor...</span>
           </CardContent>
         </Card>
       ) : filteredGroups.length === 0 ? (
-        <Card className="border-dashed border-slate-200">
+        <Card className="overflow-hidden rounded-2xl border border-dashed border-slate-200 bg-white shadow-sm">
           <CardContent className="py-14 text-center">
             <Eye className="mx-auto mb-4 h-12 w-12 text-slate-300" />
             <p className="text-slate-500">Bu filtrelerde gözlem kaydı bulunmuyor</p>
@@ -801,177 +801,168 @@ export default function GozlemHavuzuPage() {
             const historyItems = group.items.slice(1);
 
             return (
-              <Card key={group.key} className={`overflow-hidden border-l-4 ${hasActive ? "border-l-cyan-500" : "border-l-slate-300"} shadow-sm`}>
+              <Card
+                key={group.key}
+                className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${
+                  hasActive ? "border-cyan-200" : "border-slate-200"
+                }`}
+              >
                 <CardContent className="p-4">
-                  <div className="flex items-start gap-4">
-                    <div className={`rounded-2xl p-3 ${activeType.bg}`}>
-                      <Users className={`h-6 w-6 ${activeType.text}`} />
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-lg font-semibold text-slate-800">{group.student_name}</h3>
+                        {group.student_number && <Badge variant="outline">{group.student_number}</Badge>}
+                        {group.class_display && <Badge variant="outline">{group.class_display}</Badge>}
+                        <Badge
+                          variant="outline"
+                          className={hasActive ? "border-cyan-200 bg-cyan-50 text-cyan-700" : ""}
+                        >
+                          {hasActive ? "Aktif havuz" : "Arşiv"}
+                        </Badge>
+                        <Badge variant="outline">
+                          {leadItem ? OBSERVATION_PRIORITIES.find((item) => item.value === leadItem.priority)?.label : "Orta"}
+                        </Badge>
+                      </div>
+
+                      <p className="text-sm text-slate-600">
+                        {leadItem ? OBSERVATION_STATUSES.find((item) => item.value === leadItem.status)?.label : "-"}
+                        {group.items.length ? ` · ${group.items.length} kayıt` : ""}
+                        {leadItem?.observed_at ? ` · ${formatDate(leadItem.observed_at)}` : ""}
+                      </p>
+
+                      {leadItem && (
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline">
+                              {observationTypeLabelMap[leadItem.observation_type]}
+                            </Badge>
+                            <Badge variant="outline">
+                              {OBSERVATION_PRIORITIES.find((item) => item.value === leadItem.priority)?.label}
+                            </Badge>
+                            <Badge variant="outline">
+                              {OBSERVATION_STATUSES.find((item) => item.value === leadItem.status)?.label}
+                            </Badge>
+                          </div>
+                          <p className="mt-2 text-sm leading-6 text-slate-700">{leadItem.note || "Not eklenmedi"}</p>
+                          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3.5 w-3.5" />
+                              {formatDateTime(leadItem.created_at)}
+                            </span>
+                            {leadItem.observed_at && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3.5 w-3.5" />
+                                {formatDate(leadItem.observed_at)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-lg font-semibold text-slate-800">{group.student_name}</h3>
-                            {group.student_number && <Badge variant="outline">{group.student_number}</Badge>}
-                            {group.class_display && <Badge variant="outline">{group.class_display}</Badge>}
-                            <Badge className={`${statusStyleMap[hasActive ? "pending" : "converted"].bg} ${statusStyleMap[hasActive ? "pending" : "converted"].text}`}>
-                              {hasActive ? "Aktif havuz" : "Arşiv"}
-                            </Badge>
-                            <Badge className={`${priorityStyleMap[leadItem?.priority || "medium"].bg} ${priorityStyleMap[leadItem?.priority || "medium"].text}`}>
-                              {leadItem ? OBSERVATION_PRIORITIES.find((item) => item.value === leadItem.priority)?.label : "Orta"}
-                            </Badge>
-                          </div>
+                    <div className="flex shrink-0 flex-col items-start gap-2 lg:items-end">
+                      {leadItem?.status === "converted" ? (
+                        <Button size="sm" variant="outline" onClick={() => handleRestoreToPool(leadItem.id)}>
+                          <ArrowRight className="mr-2 h-4 w-4 rotate-180" />
+                          Havuza al
+                        </Button>
+                      ) : hasActive ? (
+                        <Button size="sm" className="bg-cyan-600 hover:bg-cyan-700" onClick={() => handleConvertToAppointment(group)}>
+                          <ArrowRight className="mr-2 h-4 w-4" />
+                          Randevuya dönüştür
+                        </Button>
+                      ) : null}
 
-                          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-4 w-4" />
-                              {leadItem ? formatDateTime(leadItem.created_at) : "-"}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <CheckCircle2 className="h-4 w-4" />
-                              {group.items.length} kayıt
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Filter className="h-4 w-4" />
-                              {leadItem ? OBSERVATION_STATUSES.find((item) => item.value === leadItem.status)?.label : "-"}
-                            </span>
-                          </div>
+                      {leadItem && (
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Button size="sm" variant="outline" onClick={() => openEditForm(leadItem)}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Düzenle
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDelete(leadItem.id)}
+                            className="text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Sil
+                          </Button>
+                        </div>
+                      )}
 
-                          {leadItem && (
-                            <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <Button size="sm" variant="outline" onClick={() => toggleExpandedGroup(group.key)}>
+                        {isExpanded ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
+                        {isExpanded ? "Geçmişi gizle" : `Geçmiş (${historyItems.length})`}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {historyItems.length > 0 && (
+                    <div className={`mt-4 space-y-2 ${isExpanded ? "" : "hidden"}`}>
+                      {historyItems.map((item) => (
+                        <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
-                                <Badge className={`${typeStyleMap[leadItem.observation_type].bg} ${typeStyleMap[leadItem.observation_type].text}`}>
-                                  {observationTypeLabelMap[leadItem.observation_type]}
+                                <Badge variant="outline">
+                                  {observationTypeLabelMap[item.observation_type]}
                                 </Badge>
-                                <Badge className={`${priorityStyleMap[leadItem.priority].bg} ${priorityStyleMap[leadItem.priority].text}`}>
-                                  {OBSERVATION_PRIORITIES.find((item) => item.value === leadItem.priority)?.label}
+                                <Badge variant="outline">
+                                  {OBSERVATION_PRIORITIES.find((entry) => entry.value === item.priority)?.label}
                                 </Badge>
-                                <Badge className={`${statusStyleMap[leadItem.status].bg} ${statusStyleMap[leadItem.status].text}`}>
-                                  {OBSERVATION_STATUSES.find((item) => item.value === leadItem.status)?.label}
+                                <Badge variant="outline">
+                                  {OBSERVATION_STATUSES.find((entry) => entry.value === item.status)?.label}
                                 </Badge>
                               </div>
-                              <p className="mt-2 text-sm leading-6 text-slate-700">{leadItem.note || "Not eklenmedi"}</p>
-                              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                              <p className="mt-2 text-sm text-slate-700">{item.note || "Not eklenmedi"}</p>
+                              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
                                 <span className="flex items-center gap-1">
                                   <Clock className="h-3.5 w-3.5" />
-                                  {formatDateTime(leadItem.created_at)}
+                                  {formatDateTime(item.created_at)}
                                 </span>
-                                {leadItem.observed_at && (
+                                {item.observed_at && (
                                   <span className="flex items-center gap-1">
                                     <Calendar className="h-3.5 w-3.5" />
-                                    {formatDate(leadItem.observed_at)}
+                                    {formatDate(item.observed_at)}
                                   </span>
                                 )}
                               </div>
                             </div>
-                          )}
-                        </div>
 
-                        <div className="flex flex-wrap gap-2 lg:justify-end">
-                          {leadItem?.status === "converted" ? (
-                            <Button size="sm" variant="outline" onClick={() => handleRestoreToPool(leadItem.id)}>
-                              <ArrowRight className="mr-2 h-4 w-4 rotate-180" />
-                              Havuza al
-                            </Button>
-                          ) : hasActive ? (
-                            <Button size="sm" className="bg-cyan-600 hover:bg-cyan-700" onClick={() => handleConvertToAppointment(group)}>
-                              <ArrowRight className="mr-2 h-4 w-4" />
-                              Randevuya dönüştür
-                            </Button>
-                          ) : null}
-
-                          {leadItem && (
-                            <>
-                              <Button size="sm" variant="outline" onClick={() => openEditForm(leadItem)}>
-                                <Edit className="mr-2 h-4 w-4" />
+                            <div className="flex flex-wrap gap-2">
+                              {item.status === "pending" && (
+                                <Button size="sm" variant="outline" onClick={() => handleComplete(item.id)}>
+                                  <CheckCircle2 className="mr-1 h-4 w-4" />
+                                  Tamamlandı
+                                </Button>
+                              )}
+                              {item.status === "converted" && (
+                                <Button size="sm" variant="outline" onClick={() => handleRestoreToPool(item.id)}>
+                                  <ArrowRight className="mr-1 h-4 w-4 rotate-180" />
+                                  Havuza al
+                                </Button>
+                              )}
+                              <Button size="sm" variant="outline" onClick={() => openEditForm(item)}>
+                                <Edit className="mr-1 h-4 w-4" />
                                 Düzenle
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleDelete(leadItem.id)}
+                                onClick={() => handleDelete(item.id)}
                                 className="text-red-600 hover:bg-red-50"
                               >
-                                <Trash2 className="mr-2 h-4 w-4" />
+                                <Trash2 className="mr-1 h-4 w-4" />
                                 Sil
                               </Button>
-                            </>
-                          )}
-
-                          <Button size="sm" variant="outline" onClick={() => toggleExpandedGroup(group.key)}>
-                            {isExpanded ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
-                            {isExpanded ? "Geçmişi gizle" : `Geçmiş (${historyItems.length})`}
-                          </Button>
-                        </div>
-                      </div>
-
-                      {historyItems.length > 0 && (
-                        <div className={`mt-4 space-y-2 ${isExpanded ? "" : "hidden"}`}>
-                          {historyItems.map((item) => (
-                            <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-3">
-                              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <Badge className={`${typeStyleMap[item.observation_type].bg} ${typeStyleMap[item.observation_type].text}`}>
-                                      {observationTypeLabelMap[item.observation_type]}
-                                    </Badge>
-                                    <Badge className={`${priorityStyleMap[item.priority].bg} ${priorityStyleMap[item.priority].text}`}>
-                                      {OBSERVATION_PRIORITIES.find((entry) => entry.value === item.priority)?.label}
-                                    </Badge>
-                                    <Badge className={`${statusStyleMap[item.status].bg} ${statusStyleMap[item.status].text}`}>
-                                      {OBSERVATION_STATUSES.find((entry) => entry.value === item.status)?.label}
-                                    </Badge>
-                                  </div>
-                                  <p className="mt-2 text-sm text-slate-700">{item.note || "Not eklenmedi"}</p>
-                                  <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                                    <span className="flex items-center gap-1">
-                                      <Clock className="h-3.5 w-3.5" />
-                                      {formatDateTime(item.created_at)}
-                                    </span>
-                                    {item.observed_at && (
-                                      <span className="flex items-center gap-1">
-                                        <Calendar className="h-3.5 w-3.5" />
-                                        {formatDate(item.observed_at)}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <div className="flex flex-wrap gap-2">
-                                  {item.status === "pending" && (
-                                    <Button size="sm" variant="outline" onClick={() => handleComplete(item.id)}>
-                                      <CheckCircle2 className="mr-1 h-4 w-4" />
-                                      Tamamlandı
-                                    </Button>
-                                  )}
-                                  {item.status === "converted" && (
-                                    <Button size="sm" variant="outline" onClick={() => handleRestoreToPool(item.id)}>
-                                      <ArrowRight className="mr-1 h-4 w-4 rotate-180" />
-                                      Havuza al
-                                    </Button>
-                                  )}
-                                  <Button size="sm" variant="outline" onClick={() => openEditForm(item)}>
-                                    <Edit className="mr-1 h-4 w-4" />
-                                    Düzenle
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleDelete(item.id)}
-                                    className="text-red-600 hover:bg-red-50"
-                                  >
-                                    <Trash2 className="mr-1 h-4 w-4" />
-                                    Sil
-                                  </Button>
-                                </div>
-                              </div>
                             </div>
-                          ))}
+                          </div>
                         </div>
-                      )}
+                      ))}
                     </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
             );
