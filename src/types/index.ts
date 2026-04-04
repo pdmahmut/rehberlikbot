@@ -89,110 +89,62 @@ export interface YonlendirmeKategori {
   baslik: string;
   icon: string;
   renk: string;
-  altNedenler: string[];
+  altNedenler?: string[];
 }
 
 export const YONLENDIRME_KATEGORILERI: YonlendirmeKategori[] = [
   {
     id: "akademik",
-    baslik: "Akademik / Okula Uyum Kaynaklı Nedenler",
+    baslik: "Akademik Sorunlar",
     icon: "📚",
-    renk: "blue",
-    altNedenler: [
-      "Akademik başarısızlık",
-      "Derslere ilgisizlik / motivasyon düşüklüğü",
-      "Ödev yapmama / sorumluluk almama",
-      "Dikkat ve odaklanma güçlüğü",
-      "Sınav kaygısı",
-      "Okula uyum sorunu"
-    ]
+    renk: "blue"
   },
   {
     id: "davranissal",
-    baslik: "Davranışsal Nedenler",
+    baslik: "Davranış Problemleri",
     icon: "⚠️",
-    renk: "orange",
-    altNedenler: [
-      "Sınıf kurallarına uymama",
-      "Arkadaşlarını rahatsız etme",
-      "Öğretmene karşı saygısız davranış",
-      "Öfke kontrolü güçlüğü",
-      "İnatlaşma / karşı gelme"
-    ]
+    renk: "orange"
   },
   {
     id: "akran",
-    baslik: "Akran İlişkileri",
+    baslik: "Akran İlişkileri ve Sosyal Problemler",
     icon: "👥",
-    renk: "purple",
-    altNedenler: [
-      "Zorbalığa maruz kalan",
-      "Zorbalık yapan",
-      "Sosyal iletişim güçlüğü"
-    ]
+    renk: "purple"
   },
   {
     id: "duygusal",
-    baslik: "Duygusal – Psikolojik Nedenler",
+    baslik: "Duygusal Problemler",
     icon: "💭",
-    renk: "pink",
-    altNedenler: [
-      "Duygusal – Psikolojik sorunlar"
-    ]
+    renk: "pink"
   },
   {
     id: "aile",
-    baslik: "Aile Kaynaklı Nedenler",
+    baslik: "Ailevi Sorunlar",
     icon: "🏠",
-    renk: "teal",
-    altNedenler: [
-      "Aile içi iletişim sorunları",
-      "Boşanma süreci / aile değişimi",
-      "Aile tutumlarıyla ilgili sorunlar",
-      "Ev ortamına bağlı ders çalışma güçlüğü"
-    ]
+    renk: "teal"
   },
   {
     id: "devamsizlik",
-    baslik: "Devamsızlık ve Okul Disiplini",
+    baslik: "Devamsızlık ve Okula Uyum Problemleri",
     icon: "📋",
-    renk: "red",
-    altNedenler: [
-      "Devamsızlık",
-      "Geç kalma",
-      "Okul kurallarına uymama",
-      "Okul eşyalarına zarar verme",
-      "Disipline yönlendirme"
-    ]
+    renk: "red"
   },
   {
-    id: "dijital",
-    baslik: "Dijital / Güncel Sorun Alanları",
-    icon: "📱",
-    renk: "indigo",
-    altNedenler: [
-      "Aşırı ekran kullanımı",
-      "Dijital oyun bağımlılığı",
-      "Sosyal medya kaynaklı sorunlar",
-      "Siber zorbalık"
-    ]
+    id: "riskli",
+    baslik: "Riskli Durumlar",
+    icon: "🚨",
+    renk: "red"
   },
   {
-    id: "ozel",
-    baslik: "Özel Durumlar",
+    id: "gelisimsel",
+    baslik: "Kimlik ve Gelişimsel Süreçler",
     icon: "⭐",
-    renk: "amber",
-    altNedenler: [
-      "Sağlık sorunlarına bağlı uyum güçlüğü",
-      "Özel gereksinim şüphesi",
-      "Travmatik yaşantı (kayıp, hastalık vb.)",
-      "Rehberlik servisi tarafından takip edilen öğrenci"
-    ]
+    renk: "amber"
   }
 ];
 
-// Tüm alt nedenleri düz array olarak export et (geriye dönük uyumluluk için)
-export const YONLENDIRME_NEDENLERI = YONLENDIRME_KATEGORILERI.flatMap(k => k.altNedenler);
+// Tüm nedenleri düz array olarak export et (geriye dönük uyumluluk için)
+export const YONLENDIRME_NEDENLERI = YONLENDIRME_KATEGORILERI.map(k => k.baslik);
 
 export type YonlendirmeNedeni = string;
 
@@ -525,4 +477,16 @@ export interface AppointmentTemplate {
   default_location: AppointmentLocation;
   purpose_template?: string;
   outcome_options: string[];
+}
+// Bireysel Başvuru Kaydı
+export interface IndividualRequestRecord {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+  student_name: string;
+  class_key?: string | null;
+  class_display?: string | null;
+  request_date: string;
+  note?: string | null;
+  status: 'pending' | 'completed' | 'cancelled';
 }

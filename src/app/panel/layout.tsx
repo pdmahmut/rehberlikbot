@@ -128,6 +128,12 @@ const menuCategories: MenuCategory[] = [
         color: "rose"
       },
       {
+        href: "/panel/bireysel-basvurular",
+        label: "Bireysel Başvurular",
+        icon: MessageSquare,
+        color: "blue"
+      },
+      {
         href: "/panel/ogrenci-bildirimleri",
         label: "Öğrenci Bildirimleri",
         icon: MessageSquare,
@@ -166,55 +172,14 @@ const menuCategories: MenuCategory[] = [
     ]
   },
   {
-    title: "Randevular",
-    items: [
-      {
-        href: "/panel/randevu",
-        label: "Randevular",
-        icon: CalendarCheck,
-        exact: true,
-        color: "indigo"
-      },
-      {
-        href: "/panel/randevu/raporlar",
-        label: "Randevu Raporları",
-        icon: FileText,
-        color: "purple"
-      },
-      {
-        href: "/panel/randevu/bildirimler",
-        label: "Randevu Bildirimleri",
-        icon: Bell,
-        color: "amber"
-      },
-    ]
-  },
-  {
-    title: "Süreç Yönetimi",
-    items: [
-      {
-        href: "/panel/ram-yonlendirme",
-        label: "RAM Yönlendirme",
-        icon: ExternalLink,
-        color: "purple"
-      },
-      {
-        href: "/panel/takip-hatirlaticilar",
-        label: "Takip Hatırlatıcılar",
-        icon: BellRing,
-        color: "orange"
-      },
-      {
-        href: "/panel/veli-iletisim",
-        label: "Veli İletişim",
-        icon: Phone,
-        color: "pink"
-      },
-    ]
-  },
-  {
     title: "Analiz & Raporlar",
     items: [
+      {
+        href: "/panel/basvurular",
+        label: "Başvurular",
+        icon: MessageSquare,
+        color: "purple"
+      },
       { 
         href: "/panel/nedenler", 
         label: "Yönlendirme Nedenleri", 
@@ -232,12 +197,6 @@ const menuCategories: MenuCategory[] = [
         label: "Öğretmen & Sınıf", 
         icon: UserCheck,
         color: "emerald"
-      },
-      {
-        href: "/panel/trend-analizi",
-        label: "Trend Analizi",
-        icon: TrendingUp,
-        color: "teal"
       },
       {
         href: "/panel/donem-raporu",

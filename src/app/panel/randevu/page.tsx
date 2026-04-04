@@ -199,10 +199,7 @@ export default function RandevuPage() {
   const [viewMode, setViewMode] = useState<"day" | "week">("day");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<AppointmentStatus | "all">("all");
-  const [filterType, setFilterType] = useState<ParticipantType | "all">("all");
-  const [filterPriority, setFilterPriority] = useState<PriorityLevel | "all">("all");
-  const [showFilters, setShowFilters] = useState(false);
+
 
   const [classes, setClasses] = useState<{ value: string; text: string }[]>([]);
   const [students, setStudents] = useState<{ value: string; text: string }[]>([]);
@@ -444,10 +441,16 @@ export default function RandevuPage() {
   }, [selectedClass, formData.participant_type]);
 
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    const weekEnd = new Date();
-    weekEnd.setDate(weekEnd.getDate() + 7);
-    fetchAppointments({ from: today, to: weekEnd.toISOString().slice(0, 10) });
+    const today = new Date();
+    const pastDate = new Date(today);
+    pastDate.setDate(today.getDate() - 30); // 30 gün öncesi
+    const futureDate = new Date(today);
+    futureDate.setDate(today.getDate() + 30); // 30 gün sonrası
+    
+    fetchAppointments({ 
+      from: pastDate.toISOString().slice(0, 10), 
+      to: futureDate.toISOString().slice(0, 10) 
+    });
   }, [fetchAppointments]);
 
   const filteredAppointments = useMemo(() => {
@@ -473,19 +476,11 @@ export default function RandevuPage() {
       );
     }
 
-    if (filterStatus !== "all") {
-      filtered = filtered.filter(apt => apt.status === filterStatus);
-    }
-    if (filterType !== "all") {
-      filtered = filtered.filter(apt => apt.participant_type === filterType);
-    }
-    if (filterPriority !== "all") {
-      filtered = filtered.filter(apt => apt.priority === filterPriority);
-    }
+
 
     // Ders sırasına göre sırala (1. Ders, 2. Ders ...)
     return filtered.sort((a, b) => a.start_time.localeCompare(b.start_time));
-  }, [appointments, viewMode, currentDate, searchQuery, filterStatus, filterType, filterPriority, getWeekDays]);
+  }, [appointments, viewMode, currentDate, searchQuery, getWeekDays]);
 
   const goToToday = () => setCurrentDate(new Date());
   const goToPrev = () => {
@@ -881,15 +876,6 @@ export default function RandevuPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setShowFilters(!showFilters)}
-                className={`bg-white/10 hover:bg-white/20 text-white border-0 ${showFilters ? "ring-2 ring-white/30" : ""}`}
-              >
-                <Filter className="h-4 w-4 mr-1" />
-                Filtreler
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
                 onClick={() => {
                   const today = new Date().toISOString().slice(0, 10);
                   const weekEnd = new Date();
@@ -912,81 +898,6 @@ export default function RandevuPage() {
           </div>
         </div>
       </div>
-
-      {/* FİLTRELER */}
-      {showFilters && (
-        <Card className="bg-white/80 backdrop-blur border-slate-200/50">
-          <CardContent className="p-4">
-            <div className="flex flex-wrap gap-4 items-end">
-              <div className="flex-1 min-w-[200px]">
-                <label className="text-xs font-medium text-slate-500 mb-1 block">Ara</label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="İsim veya etiket ara..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-500 mb-1 block">Durum</label>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value as AppointmentStatus | "all")}
-                  className="px-3 py-2 text-sm border rounded-lg bg-white focus:ring-2 focus:ring-teal-500"
-                >
-                  <option value="all">Tümü</option>
-                  {APPOINTMENT_STATUS.map(s => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-500 mb-1 block">Görüşme Türü</label>
-                <select
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value as ParticipantType | "all")}
-                  className="px-3 py-2 text-sm border rounded-lg bg-white focus:ring-2 focus:ring-teal-500"
-                >
-                  <option value="all">Tümü</option>
-                  {PARTICIPANT_TYPES.map(p => (
-                    <option key={p.value} value={p.value}>{p.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-500 mb-1 block">Öncelik</label>
-                <select
-                  value={filterPriority}
-                  onChange={(e) => setFilterPriority(e.target.value as PriorityLevel | "all")}
-                  className="px-3 py-2 text-sm border rounded-lg bg-white focus:ring-2 focus:ring-teal-500"
-                >
-                  <option value="all">Tümü</option>
-                  {PRIORITY_LEVELS.map(p => (
-                    <option key={p.value} value={p.value}>{p.label}</option>
-                  ))}
-                </select>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSearchQuery("");
-                  setFilterStatus("all");
-                  setFilterType("all");
-                  setFilterPriority("all");
-                }}
-                className="text-slate-500"
-              >
-                Temizle
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* TAKVİM ALANI */}
       {viewMode === "day" ? (

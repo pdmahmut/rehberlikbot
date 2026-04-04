@@ -37,7 +37,6 @@ import {
   Send
 } from "lucide-react";
 import { toast } from "sonner";
-import { notifyGuidanceReferralsChanged } from "@/lib/guidance";
 import {
   HistorySummaryCard,
   ReferralReasonsChart,
@@ -83,7 +82,7 @@ interface StudentOption {
 
 type SortField = "date" | "type" | "reason";
 type SortOrder = "asc" | "desc";
-type FilterType = "all" | "referral" | "discipline";
+type FilterType = "all" | "discipline";
 
 export default function OgrenciGecmisiPage() {
   // State
@@ -102,7 +101,6 @@ export default function OgrenciGecmisiPage() {
   
   const [deletingId, setDeletingId] = useState<string | null>(null);
   
-  const [showReferrals, setShowReferrals] = useState(true);
   const [showDiscipline, setShowDiscipline] = useState(true);
   const [showCharts, setShowCharts] = useState(true);
   
@@ -111,7 +109,7 @@ export default function OgrenciGecmisiPage() {
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [viewMode, setViewMode] = useState<"list" | "timeline">("list");
-  const [activeTab, setActiveTab] = useState<"all" | "referrals" | "discipline">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "discipline">("all");
 
   // Sınıfları yükle
   useEffect(() => {
@@ -209,36 +207,6 @@ export default function OgrenciGecmisiPage() {
       setSelectedClass("");
       setSelectedStudent(null);
       loadHistory(searchQuery.trim());
-    }
-  };
-
-  // Yönlendirme kaydını sil
-  const handleDeleteReferral = async (id: string) => {
-    if (!confirm("Bu yönlendirme kaydını silmek istediğinizden emin misiniz?")) return;
-    
-    setDeletingId(id);
-    try {
-      const res = await fetch(`/api/student-history?id=${encodeURIComponent(id)}`, {
-        method: "DELETE",
-      });
-      
-      if (res.ok) {
-        setReferrals(prev => prev.filter(r => r.id !== id));
-        notifyGuidanceReferralsChanged({
-          action: "delete",
-          id,
-          studentName: selectedStudent?.text || searchQuery.trim() || undefined,
-        });
-        toast.success("Yönlendirme kaydı silindi");
-      } else {
-        const data = await res.json();
-        toast.error(data.error || "Kayıt silinemedi");
-      }
-    } catch (error) {
-      console.error("Delete referral error:", error);
-      toast.error("Kayıt silinirken hata oluştu");
-    } finally {
-      setDeletingId(null);
     }
   };
 
@@ -815,7 +783,6 @@ export default function OgrenciGecmisiPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Tümü</SelectItem>
-                    <SelectItem value="referral">Yönlendirmeler</SelectItem>
                     <SelectItem value="discipline">Disiplin</SelectItem>
                   </SelectContent>
                 </Select>
@@ -854,101 +821,7 @@ export default function OgrenciGecmisiPage() {
       {/* Kayıtlar - Liste Görünümü */}
       {viewMode === "list" && (selectedStudent || searchQuery) && !loadingHistory && (
         <div className="space-y-4">
-          {/* Yönlendirme Kayıtları */}
-          {(filterType === "all" || filterType === "referral") && (
-            <Card className="bg-white/80 backdrop-blur shadow-sm">
-              <CardHeader className="pb-3">
-                <button 
-                  onClick={() => setShowReferrals(!showReferrals)}
-                  className="w-full flex items-center justify-between"
-                >
-                  <CardTitle className="text-base font-semibold text-blue-800 flex items-center gap-2">
-                    <div className="p-1.5 bg-blue-100 rounded-lg">
-                      <AlertTriangle className="h-4 w-4 text-blue-600" />
-                    </div>
-                    Yönlendirme Kayıtları
-                    <Badge className="bg-blue-600 text-white ml-2">{referrals.length}</Badge>
-                  </CardTitle>
-                  {showReferrals ? (
-                    <ChevronUp className="h-5 w-5 text-slate-400" />
-                  ) : (
-                    <ChevronDown className="h-5 w-5 text-slate-400" />
-                  )}
-                </button>
-              </CardHeader>
-              {showReferrals && (
-                <CardContent>
-                  {referrals.length === 0 ? (
-                    <div className="text-center py-8 text-slate-400">
-                      <FileText className="h-12 w-12 mx-auto mb-2 opacity-30" />
-                      <p>Yönlendirme kaydı bulunamadı</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {referrals.map((record) => (
-                        <div
-                          key={record.id}
-                          className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100 hover:border-blue-300 hover:shadow-md transition-all group"
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1 min-w-0">
-                              <div className="mb-3">
-                                <h3 className="text-lg font-bold text-slate-800 leading-tight">
-                                  {record.studentName || selectedStudent?.text || searchQuery.trim()}
-                                </h3>
-                                <p className="text-xs text-slate-500 mt-1">
-                                  Yönlendirme kaydı
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <Badge className="bg-blue-600 text-white">
-                                  {record.reason}
-                                </Badge>
-                                <span className="text-xs text-slate-500 px-2 py-0.5 bg-white rounded-full">
-                                  {record.classDisplay}
-                                </span>
-                              </div>
-                              <div className="mt-3 flex items-center gap-4 text-sm text-slate-600">
-                                <span className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-lg">
-                                  <User className="h-3.5 w-3.5 text-blue-500" />
-                                  {record.teacherName}
-                                </span>
-                                <span className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-lg">
-                                  <Calendar className="h-3.5 w-3.5 text-blue-500" />
-                                  {formatDateTime(record.date)}
-                                </span>
-                              </div>
-                              {record.notes && (
-                                <p className="mt-3 text-sm text-slate-600 bg-white p-3 rounded-lg border border-slate-100">
-                                  <span className="font-medium text-slate-700">Not: </span>
-                                  {record.notes}
-                                </p>
-                              )}
-                            </div>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-8 w-8 text-red-500 border-red-200 hover:bg-red-50 flex-shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
-                              onClick={() => handleDeleteReferral(record.id)}
-                              disabled={deletingId === record.id}
-                              aria-label="Yönlendirme kaydını sil"
-                              title="Yönlendirme kaydını sil"
-                            >
-                              {deletingId === record.id ? (
-                                <RefreshCw className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              )}
-            </Card>
-          )}
+
 
           {/* Disiplin Kayıtları */}
           {(filterType === "all" || filterType === "discipline") && (

@@ -164,26 +164,12 @@ export default function RPDYonlendirme() {
     }
   }, [showNotifications]);
 
-  // Açık kategorileri takip et
-  const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
-
-  const toggleCategory = (categoryId: string) => {
-    setExpandedCategories(prev => 
-      prev.includes(categoryId) 
-        ? prev.filter(id => id !== categoryId)
-        : [...prev, categoryId]
-    );
-  };
-
   // Filtrelenmiş kategoriler
   const filteredCategories = useMemo(() => {
     if (!reasonSearch) return YONLENDIRME_KATEGORILERI;
-    return YONLENDIRME_KATEGORILERI.map(kategori => ({
-      ...kategori,
-      altNedenler: kategori.altNedenler.filter(neden =>
-        neden.toLowerCase().includes(reasonSearch.toLowerCase())
-      )
-    })).filter(kategori => kategori.altNedenler.length > 0);
+    return YONLENDIRME_KATEGORILERI.filter(kategori =>
+      kategori.baslik.toLowerCase().includes(reasonSearch.toLowerCase())
+    );
   }, [reasonSearch]);
 
   // Session süresi hesaplama
@@ -773,8 +759,7 @@ export default function RPDYonlendirme() {
                         
                         <div className="border-2 border-gray-200 rounded-xl p-2 sm:p-3 bg-gradient-to-br from-white/50 to-gray-50/50 backdrop-blur-sm max-h-[400px] overflow-y-auto">
                           {filteredCategories.map((kategori) => {
-                            const isExpanded = expandedCategories.includes(kategori.id);
-                            const selectedInCategory = kategori.altNedenler.filter(n => field.value?.includes(n)).length;
+                            const isSelected = field.value?.includes(kategori.baslik);
                             
                             // Renk eşlemesi
                             const colorMap: Record<string, { bg: string; border: string; text: string; light: string }> = {
@@ -794,75 +779,32 @@ export default function RPDYonlendirme() {
                                 {/* Kategori Başlığı */}
                                 <button
                                   type="button"
-                                  onClick={() => toggleCategory(kategori.id)}
+                                  onClick={() => {
+                                    const currentValues = field.value || [];
+                                    if (isSelected) {
+                                      field.onChange(currentValues.filter(v => v !== kategori.baslik));
+                                    } else {
+                                      field.onChange([...currentValues, kategori.baslik]);
+                                    }
+                                  }}
                                   className={`w-full flex items-center justify-between p-2.5 sm:p-3 rounded-lg transition-all duration-200 ${
-                                    isExpanded ? `${colors.light} ${colors.border} border-2` : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
+                                    isSelected ? `${colors.light} ${colors.border} border-2` : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
                                   }`}
                                 >
                                   <div className="flex items-center gap-2 sm:gap-3">
                                     <span className="text-lg sm:text-xl">{kategori.icon}</span>
-                                    <span className={`font-semibold text-xs sm:text-sm ${isExpanded ? colors.text : 'text-gray-700'}`}>
+                                    <span className={`font-semibold text-xs sm:text-sm ${isSelected ? colors.text : 'text-gray-700'}`}>
                                       {kategori.baslik}
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    {selectedInCategory > 0 && (
+                                    {isSelected && (
                                       <Badge className={`${colors.bg} text-white text-[10px] px-1.5`}>
-                                        {selectedInCategory}
+                                        ✓
                                       </Badge>
-                                    )}
-                                    {isExpanded ? (
-                                      <ChevronUp className={`w-4 h-4 ${colors.text}`} />
-                                    ) : (
-                                      <ChevronDown className="w-4 h-4 text-gray-400" />
                                     )}
                                   </div>
                                 </button>
-                                
-                                {/* Alt Nedenler */}
-                                {isExpanded && (
-                                  <div className={`mt-1 ml-4 sm:ml-6 pl-3 sm:pl-4 border-l-2 ${colors.border} animate-fade-in`}>
-                                    {kategori.altNedenler.map((neden, index) => (
-                                      <label 
-                                        key={neden} 
-                                        className="flex items-center space-x-3 min-h-[40px] sm:min-h-[44px] group cursor-pointer p-1.5 sm:p-2 rounded-lg hover:bg-white/70 active:bg-white transition-colors"
-                                        style={{ animationDelay: `${index * 0.03}s` }}
-                                      >
-                                        <div className="relative flex-shrink-0">
-                                          <input
-                                            type="checkbox"
-                                            checked={field.value?.includes(neden) || false}
-                                            onChange={(e) => {
-                                              const currentValues = field.value || [];
-                                              if (e.target.checked) {
-                                                field.onChange([...currentValues, neden]);
-                                              } else {
-                                                field.onChange(currentValues.filter(v => v !== neden));
-                                              }
-                                            }}
-                                            className="absolute inset-0 w-5 h-5 sm:w-6 sm:h-6 opacity-0 cursor-pointer"
-                                          />
-                                          <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-md border-2 transition-all duration-300 flex items-center justify-center ${
-                                            field.value?.includes(neden)
-                                              ? `${colors.bg} border-transparent shadow-md scale-105`
-                                              : 'border-gray-300 hover:border-gray-400 bg-white'
-                                          }`}>
-                                            {field.value?.includes(neden) && (
-                                              <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white animate-in zoom-in-50 duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                                              </svg>
-                                            )}
-                                          </div>
-                                        </div>
-                                        <span className={`text-xs sm:text-sm font-medium leading-tight flex-1 transition-all duration-200 ${
-                                          field.value?.includes(neden) ? colors.text : 'text-gray-600 group-hover:text-gray-800'
-                                        }`}>
-                                          {neden}
-                                        </span>
-                                      </label>
-                                    ))}
-                                  </div>
-                                )}
                               </div>
                             );
                           })}
