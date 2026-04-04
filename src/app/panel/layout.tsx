@@ -172,6 +172,17 @@ const menuCategories: MenuCategory[] = [
     ]
   },
   {
+    title: "Randevular",
+    items: [
+      {
+        href: "/panel/randevu",
+        label: "Randevular",
+        icon: CalendarCheck,
+        color: "blue"
+      },
+    ]
+  },
+  {
     title: "Analiz & Raporlar",
     items: [
       {
