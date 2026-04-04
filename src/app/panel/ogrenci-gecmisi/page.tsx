@@ -109,7 +109,7 @@ export default function OgrenciGecmisiPage() {
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [viewMode, setViewMode] = useState<"list" | "timeline">("list");
-  const [activeTab, setActiveTab] = useState<"all" | "discipline">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "referrals" | "discipline">("all");
 
   // Sınıfları yükle
   useEffect(() => {
@@ -455,7 +455,7 @@ export default function OgrenciGecmisiPage() {
               {/* Kayıt Tipi Filtre Toggle */}
               <div className="flex items-center bg-white/10 rounded-lg p-1">
                 <button
-                  onClick={() => setActiveTab("all")}
+                  onClick={() => { setActiveTab("all"); setFilterType("all"); }}
                   className={`px-2 py-1 rounded text-xs font-medium transition-all flex items-center gap-1 ${
                     activeTab === "all" 
                       ? "bg-white text-purple-600 shadow-sm" 
@@ -466,7 +466,7 @@ export default function OgrenciGecmisiPage() {
                   Tümü
                 </button>
                 <button
-                  onClick={() => setActiveTab("referrals")}
+                  onClick={() => { setActiveTab("referrals"); setFilterType("all"); }}
                   className={`px-2 py-1 rounded text-xs font-medium transition-all flex items-center gap-1 ${
                     activeTab === "referrals" 
                       ? "bg-white text-purple-600 shadow-sm" 
@@ -477,7 +477,7 @@ export default function OgrenciGecmisiPage() {
                   Yönlendirme
                 </button>
                 <button
-                  onClick={() => setActiveTab("discipline")}
+                  onClick={() => { setActiveTab("discipline"); setFilterType("discipline"); }}
                   className={`px-2 py-1 rounded text-xs font-medium transition-all flex items-center gap-1 ${
                     activeTab === "discipline" 
                       ? "bg-white text-purple-600 shadow-sm" 
