@@ -44,7 +44,6 @@ export default function ConfigurationStatus() {
     <div className="w-full overflow-hidden bg-gradient-to-r from-slate-50 via-slate-100 to-slate-50 border-t border-slate-200/50 py-2">
       <div className="marquee-container">
         <div className="marquee-content">
-          {/* İlk kopya */}
           <div className="flex items-center gap-8 px-8">
             <div className={`flex items-center gap-2 text-xs ${allConfigured ? 'text-emerald-600' : 'text-amber-600'}`}>
               {allConfigured ? <CheckCircle className="h-3 w-3" /> : <Settings className="h-3 w-3 animate-spin-slow" />}
@@ -63,7 +62,6 @@ export default function ConfigurationStatus() {
               <span className="whitespace-nowrap font-medium">Coded By Mehmet DALĞIN</span>
             </div>
           </div>
-          {/* İkinci kopya (seamless loop için) */}
           <div className="flex items-center gap-8 px-8">
             <div className={`flex items-center gap-2 text-xs ${allConfigured ? 'text-emerald-600' : 'text-amber-600'}`}>
               {allConfigured ? <CheckCircle className="h-3 w-3" /> : <Settings className="h-3 w-3 animate-spin-slow" />}

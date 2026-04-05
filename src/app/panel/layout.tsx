@@ -78,12 +78,10 @@ const menuCategories: MenuCategory[] = [
   {
     title: "Genel",
     items: [
-      { 
-        href: "/panel", 
-        label: "Özet", 
-        icon: LayoutDashboard,
-        exact: true,
-        badge: null,
+      {
+        href: "/panel/randevu",
+        label: "Randevular",
+        icon: CalendarCheck,
         color: "blue"
       },
       { 
@@ -98,17 +96,17 @@ const menuCategories: MenuCategory[] = [
         icon: ListTodo,
         color: "orange"
       },
-      { 
-        href: "/panel/ayarlar", 
-        label: "Ayarlar", 
-        icon: Settings,
-        color: "slate"
-      },
     ]
   },
   {
     title: "Öğrenci Takip",
     items: [
+      {
+        href: "/panel/ogrenci-yonlendirmesi",
+        label: "Öğrenci Yönlendirmesi",
+        icon: Sparkles,
+        color: "purple"
+      },
       {
         href: "/panel/potansiyel-gorusmeler",
         label: "Potansiyel Görüşmeler",
@@ -172,17 +170,6 @@ const menuCategories: MenuCategory[] = [
     ]
   },
   {
-    title: "Randevular",
-    items: [
-      {
-        href: "/panel/randevu",
-        label: "Randevular",
-        icon: CalendarCheck,
-        color: "blue"
-      },
-    ]
-  },
-  {
     title: "Analiz & Raporlar",
     items: [
       {
@@ -237,6 +224,12 @@ const menuCategories: MenuCategory[] = [
         label: "Disiplin Kurulu",
         icon: Gavel,
         color: "rose"
+      },
+      {
+        href: "/panel/ayarlar",
+        label: "Ayarlar",
+        icon: Settings,
+        color: "slate"
       },
       { 
         href: "/panel/telegram", 

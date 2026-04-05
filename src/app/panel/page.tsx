@@ -4,45 +4,36 @@ import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import * as Dialog from "@radix-ui/react-dialog";
 import { 
   CalendarDays, 
-  TrendingUp, 
-  TrendingDown,
-  UserCheck, 
-  RefreshCw, 
-  BarChart3, 
-  Clock, 
-  ChevronDown, 
-  ChevronUp, 
   Sparkles, 
-  Target, 
   Users,
-  GraduationCap,
   AlertCircle,
-  CheckCircle2,
-  Zap,
-  Award,
-  Flame,
-  Calendar,
+  Clock, 
+  ChevronRight,
+  Eye,
   ArrowUpRight,
   ArrowDownRight,
+  CheckSquare,
+  Circle,
+  Flag,
+  Loader2,
+  Calendar,
+  Flame,
+  Zap,
+  GraduationCap,
   BookOpen,
+  CheckCircle2,
   MessageSquare,
-  FileText,
   Bell,
-  ChevronRight,
-  MoreHorizontal,
-  Eye,
-  Star,
-  Brain,
-  X
+  Phone,
+  PhoneCall
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 import { usePanelData } from "./hooks";
 import { ClickableStudent } from "@/components/ClickableStudent";
 import { DashboardCharts } from "@/components/charts/DashboardCharts";
-import { ReferralStudent } from "./types";
 import { 
   NotificationPermissionBanner, 
   NotificationStatus, 
@@ -122,128 +113,7 @@ function LiveClock() {
 }
 
 // Yönlendirme Listesi Modal Komponenti
-function ReferralListModal({ 
-  open, 
-  onOpenChange, 
-  title, 
-  students,
-  gradient,
-  onConvertToAppointment
-}: { 
-  open: boolean; 
-  onOpenChange: (open: boolean) => void; 
-  title: string; 
-  students: ReferralStudent[];
-  gradient: string;
-  onConvertToAppointment: (student: ReferralConvertibleStudent) => void;
-}) {
-  const formatDateTime = (dateStr?: string) => {
-    if (!dateStr) return "-";
-    const date = new Date(dateStr);
-    return date.toLocaleString('tr-TR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
 
-  return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-        <Dialog.Content className="fixed left-[50%] top-[50%] z-50 max-h-[90vh] w-[96vw] max-w-[1280px] translate-x-[-50%] translate-y-[-50%] rounded-2xl bg-white shadow-2xl focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]">
-          {/* Header */}
-          <div className={`bg-gradient-to-r ${gradient} p-6 rounded-t-2xl`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/20 rounded-xl">
-                  <Users className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <Dialog.Title className="text-xl font-bold text-white">
-                    {title}
-                  </Dialog.Title>
-                  <p className="text-white/80 text-sm">
-                    Toplam {students.length} yönlendirme
-                  </p>
-                </div>
-              </div>
-              <Dialog.Close asChild>
-                <button className="p-2 rounded-xl bg-white/20 hover:bg-white/30 transition-colors">
-                  <X className="h-5 w-5 text-white" />
-                </button>
-              </Dialog.Close>
-            </div>
-          </div>
-
-          {/* Content */}
-          <div className="p-6 max-h-[72vh] overflow-y-auto">
-            {students.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="mx-auto w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-                  <Users className="h-8 w-8 text-slate-400" />
-                </div>
-                <p className="text-slate-500">Bu dönemde yönlendirme bulunamadı</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                  <tr className="border-b border-slate-200">
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Öğrenci</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Sınıf</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Yönlendiren</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Neden</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Tarih/Saat</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">İşlem</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {students.map((student, idx) => (
-                      <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                        <td className="py-3 px-4">
-                          <ClickableStudent studentName={student.student_name} classDisplay={student.class_display} />
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge variant="outline" className="bg-slate-50">
-                            {student.class_display}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4 text-slate-600">
-                          {student.teacher_name || "-"}
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge className={`bg-gradient-to-r ${gradient} text-white border-0`}>
-                            {student.reason || "Belirtilmemiş"}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4 text-slate-500 text-sm whitespace-nowrap">
-                          {formatDateTime(student.created_at)}
-                        </td>
-                        <td className="py-3 px-4">
-                          <Button
-                            size="sm"
-                            onClick={() => onConvertToAppointment(student)}
-                            className="bg-cyan-600 hover:bg-cyan-700 text-white whitespace-nowrap"
-                          >
-                            <CalendarDays className="mr-2 h-4 w-4" />
-                            Randevuya dönüştür
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
-}
 
 // Stat Kartı Komponenti - Modern & Animated
 function StatCard({ 
@@ -359,53 +229,242 @@ function StatCard({
   );
 }
 
-// Hızlı Eylem Kartı - Modern & Interactive
-function QuickActionCard({ 
-  title, 
-  description, 
-  icon: Icon, 
-  href, 
-  color 
-}: { 
-  title: string; 
-  description: string; 
-  icon: React.ElementType; 
-  href: string; 
-  color: string;
-}) {
+
+
+
+// Yapılacaklar Widget
+function TasksWidget() {
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTasks = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('tasks')
+          .select('*')
+          .eq('status', 'pending')
+          .order('due_date', { ascending: true })
+          .limit(5);
+        if (!error) setTasks(data || []);
+      } catch (err) {
+        console.error("Görevler yüklenirken hata:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTasks();
+  }, []);
+
+  const today = new Date().toISOString().split('T')[0];
+
+  if (loading) {
+    return (
+      <Card className="bg-white border-0 shadow-lg relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-amber-50 to-orange-50 opacity-50" />
+        <div className="absolute -top-16 -right-16 w-32 h-32 rounded-full bg-amber-100/50 blur-2xl animate-float-slow" />
+        <CardContent className="p-4 flex items-center justify-center py-8 relative">
+          <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <Link href={href}>
-      <Card className="group cursor-pointer border border-slate-200 hover:border-transparent hover:shadow-lg transition-all duration-300 hover:-translate-y-1 bg-white relative overflow-hidden">
-        {/* Hover Glow Effect */}
-        <div className={`absolute inset-0 bg-gradient-to-r ${color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
-        
-        {/* Animated Border */}
-        <div className={`absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300`}
-          style={{ 
-            background: `linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.1), transparent)`,
-            backgroundSize: '200% 100%',
-            animation: 'shimmer 2s infinite'
-          }} 
-        />
-        
-        <CardContent className="p-4 flex items-center gap-4 relative">
-          <div className={`p-2.5 rounded-xl bg-gradient-to-br ${color} shadow-sm group-hover:shadow-lg group-hover:scale-110 transition-all duration-300`}>
-            <Icon className="h-5 w-5 text-white group-hover:animate-bounce-subtle" />
+    <Link href="/panel/yapilacaklar">
+      <Card className="bg-gradient-to-br from-amber-500 via-orange-500 to-yellow-600 border-0 shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden group cursor-pointer text-white relative">
+        {/* Background Decorations */}
+        <div className="absolute inset-0 bg-grid-white/10 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.5))]" />
+        <div className="absolute -top-20 -right-20 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
+        <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
+
+        <CardHeader className="pb-3 relative">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium text-white flex items-center gap-2">
+              <div className="relative">
+                <CheckSquare className="h-4 w-4 text-white" />
+                <div className="absolute inset-0 animate-ping opacity-50">
+                  <CheckSquare className="h-4 w-4 text-amber-300" />
+                </div>
+              </div>
+              Yapılacaklar
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-amber-300 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400"></span>
+              </span>
+              <Badge className="bg-white/20 text-white hover:bg-white/30 border-0 shadow-sm backdrop-blur-sm">
+                {tasks.length} bekliyor
+              </Badge>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-slate-800 group-hover:text-slate-900 transition-colors">{title}</p>
-            <p className="text-xs text-slate-400 truncate group-hover:text-slate-500 transition-colors">{description}</p>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-1 h-1 rounded-full bg-slate-300 group-hover:bg-indigo-400 transition-colors" />
-            <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-2 transition-all duration-300" />
-          </div>
+        </CardHeader>
+        <CardContent className="space-y-2 relative">
+          {tasks.length === 0 ? (
+            <div className="text-center py-6">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm mb-3 animate-bounce-subtle">
+                <Sparkles className="h-6 w-6 text-amber-200" />
+              </div>
+              <p className="text-white/90 text-sm font-medium">Bekleyen görev yok</p>
+              <p className="text-white/70 text-xs mt-1">Harika! 🎉</p>
+            </div>
+          ) : (
+            tasks.slice(0, 4).map((task: any, idx: number) => {
+              const overdue = task.due_date && task.due_date < today;
+              return (
+                <div
+                  key={task.id}
+                  className={`flex items-start gap-3 p-3 rounded-lg bg-white/10 backdrop-blur-sm group-hover:bg-white/20 transition-all duration-300 ${
+                    overdue ? 'ring-1 ring-red-300/50' : ''
+                  }`}
+                  style={{ animationDelay: `${idx * 100}ms` }}
+                >
+                  <div className={`flex-shrink-0 mt-0.5 ${overdue ? 'animate-pulse' : ''}`}>
+                    {overdue ? (
+                      <AlertCircle className="h-4 w-4 text-red-300" />
+                    ) : task.priority === 'urgent' ? (
+                      <Flag className="h-4 w-4 text-red-300" />
+                    ) : (
+                      <Circle className="h-4 w-4 text-amber-200" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-white truncate group-hover:text-amber-100 transition-colors">
+                      {task.title}
+                    </p>
+                    {task.due_date && (
+                      <p className={`text-[10px] mt-1 flex items-center gap-1 ${
+                        overdue ? 'text-red-200 font-semibold' : 'text-white/70'
+                      }`}>
+                        <Clock className="h-3 w-3" />
+                        {overdue ? 'Gecikmiş' : task.due_date === today ? 'Bugün' : task.due_date}
+                      </p>
+                    )}
+                  </div>
+                  {task.priority === 'urgent' && !overdue && (
+                    <div className="flex-shrink-0">
+                      <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+          {tasks.length > 4 && (
+            <div className="text-center pt-2">
+              <p className="text-xs text-amber-200 font-medium">+{tasks.length - 4} daha var</p>
+              <ChevronRight className="h-4 w-4 text-amber-200 mx-auto mt-1 group-hover:translate-x-1 transition-transform" />
+            </div>
+          )}
         </CardContent>
       </Card>
     </Link>
   );
 }
 
+// Bugünkü Randevular Widget
+function TodayAppointmentsWidget() {
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const res = await fetch(`/api/appointments?date=${today}`);
+        if (res.ok) {
+          const data = await res.json();
+          setAppointments(data.appointments || []);
+        }
+      } catch (err) {
+        console.error("Randevular yüklenirken hata:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAppointments();
+  }, []);
+
+  const participantTypeLabel: Record<string, string> = {
+    student: 'Öğrenci',
+    parent: 'Veli',
+    teacher: 'Öğretmen',
+    other: 'Diğer',
+  };
+
+  const statusColor: Record<string, string> = {
+    planned: 'bg-blue-400',
+    completed: 'bg-green-400',
+    cancelled: 'bg-red-400',
+    no_show: 'bg-slate-400',
+  };
+
+  if (loading) {
+    return (
+      <Card className="bg-white border-0 shadow-lg overflow-hidden">
+        <CardContent className="p-4 flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Link href="/panel/randevu">
+      <Card className="bg-gradient-to-br from-indigo-500 via-blue-500 to-cyan-500 border-0 shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden group cursor-pointer text-white relative">
+        <div className="absolute -top-20 -right-20 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
+        <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
+
+        <CardHeader className="pb-3 relative">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium text-white flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-white" />
+              Bugünkü Randevular
+            </CardTitle>
+            <Badge className="bg-white/20 text-white hover:bg-white/30 border-0 shadow-sm backdrop-blur-sm">
+              {appointments.length} randevu
+            </Badge>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-2 relative">
+          {appointments.length === 0 ? (
+            <div className="text-center py-6">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm mb-3">
+                <Calendar className="h-6 w-6 text-indigo-200" />
+              </div>
+              <p className="text-white/90 text-sm font-medium">Bugün randevu yok</p>
+            </div>
+          ) : (
+            appointments.slice(0, 4).map((apt: any) => (
+              <div
+                key={apt.id}
+                className="flex items-center gap-3 p-3 rounded-lg bg-white/10 backdrop-blur-sm group-hover:bg-white/20 transition-all duration-300"
+              >
+                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${statusColor[apt.status] || 'bg-white/50'}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-white truncate">{apt.participant_name}</p>
+                  <p className="text-[10px] text-white/70 mt-0.5 flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {apt.start_time?.slice(0, 5)}
+                    {apt.participant_type && ` · ${participantTypeLabel[apt.participant_type] || apt.participant_type}`}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+          {appointments.length > 4 && (
+            <div className="text-center pt-2">
+              <p className="text-xs text-indigo-200 font-medium">+{appointments.length - 4} daha var</p>
+              <ChevronRight className="h-4 w-4 text-indigo-200 mx-auto mt-1 group-hover:translate-x-1 transition-transform" />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
 
 // Performans Özeti Widget
 function PerformanceSummary({ stats }: { stats: any }) {
@@ -872,12 +931,17 @@ export default function PanelOzetPage() {
   const { stats, loadingStats, statsError, fetchStats } = usePanelData();
   const [showCharts, setShowCharts] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  
-  // Modal state'leri
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalTitle, setModalTitle] = useState("");
-  const [modalStudents, setModalStudents] = useState<ReferralStudent[]>([]);
-  const [modalGradient, setModalGradient] = useState("from-blue-500 to-indigo-600");
+
+  // Sayfa yüklendiğinde randevular sayfasına yönlendir
+  useEffect(() => {
+    router.replace('/panel/randevu');
+  }, [router]);
+
+  // Modal state'leri - kaldırıldı
+  // const [modalOpen, setModalOpen] = useState(false);
+  // const [modalTitle, setModalTitle] = useState("");
+  // const [modalStudents, setModalStudents] = useState<ReferralStudent[]>([]);
+  // const [modalGradient, setModalGradient] = useState("from-blue-500 to-indigo-600");
 
   // Yeni yönlendirme bildirimleri
   const latestStudent = stats?.todayStudents?.[0] 
@@ -890,52 +954,52 @@ export default function PanelOzetPage() {
   
   useNewReferralNotification(stats?.totalCount ?? 0, latestStudent);
 
-  // Tarihe göre öğrencileri filtrele
-  const filterStudentsByPeriod = (period: "today" | "week" | "month" | "all") => {
-    if (!stats?.allStudents) return [];
-    
-    const today = new Date();
-    const todayStr = today.toISOString().slice(0, 10);
-    
-    const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay() + 1);
-    const weekStr = startOfWeek.toISOString().slice(0, 10);
-    
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const monthStr = startOfMonth.toISOString().slice(0, 10);
+  // Tarihe göre öğrencileri filtrele - kaldırıldı
+  // const filterStudentsByPeriod = (period: "today" | "week" | "month" | "all") => {
+  //   if (!stats?.allStudents) return [];
+  //
+  //   const today = new Date();
+  //   const todayStr = today.toISOString().slice(0, 10);
+  //
+  //   const startOfWeek = new Date(today);
+  //   startOfWeek.setDate(today.getDate() - today.getDay() + 1);
+  //   const weekStr = startOfWeek.toISOString().slice(0, 10);
+  //
+  //   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  //   const monthStr = startOfMonth.toISOString().slice(0, 10);
+  //
+  //   switch (period) {
+  //     case "today":
+  //       return stats.allStudents.filter(s => s.date === todayStr);
+  //     case "week":
+  //       return stats.allStudents.filter(s => s.date >= weekStr && s.date <= todayStr);
+  //     case "month":
+  //       return stats.allStudents.filter(s => s.date >= monthStr && s.date <= todayStr);
+  //     case "all":
+  //       return stats.allStudents;
+  //     default:
+  //       return [];
+  //   }
+  // };
 
-    switch (period) {
-      case "today":
-        return stats.allStudents.filter(s => s.date === todayStr);
-      case "week":
-        return stats.allStudents.filter(s => s.date >= weekStr && s.date <= todayStr);
-      case "month":
-        return stats.allStudents.filter(s => s.date >= monthStr && s.date <= todayStr);
-      case "all":
-        return stats.allStudents;
-      default:
-        return [];
-    }
-  };
+  // Kart tıklama işleyicileri - kaldırıldı
+  // const handleStatCardClick = (period: "today" | "week" | "month" | "all", title: string, gradient: string) => {
+  //   const students = filterStudentsByPeriod(period);
+  //   setModalTitle(title);
+  //   setModalStudents(students);
+  //   setModalGradient(gradient);
+  //   setModalOpen(true);
+  // };
 
-  // Kart tıklama işleyicileri
-  const handleStatCardClick = (period: "today" | "week" | "month" | "all", title: string, gradient: string) => {
-    const students = filterStudentsByPeriod(period);
-    setModalTitle(title);
-    setModalStudents(students);
-    setModalGradient(gradient);
-    setModalOpen(true);
-  };
-
-  const handleConvertReferralToAppointment = (student: ReferralConvertibleStudent) => {
-    const params = new URLSearchParams();
-    params.set("studentName", student.student_name);
-    if (student.class_display) params.set("classDisplay", student.class_display);
-    if (student.reason) params.set("note", student.reason);
-    if (student.teacher_name) params.set("teacherName", student.teacher_name);
-    setModalOpen(false);
-    router.push(`/panel/randevu?${params.toString()}`);
-  };
+  // const handleConvertReferralToAppointment = (student: ReferralConvertibleStudent) => {
+  //   const params = new URLSearchParams();
+  //   params.set("studentName", student.student_name);
+  //   if (student.class_display) params.set("classDisplay", student.class_display);
+  //   if (student.reason) params.set("note", student.reason);
+  //   if (student.teacher_name) params.set("teacherName", student.teacher_name);
+  //   setModalOpen(false);
+  //   router.push(`/panel/randevu?${params.toString()}`);
+  // };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -972,52 +1036,17 @@ export default function PanelOzetPage() {
       )}
 
       {/* İstatistik Kartları */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Bugün"
-          value={loadingStats ? "..." : stats?.todayCount ?? 0}
-          subtitle="yönlendirme yapıldı"
-          icon={CalendarDays}
-          trend={todayTrend.direction}
-          trendValue={todayTrend.value}
-          gradient="from-blue-500 to-indigo-600"
-          onClick={() => handleStatCardClick("today", "Bugünkü Yönlendirmeler", "from-blue-500 to-indigo-600")}
-        />
-        <StatCard
-          title="Bu Hafta"
-          value={loadingStats ? "..." : stats?.weekCount ?? 0}
-          subtitle="toplam yönlendirme"
-          icon={TrendingUp}
-          gradient="from-emerald-500 to-teal-600"
-          onClick={() => handleStatCardClick("week", "Bu Haftaki Yönlendirmeler", "from-emerald-500 to-teal-600")}
-        />
-        <StatCard
-          title="Bu Ay"
-          value={loadingStats ? "..." : stats?.monthCount ?? 0}
-          subtitle="aylık toplam"
-          icon={BarChart3}
-          gradient="from-amber-500 to-orange-600"
-          onClick={() => handleStatCardClick("month", "Bu Ayki Yönlendirmeler", "from-amber-500 to-orange-600")}
-        />
-        <StatCard
-          title="Tüm Zamanlar"
-          value={loadingStats ? "..." : stats?.totalCount ?? 0}
-          subtitle="toplam kayıt"
-          icon={Star}
-          gradient="from-violet-500 to-purple-600"
-          onClick={() => handleStatCardClick("all", "Tüm Yönlendirmeler", "from-violet-500 to-purple-600")}
-        />
-      </div>
+      {/* Kaldırıldı - İstatistik kartları artık gösterilmiyor */}
 
-      {/* Referral List Modal */}
-      <ReferralListModal
+      {/* Referral List Modal - kaldırıldı */}
+      {/* <ReferralListModal
         open={modalOpen}
         onOpenChange={setModalOpen}
         title={modalTitle}
         students={modalStudents}
         gradient={modalGradient}
         onConvertToAppointment={handleConvertReferralToAppointment}
-      />
+      /> */}
 
       {/* 2 Sütunlu Grid */}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -1045,29 +1074,15 @@ export default function PanelOzetPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 relative">
-              <QuickActionCard 
-                title="Belge Oluştur" 
-                description="Yeni belge hazırla"
-                icon={FileText}
-                href="/panel/belge"
-                color="from-violet-500 to-purple-600"
-              />
-              <QuickActionCard 
-                title="Öğrenci Listesi" 
-                description="Tüm öğrencileri görüntüle"
-                icon={GraduationCap}
-                href="/panel/ogrenci-listesi"
-                color="from-cyan-500 to-blue-600"
-              />
-              <QuickActionCard 
-                title="Telegram" 
-                description="Bildirimleri yönet"
-                icon={Bell}
-                href="/panel/telegram"
-                color="from-sky-500 to-cyan-600"
-              />
+              {/* Hızlı Erişim Kartları - Placeholder */}
             </CardContent>
           </Card>
+
+          {/* Yapılacaklar Widget */}
+          {/* <TasksWidget /> */}
+
+          {/* Bugünkü Randevular Widget */}
+          {/* <TodayAppointmentsWidget /> */}
 
         </div>
 

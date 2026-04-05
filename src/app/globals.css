@@ -389,7 +389,8 @@ html {
 .marquee-content {
   display: flex;
   width: fit-content;
-  animation: marquee 30s linear infinite;
+  animation: marquee 40s linear infinite;
+  white-space: nowrap;
 }
 
 .marquee-content:hover {

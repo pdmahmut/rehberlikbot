@@ -1,15 +1,12 @@
 import RPDYonlendirme from "@/components/RPDYonlendirme";
-import ConfigurationStatus from "@/components/ConfigurationStatus";
 
 export default function Home() {
   return (
-    <>
-      <RPDYonlendirme />
-      {/* Sayfanın en altında sistem durumu marquee - Mobilde gizli (sticky butonla çakışmasın) */}
-      <div className="mt-8 pb-24 lg:pb-4 hidden lg:block">
-        <ConfigurationStatus />
+    <main className="min-h-screen bg-slate-50">
+      <div className="px-4 pb-12 lg:px-6">
+        <RPDYonlendirme />
       </div>
-    </>
+    </main>
   );
 }
 
