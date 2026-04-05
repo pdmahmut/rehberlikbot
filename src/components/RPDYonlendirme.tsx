@@ -279,7 +279,7 @@ export default function RPDYonlendirme() {
                             <SelectTrigger className="border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all duration-300 bg-white/70 backdrop-blur-sm hover:bg-white/90 hover:shadow-md min-h-[48px] sm:min-h-[52px] px-3 sm:px-4 text-sm sm:text-base w-full rounded-xl active:scale-[0.99]">
                               <SelectValue placeholder="🧑‍🏫 Öğretmen seçin" />
                             </SelectTrigger>
-                            <SelectContent className="max-h-[40vh]">
+                            <SelectContent position="item-aligned" className="max-h-none overflow-visible">
                               {teacherOptions.map(t => (
                                 <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                               ))}
@@ -312,7 +312,7 @@ export default function RPDYonlendirme() {
                                 <SelectValue placeholder="🏫 Sınıf seçin" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent className="max-h-[40vh]">
+                            <SelectContent position="item-aligned" className="max-h-none overflow-visible">
                               {sinifSubeList.map((sinif) => (
                                 <SelectItem key={sinif.value} value={sinif.value}>
                                   {sinif.text}
@@ -346,7 +346,7 @@ export default function RPDYonlendirme() {
                               <SelectValue placeholder={ogrenciLoading ? "🔄 Yükleniyor..." : "👤 Öğrenci seçin"} />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent className="max-h-[40vh]">
+                          <SelectContent position="item-aligned" className="max-h-none overflow-visible">
                             {ogrenciLoading ? (
                               <SelectItem value="loading" disabled>🔄 Yükleniyor...</SelectItem>
                             ) : (ogrenciList || []).length === 0 ? (
@@ -405,7 +405,7 @@ export default function RPDYonlendirme() {
                           </div>
                         )}
                         
-                        <div className="border-2 border-gray-200 rounded-xl p-2 sm:p-3 bg-gradient-to-br from-white/50 to-gray-50/50 backdrop-blur-sm max-h-[400px] overflow-y-auto">
+                        <div className="border-2 border-gray-200 rounded-xl p-2 sm:p-3 bg-gradient-to-br from-white/50 to-gray-50/50 backdrop-blur-sm">
                           {filteredCategories.map((kategori) => {
                             const isSelected = field.value?.includes(kategori.baslik);
                             

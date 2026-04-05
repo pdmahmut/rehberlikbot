@@ -33,6 +33,7 @@ import {
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useAppointments, useAppointmentTasks, useCalendarHelpers } from "./hooks";
+import { parseJsonResponse, parseResponseError } from "@/lib/utils";
 import { 
   Appointment, 
   AppointmentFormData,
@@ -139,8 +140,12 @@ const resolveStudentPrefill = async (studentName: string) => {
   }
 
   try {
-    const res = await fetch(`/api/students?query=${encodeURIComponent(studentName)}`);
+    const res = await fetch(`/api/students?query=${encodeURIComponent(studentName)}`, {
+      headers: { Accept: "application/json" }
+    });
     if (!res.ok) {
+      const errorText = await parseResponseError(res);
+      console.error("Öğrenci API hatası:", errorText);
       return {
         studentText: studentName,
         classKey: "",
@@ -148,7 +153,7 @@ const resolveStudentPrefill = async (studentName: string) => {
       };
     }
 
-    const data = await res.json();
+    const data = await parseJsonResponse<any>(res);
     if (!Array.isArray(data) || data.length === 0) {
       return {
         studentText: studentName,
@@ -277,19 +282,30 @@ export default function RandevuPage() {
   useEffect(() => {
     const fetchClassesAndTeachers = async () => {
       try {
-        const classRes = await fetch("/api/data");
+        const classRes = await fetch("/api/data", {
+          headers: { Accept: "application/json" }
+        });
         if (classRes.ok) {
-          const classData = await classRes.json();
+          const classData = await parseJsonResponse<any>(classRes);
           if (Array.isArray(classData.sinifSubeList)) {
             setClasses(classData.sinifSubeList);
           }
+        } else {
+          const errorText = await parseResponseError(classRes);
+          console.error("Data API hatası:", errorText);
         }
-        const teacherRes = await fetch("/api/teachers");
+
+        const teacherRes = await fetch("/api/teachers", {
+          headers: { Accept: "application/json" }
+        });
         if (teacherRes.ok) {
-          const teacherData = await teacherRes.json();
+          const teacherData = await parseJsonResponse<any>(teacherRes);
           if (Array.isArray(teacherData.teachers)) {
             setTeachers(teacherData.teachers);
           }
+        } else {
+          const errorText = await parseResponseError(teacherRes);
+          console.error("Teachers API hatası:", errorText);
         }
       } catch (error) {
         console.error("Veri yükleme hatası:", error);
@@ -398,9 +414,11 @@ export default function RandevuPage() {
     }
     try {
       setLoadingStudents(true);
-      const res = await fetch(`/api/students?sinifSube=${encodeURIComponent(classKey)}`);
+      const res = await fetch(`/api/students?sinifSube=${encodeURIComponent(classKey)}`, {
+        headers: { Accept: "application/json" }
+      });
       if (res.ok) {
-        const data = await res.json();
+        const data = await parseJsonResponse<any>(res);
         const nextStudents = Array.isArray(data) ? data : [];
         setStudents(nextStudents);
 

@@ -9,6 +9,7 @@ import {
   AppointmentTask,
   AppointmentStatus 
 } from "@/types";
+import { parseJsonResponse, parseResponseError } from "@/lib/utils";
 
 const getLocalDateString = (date: Date) => {
   const year = date.getFullYear();
@@ -47,13 +48,16 @@ export function useAppointments() {
       if (params?.search) searchParams.set("search", params.search);
 
       const query = searchParams.toString();
-      const res = await fetch(`/api/appointments${query ? `?${query}` : ""}`);
+      const res = await fetch(`/api/appointments${query ? `?${query}` : ""}`, {
+        headers: { Accept: "application/json" }
+      });
       
       if (!res.ok) {
-        throw new Error("Randevular alınamadı");
+        const errorText = await parseResponseError(res);
+        throw new Error(errorText || "Randevular alınamadı");
       }
       
-      const data = await res.json();
+      const data = await parseJsonResponse<{ appointments?: Appointment[] }>(res);
       setAppointments(data.appointments || []);
       return data.appointments;
     } catch (err) {
@@ -72,16 +76,16 @@ export function useAppointments() {
       setLoading(true);
       const res = await fetch("/api/appointments", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(formData)
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Randevu oluşturulamadı");
+        const errorText = await parseResponseError(res);
+        throw new Error(errorText || "Randevu oluşturulamadı");
       }
 
-      const data = await res.json();
+      const data = await parseJsonResponse<{ appointment: Appointment }>(res);
       setAppointments(prev => [...prev, data.appointment]);
       toast.success("Randevu oluşturuldu");
       return data.appointment;
@@ -100,16 +104,16 @@ export function useAppointments() {
       setLoading(true);
       const res = await fetch("/api/appointments", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ id, ...updateData })
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Randevu güncellenemedi");
+        const errorText = await parseResponseError(res);
+        throw new Error(errorText || "Randevu güncellenemedi");
       }
 
-      const data = await res.json();
+      const data = await parseJsonResponse<{ appointment: Appointment }>(res);
       setAppointments(prev => 
         prev.map(apt => apt.id === id ? data.appointment : apt)
       );
@@ -138,15 +142,16 @@ export function useAppointments() {
 
       const res = await fetch("/api/appointments", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ id, ...updateData })
       });
 
       if (!res.ok) {
-        throw new Error("Görüşme kapatılamadı");
+        const errorText = await parseResponseError(res);
+        throw new Error(errorText || "Görüşme kapatılamadı");
       }
 
-      const data = await res.json();
+      const data = await parseJsonResponse<{ appointment: Appointment }>(res);
       
       // Takip randevusu oluştur
       if (closureData.create_follow_up && closureData.status === "attended") {
@@ -194,11 +199,13 @@ export function useAppointments() {
     try {
       setLoading(true);
       const res = await fetch(`/api/appointments?id=${id}`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers: { Accept: "application/json" }
       });
 
       if (!res.ok) {
-        throw new Error("Randevu silinemedi");
+        const errorText = await parseResponseError(res);
+        throw new Error(errorText || "Randevu silinemedi");
       }
 
       setAppointments(prev => prev.filter(apt => apt.id !== id));
@@ -279,13 +286,16 @@ export function useAppointmentTasks() {
     try {
       setLoading(true);
       const params = appointmentId ? `?appointmentId=${appointmentId}` : "";
-      const res = await fetch(`/api/appointment-tasks${params}`);
+      const res = await fetch(`/api/appointment-tasks${params}`, {
+        headers: { Accept: "application/json" }
+      });
       
       if (!res.ok) {
-        throw new Error("Görevler alınamadı");
+        const errorText = await parseResponseError(res);
+        throw new Error(errorText || "Görevler alınamadı");
       }
       
-      const data = await res.json();
+      const data = await parseJsonResponse<{ tasks?: AppointmentTask[] }>(res);
       setTasks(data.tasks || []);
       return data.tasks;
     } catch (err) {
@@ -301,7 +311,7 @@ export function useAppointmentTasks() {
     try {
       const res = await fetch("/api/appointment-tasks", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
           appointment_id: appointmentId,
           task_description: description,
@@ -310,10 +320,11 @@ export function useAppointmentTasks() {
       });
 
       if (!res.ok) {
-        throw new Error("Görev oluşturulamadı");
+        const errorText = await parseResponseError(res);
+        throw new Error(errorText || "Görev oluşturulamadı");
       }
 
-      const data = await res.json();
+      const data = await parseJsonResponse<{ task: AppointmentTask }>(res);
       setTasks(prev => [...prev, data.task]);
       toast.success("Görev eklendi");
       return data.task;
@@ -328,15 +339,16 @@ export function useAppointmentTasks() {
     try {
       const res = await fetch("/api/appointment-tasks", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ id, is_completed: completed })
       });
 
       if (!res.ok) {
-        throw new Error("Görev güncellenemedi");
+        const errorText = await parseResponseError(res);
+        throw new Error(errorText || "Görev güncellenemedi");
       }
 
-      const data = await res.json();
+      const data = await parseJsonResponse<{ task: AppointmentTask }>(res);
       setTasks(prev => 
         prev.map(task => task.id === id ? data.task : task)
       );
@@ -351,11 +363,13 @@ export function useAppointmentTasks() {
   const deleteTask = useCallback(async (id: string) => {
     try {
       const res = await fetch(`/api/appointment-tasks?id=${id}`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers: { Accept: "application/json" }
       });
 
       if (!res.ok) {
-        throw new Error("Görev silinemedi");
+        const errorText = await parseResponseError(res);
+        throw new Error(errorText || "Görev silinemedi");
       }
 
       setTasks(prev => prev.filter(task => task.id !== id));
