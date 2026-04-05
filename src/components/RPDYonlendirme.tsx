@@ -17,6 +17,9 @@ import { parseJsonResponse, parseResponseError } from "@/lib/utils";
 import { normalizeGuidanceStudent, notifyGuidanceReferralsChanged } from "@/lib/guidance";
 import { YONLENDIRME_KATEGORILERI } from "@/types";
 
+interface SinifSube { value: string; text: string; }
+interface Ogrenci { value: string; text: string; }
+
 const formSchema = z.object({
   ogretmenAdi: z.string().min(2, "Öğretmen adı en az 2 karakter olmalıdır"),
   sinifSube: z.string().min(1, "Sınıf/Şube seçimi zorunludur"),
