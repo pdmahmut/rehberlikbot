@@ -11,8 +11,29 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
     const status = searchParams.get('status') || 'pending';
 
+    if (id) {
+      // Tek kayıt getir
+      const { data, error } = await supabase
+        .from('individual_requests')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        console.error('Supabase individual_requests fetch single error:', error);
+        return NextResponse.json(
+          { error: 'Başvuru bulunamadı: ' + error.message },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({ request: data });
+    }
+
+    // Tüm kayıtları getir
     let query = supabase
       .from('individual_requests')
       .select('*')
@@ -102,22 +123,30 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, status } = body;
+    const { id, student_name, class_key, class_display, request_date, note, status } = body;
 
-    if (!id || !status) {
+    if (!id) {
       return NextResponse.json(
-        { error: 'Zorunlu alanlar eksik: id, status' },
+        { error: 'id gerekli' },
         { status: 400 }
       );
     }
 
     if (!supabase) {
-      return NextResponse.json({ request: { id, status } });
+      return NextResponse.json({ request: { id, student_name, class_key, class_display, request_date, note, status } });
     }
+
+    const updateData: any = { updated_at: new Date().toISOString() };
+    if (student_name !== undefined) updateData.student_name = student_name;
+    if (class_key !== undefined) updateData.class_key = class_key;
+    if (class_display !== undefined) updateData.class_display = class_display;
+    if (request_date !== undefined) updateData.request_date = request_date;
+    if (note !== undefined) updateData.note = note;
+    if (status !== undefined) updateData.status = status;
 
     const { data, error } = await supabase
       .from('individual_requests')
-      .update({ status, updated_at: new Date().toISOString() })
+      .update(updateData)
       .eq('id', id)
       .select()
       .single();

@@ -11,8 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
-import { MessageSquare, Users, Eye, Search, RefreshCw, Calendar, Clock, ArrowRight, Loader2, PhoneCall, Edit2, Trash2, MapPin } from "lucide-react";
+import { MessageSquare, Users, Eye, Search, RefreshCw, Calendar, Clock, Loader2, PhoneCall, Edit2, Trash2, MapPin } from "lucide-react";
 import { toast } from "sonner";
+import { StudentCard } from "@/components/StudentCard";
+import { DetailModal, type DetailModalRecord } from "@/components/DetailModal";
 import { useAppointments } from "../randevu/hooks";
 import {
   Appointment,
@@ -143,6 +145,105 @@ const buildAppointmentUrl = (studentName: string, classDisplay?: string | null, 
   return `/panel/randevu?${params.toString()}`;
 };
 
+const buildDetailModalItem = (
+  type: "incident" | "referral" | "observation" | "request" | "individual",
+  record: any
+): DetailModalRecord => {
+  switch (type) {
+    case "incident":
+      return {
+        id: record.id,
+        type,
+        studentName: record.target_student_name || "-",
+        classDisplay: record.target_class_display,
+        classNumber: record.target_class_key,
+        date: record.incident_date || record.created_at,
+        note: record.description,
+        sourceLabel: "Öğrenci Bildirimi",
+        detailEntries: [
+          ...(record.reporter_student_name ? [{ label: "Bildirimi Yapan", value: record.reporter_student_name }] : [])
+        ]
+      };
+
+    case "referral":
+      return {
+        id: record.id,
+        type,
+        studentName: record.student_name,
+        classDisplay: record.class_display,
+        classNumber: record.class_key,
+        date: record.created_at,
+        note: record.note || record.reason,
+        sourceLabel: "Öğretmen Yönlendirmesi",
+        detailEntries: [
+          { label: "Yönlendiren Öğretmen", value: record.teacher_name },
+          { label: "Açıklama", value: record.note || record.reason }
+        ]
+      };
+
+    case "observation":
+      return {
+        id: record.id,
+        type,
+        studentName: record.student_name,
+        classDisplay: record.class_display,
+        classNumber: record.student_number || record.class_key,
+        date: record.observed_at || record.created_at,
+        note: record.note,
+        sourceLabel: "Gözlem",
+        detailEntries: [
+          { label: "Açıklama", value: record.note }
+        ]
+      };
+
+    case "request":
+      return {
+        id: record.id,
+        type,
+        studentName: record.student_name,
+        classDisplay: record.class_display,
+        classNumber: record.class_key,
+        date: record.created_at,
+        note: record.detail,
+        sourceLabel: "Veli Talebi",
+        detailEntries: [
+          { label: "Veli Adı", value: record.parent_name },
+          { label: "Veli İlişkisi", value: record.parent_relation },
+          { label: "Telefon", value: record.parent_phone }
+        ]
+      };
+
+    case "individual":
+      return {
+        id: record.id,
+        type,
+        studentName: record.student_name,
+        classDisplay: record.class_display,
+        classNumber: record.class_key,
+        date: record.request_date || record.created_at,
+        note: record.note,
+        sourceLabel: "Bireysel Başvuru",
+        detailEntries: [
+          { label: "Başvuru Durumu", value: record.status },
+          { label: "Not", value: record.note }
+        ]
+      };
+
+    default:
+      return {
+        id: record.id || "unknown",
+        type,
+        studentName: record.student_name || "-",
+        classDisplay: record.class_display,
+        classNumber: record.class_key,
+        date: record.created_at,
+        note: record.note || record.detail || record.description,
+        sourceLabel: "Detaylar",
+        detailEntries: []
+      };
+  }
+};
+
 const matchesScheduledAppointment = (
   appointment: Appointment,
   studentName?: string | null,
@@ -173,26 +274,6 @@ const matchesScheduledAppointment = (
   );
 };
 
-function AppointmentButton({ href, isScheduled = false }: { href: string; isScheduled?: boolean }) {
-  if (isScheduled) {
-    return (
-      <Button size="sm" className="w-full border-0 bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.01] hover:from-amber-500 hover:to-orange-500 sm:w-auto" disabled>
-        <Calendar className="mr-2 h-4 w-4" />
-        Randevu verildi
-      </Button>
-    );
-  }
-
-  return (
-    <Button asChild size="sm" className="w-full border-0 bg-gradient-to-r from-indigo-600 via-sky-600 to-cyan-600 text-white shadow-lg shadow-cyan-500/20 transition-all hover:scale-[1.01] hover:from-indigo-500 hover:via-sky-500 hover:to-cyan-500 sm:w-auto">
-      <Link href={href}>
-        <ArrowRight className="mr-2 h-4 w-4" />
-        Randevuya dönüştür
-      </Link>
-    </Button>
-  );
-}
-
 export default function PotansiyelGorusmelerPage() {
   const router = useRouter();
   const { appointments, loading: appointmentsLoading, error: appointmentsError, fetchAppointments } = useAppointments();
@@ -212,6 +293,7 @@ export default function PotansiyelGorusmelerPage() {
   const [requests, setRequests] = useState<ParentMeetingRequestRecord[]>([]);
   const [individualRequests, setIndividualRequests] = useState<IndividualRequestRecord[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<DetailModalRecord | null>(null);
 
   const loadData = async () => {
     try {
@@ -416,6 +498,97 @@ export default function PotansiyelGorusmelerPage() {
     );
   }, [individualRequests, query, attendedAppointments, scheduledAppointments]);
 
+  // Tüm kayıtları birleştir ve kronolojik sırala
+  const allMergedRecords = useMemo(() => {
+    const records: Array<{
+      id: string;
+      studentName: string;
+      classDisplay?: string | null;
+      classNumber?: string | null;
+      note?: string | null;
+      date?: string | null;
+      type: "incident" | "referral" | "observation" | "request" | "individual";
+      data: any;
+    }> = [];
+
+    // Öğrenci Bildirimleri
+    filteredIncidents.forEach((incident) => {
+      records.push({
+        id: `incident-${incident.id}`,
+        studentName: incident.target_student_name || "",
+        classDisplay: incident.target_class_display,
+        classNumber: incident.target_class_key,
+        note: incident.description,
+        date: incident.incident_date || incident.created_at,
+        type: "incident",
+        data: incident,
+      });
+    });
+
+    // Öğretmen Yönlendirmeleri
+    filteredReferrals.forEach((referral) => {
+      records.push({
+        id: `referral-${referral.id}`,
+        studentName: referral.student_name,
+        classDisplay: referral.class_display,
+        classNumber: referral.class_key,
+        note: referral.reason || referral.note,
+        date: referral.created_at,
+        type: "referral",
+        data: referral,
+      });
+    });
+
+    // Gözlem Havuzu
+    filteredObservations.forEach((observation) => {
+      records.push({
+        id: `observation-${observation.id}`,
+        studentName: observation.student_name,
+        classDisplay: observation.class_display,
+        classNumber: observation.student_number || observation.class_key,
+        note: observation.note,
+        date: observation.observed_at || observation.created_at,
+        type: "observation",
+        data: observation,
+      });
+    });
+
+    // Veli Talepleri
+    filteredRequests.forEach((request) => {
+      records.push({
+        id: `request-${request.id}`,
+        studentName: request.student_name,
+        classDisplay: request.class_display,
+        classNumber: request.class_key,
+        note: request.subject || request.detail,
+        date: request.created_at,
+        type: "request",
+        data: request,
+      });
+    });
+
+    // Bireysel Başvurular
+    filteredIndividualRequests.forEach((request) => {
+      records.push({
+        id: `individual-${request.id}`,
+        studentName: request.student_name,
+        classDisplay: request.class_display,
+        classNumber: request.class_key,
+        note: request.note,
+        date: request.request_date || request.created_at,
+        type: "individual",
+        data: request,
+      });
+    });
+
+    // Tarih'e göre sırala (en yeni en üstte)
+    return records.sort((a, b) => {
+      const dateA = new Date(a.date || 0).getTime();
+      const dateB = new Date(b.date || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [filteredIncidents, filteredReferrals, filteredObservations, filteredRequests, filteredIndividualRequests]);
+
   const applicationRecords = useMemo<ApplicationRecord[]>(() => {
     const applications: ApplicationRecord[] = [];
 
@@ -547,26 +720,34 @@ export default function PotansiyelGorusmelerPage() {
     filteredIncidents.length + filteredReferrals.length + filteredObservations.length + filteredRequests.length + filteredIndividualRequests.length;
 
   const handleEditSource = (kind: "incident" | "referral" | "observation" | "request" | "individual-request", record: { id?: string; studentName: string; classDisplay?: string | null }) => {
-    const classDisplay = record.classDisplay || undefined;
-    const studentName = record.studentName || undefined;
-
-    switch (kind) {
-      case "incident":
-        router.push("/panel/ogrenci-bildirimleri");
-        return;
-      case "referral":
-        router.push(studentName ? `/panel/ogrenci-gecmisi?studentName=${encodeURIComponent(studentName)}${classDisplay ? `&classDisplay=${encodeURIComponent(classDisplay)}` : ""}` : "/panel/ogrenci-gecmisi");
-        return;
-      case "observation":
-        router.push(studentName ? `/panel/gozlem-havuzu?studentName=${encodeURIComponent(studentName)}${classDisplay ? `&classDisplay=${encodeURIComponent(classDisplay)}` : ""}` : "/panel/gozlem-havuzu");
-        return;
-      case "request":
-        router.push("/panel/veli-talepleri");
-        return;
-      case "individual-request":
-        router.push(record.id ? `/panel/bireysel-basvurular?editId=${encodeURIComponent(record.id)}` : "/panel/bireysel-basvurular");
-        return;
+    if (!record.id) {
+      toast.error("Düzenlenecek kayıt bulunamadı");
+      return;
     }
+
+    const pageMap = {
+      "incident": "/panel/ogrenci-bildirimleri",
+      "referral": "/panel/bireysel-basvurular",
+      "observation": "/panel/gozlem-havuzu",
+      "request": "/panel/veli-talepleri",
+      "individual-request": "/panel/bireysel-basvurular"
+    };
+
+    const typeMapForGeneric = {
+      "referral": "teacher_referral",
+      "individual-request": "individual"
+    };
+
+    const baseUrl = pageMap[kind];
+    const params = new URLSearchParams();
+    params.set("editId", record.id);
+    params.set("referer", "potansiyel-gorusmeler");
+    
+    if (kind === "referral" || kind === "individual-request") {
+      params.set("type", typeMapForGeneric[kind]);
+    }
+
+    router.push(`${baseUrl}?${params.toString()}`);
   };
 
   const handleDeleteSource = async (kind: "incident" | "referral" | "observation" | "request" | "individual-request", id?: string) => {
@@ -692,91 +873,138 @@ export default function PotansiyelGorusmelerPage() {
             ))}
           </TabsList>
 
-          <TabsContent value="all" className="mt-6 space-y-4">
-            <SectionBlock
-              title="Öğrenci Bildirimleri"
-              icon={MessageSquare}
-              count={filteredIncidents.length}
-              emptyText="Bildirim bulunamadı"
-            >
-              {filteredIncidents.map((incident) => (
-                <IncidentCard
-                  key={incident.id}
-                  incident={incident}
-                  isScheduled={isAppointmentScheduled(incident.target_student_name, incident.target_class_display, incident.target_class_key)}
-                  onEdit={() => handleEditSource("incident", { studentName: incident.target_student_name || "", classDisplay: incident.target_class_display || null })}
-                  onDelete={() => handleDeleteSource("incident", incident.id)}
-                />
-              ))}
-            </SectionBlock>
+          <TabsContent value="all" className="mt-6">
+            <Card className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <CardHeader className="border-b bg-slate-50 p-4">
+                <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" /> Tüm Kayıtlar (Kronolojik)
+                  <Badge variant="secondary">{allMergedRecords.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4">
+                {allMergedRecords.length === 0 ? (
+                  <p className="py-8 text-center text-slate-500">Kayıt bulunamadı</p>
+                ) : (
+                  <div className="space-y-2">
+                    {allMergedRecords.map((record) => {
+                      const isScheduled = isAppointmentScheduled(
+                        record.studentName,
+                        record.classDisplay,
+                        record.classNumber
+                      );
 
-            <SectionBlock
-              title="Öğretmen Yönlendirmeleri"
-              icon={Users}
-              count={filteredReferrals.length}
-              emptyText="Yönlendirme bulunamadı"
-            >
-              {filteredReferrals.map((referral) => (
-                <ReferralCard
-                  key={referral.id}
-                  referral={referral}
-                  isScheduled={isAppointmentScheduled(referral.student_name, referral.class_display, referral.class_key)}
-                  onEdit={() => handleEditSource("referral", { studentName: referral.student_name, classDisplay: referral.class_display || null })}
-                  onDelete={() => handleDeleteSource("referral", referral.id)}
-                />
-              ))}
-            </SectionBlock>
+                      let onEdit = () => {};
+                      let onDelete = () => {};
+                      let appointmentUrl = "";
 
-            <SectionBlock
-              title="Gözlem Havuzu"
-              icon={Eye}
-              count={filteredObservations.length}
-              emptyText="Gözlem kaydı bulunamadı"
-            >
-              {filteredObservations.map((observation) => (
-                <ObservationCard
-                  key={observation.id}
-                  observation={observation}
-                  isScheduled={isAppointmentScheduled(observation.student_name, observation.class_display, observation.class_key)}
-                  onEdit={() => handleEditSource("observation", { studentName: observation.student_name, classDisplay: observation.class_display || null })}
-                  onDelete={() => handleDeleteSource("observation", observation.id)}
-                />
-              ))}
-            </SectionBlock>
+                      if (record.type === "incident") {
+                        const incident = record.data;
+                        onEdit = () =>
+                          handleEditSource("incident", {
+                            id: incident.id,
+                            studentName: incident.target_student_name || "",
+                            classDisplay: incident.target_class_display || null,
+                          });
+                        onDelete = () => handleDeleteSource("incident", incident.id);
+                        appointmentUrl = buildAppointmentUrl(
+                          incident.target_student_name || "",
+                          incident.target_class_display || null,
+                          incident.target_class_key || null,
+                          incident.description
+                        );
+                      } else if (record.type === "referral") {
+                        const referral = record.data;
+                        onEdit = () =>
+                          handleEditSource("referral", {
+                            id: referral.id,
+                            studentName: referral.student_name,
+                            classDisplay: referral.class_display || null,
+                          });
+                        onDelete = () => handleDeleteSource("referral", referral.id);
+                        appointmentUrl = buildAppointmentUrl(
+                          referral.student_name,
+                          referral.class_display || null,
+                          referral.class_key || null,
+                          referral.note || referral.reason
+                        );
+                      } else if (record.type === "observation") {
+                        const observation = record.data;
+                        onEdit = () =>
+                          handleEditSource("observation", {
+                            id: observation.id,
+                            studentName: observation.student_name,
+                            classDisplay: observation.class_display || null,
+                          });
+                        onDelete = () => handleDeleteSource("observation", observation.id);
+                        appointmentUrl = buildAppointmentUrl(
+                          observation.student_name,
+                          observation.class_display || null,
+                          observation.class_key || null,
+                          observation.note
+                        );
+                      } else if (record.type === "request") {
+                        const request = record.data;
+                        onEdit = () =>
+                          handleEditSource("request", {
+                            id: request.id,
+                            studentName: request.student_name,
+                            classDisplay: request.class_display || null,
+                          });
+                        onDelete = () => handleDeleteSource("request", request.id);
+                        appointmentUrl = buildAppointmentUrl(
+                          request.student_name,
+                          request.class_display || null,
+                          request.class_key || null,
+                          request.detail
+                        );
+                      } else if (record.type === "individual") {
+                        const req = record.data;
+                        onEdit = () =>
+                          handleEditSource("individual-request", {
+                            id: req.id,
+                            studentName: req.student_name,
+                            classDisplay: req.class_display || null,
+                          });
+                        onDelete = () => handleDeleteSource("individual-request", req.id);
+                        appointmentUrl = buildAppointmentUrl(
+                          req.student_name,
+                          req.class_display || null,
+                          req.class_key || null,
+                          req.note
+                        );
+                      }
 
-            <SectionBlock
-              title="Veli Talepleri"
-              icon={PhoneCall}
-              count={filteredRequests.length}
-              emptyText="Veli talebi bulunamadı"
-            >
-              {filteredRequests.map((request) => (
-                <ParentRequestCard
-                  key={request.id}
-                  request={request}
-                  isScheduled={isAppointmentScheduled(request.student_name, request.class_display, request.class_key)}
-                  onEdit={() => handleEditSource("request", { studentName: request.student_name, classDisplay: request.class_display || null })}
-                  onDelete={() => handleDeleteSource("request", request.id)}
-                />
-              ))}
-            </SectionBlock>
-
-            <SectionBlock
-              title="Bireysel Başvurular"
-              icon={MessageSquare}
-              count={filteredIndividualRequests.length}
-              emptyText="Bireysel başvuru bulunamadı"
-            >
-              {filteredIndividualRequests.map((request) => (
-                <IndividualRequestCard
-                  key={request.id}
-                  request={request}
-                  isScheduled={isAppointmentScheduled(request.student_name, request.class_display, request.class_key)}
-                  onEdit={() => handleEditSource("individual-request", { studentName: request.student_name, classDisplay: request.class_display || null })}
-                  onDelete={() => handleDeleteSource("individual-request", request.id)}
-                />
-              ))}
-            </SectionBlock>
+                      return (
+                        <div key={record.id} className="relative">
+                          <StudentCard
+                            studentName={record.studentName}
+                            classDisplay={record.classDisplay}
+                            classNumber={record.classNumber}
+                            note={record.note}
+                            date={record.date}
+                            isScheduled={isScheduled}
+                            onClick={() => setSelectedItem(buildDetailModalItem(record.type, record.data))}
+                            onEdit={onEdit}
+                            onDelete={onDelete}
+                            appointmentUrl={appointmentUrl}
+                          />
+                          <Badge
+                            variant="outline"
+                            className="absolute -top-2 -right-2 text-xs bg-white"
+                          >
+                            {record.type === "incident" && "Öğrenci Bildirimi"}
+                            {record.type === "referral" && "Öğretmen Yönl."}
+                            {record.type === "observation" && "Gözlem"}
+                            {record.type === "request" && "Veli Talebi"}
+                            {record.type === "individual" && "Bireysel Başv."}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="incidents" className="mt-6">
@@ -786,15 +1014,28 @@ export default function PotansiyelGorusmelerPage() {
               count={filteredIncidents.length}
               emptyText="Bildirim bulunamadı"
             >
-              {filteredIncidents.map((incident) => (
-                <IncidentCard
-                  key={incident.id}
-                  incident={incident}
-                  isScheduled={isAppointmentScheduled(incident.target_student_name, incident.target_class_display, incident.target_class_key)}
-                  onEdit={() => handleEditSource("incident", { studentName: incident.target_student_name || "", classDisplay: incident.target_class_display || null })}
-                  onDelete={() => handleDeleteSource("incident", incident.id)}
-                />
-              ))}
+              <div className="space-y-2">
+                {filteredIncidents.map((incident) => (
+                  <StudentCard
+                    key={incident.id}
+                    studentName={incident.target_student_name || ""}
+                    classDisplay={incident.target_class_display}
+                    classNumber={incident.target_class_key}
+                    note={incident.description}
+                    date={incident.incident_date || incident.created_at}
+                    isScheduled={isAppointmentScheduled(incident.target_student_name, incident.target_class_display, incident.target_class_key)}
+                    onClick={() => setSelectedItem(buildDetailModalItem("incident", incident))}
+                    onEdit={() => handleEditSource("incident", { id: incident.id, studentName: incident.target_student_name || "", classDisplay: incident.target_class_display || null })}
+                    onDelete={() => handleDeleteSource("incident", incident.id)}
+                    appointmentUrl={buildAppointmentUrl(
+                      incident.target_student_name || "",
+                      incident.target_class_display || null,
+                      incident.target_class_key || null,
+                      incident.description
+                    )}
+                  />
+                ))}
+              </div>
             </SectionBlock>
           </TabsContent>
 
@@ -805,15 +1046,23 @@ export default function PotansiyelGorusmelerPage() {
               count={filteredReferrals.length}
               emptyText="Yönlendirme bulunamadı"
             >
-              {filteredReferrals.map((referral) => (
-                <ReferralCard
-                  key={referral.id}
-                  referral={referral}
-                  isScheduled={isAppointmentScheduled(referral.student_name, referral.class_display, referral.class_key)}
-                  onEdit={() => handleEditSource("referral", { studentName: referral.student_name, classDisplay: referral.class_display || null })}
-                  onDelete={() => handleDeleteSource("referral", referral.id)}
-                />
-              ))}
+              <div className="space-y-2">
+                {filteredReferrals.map((referral) => (
+                  <StudentCard
+                    key={referral.id}
+                    studentName={referral.student_name}
+                    classDisplay={referral.class_display}
+                    classNumber={referral.class_key}
+                    note={referral.reason || referral.note}
+                    date={referral.created_at}
+                    isScheduled={isAppointmentScheduled(referral.student_name, referral.class_display, referral.class_key)}
+                    onClick={() => setSelectedItem(buildDetailModalItem("referral", referral))}
+                    onEdit={() => handleEditSource("referral", { id: referral.id, studentName: referral.student_name, classDisplay: referral.class_display || null })}
+                    onDelete={() => handleDeleteSource("referral", referral.id)}
+                    appointmentUrl={buildAppointmentUrl(referral.student_name, referral.class_display || null, referral.class_key || null, referral.note || referral.reason)}
+                  />
+                ))}
+              </div>
             </SectionBlock>
           </TabsContent>
 
@@ -824,15 +1073,23 @@ export default function PotansiyelGorusmelerPage() {
               count={filteredObservations.length}
               emptyText="Gözlem kaydı bulunamadı"
             >
-              {filteredObservations.map((observation) => (
-                <ObservationCard
-                  key={observation.id}
-                  observation={observation}
-                  isScheduled={isAppointmentScheduled(observation.student_name, observation.class_display, observation.class_key)}
-                  onEdit={() => handleEditSource("observation", { studentName: observation.student_name, classDisplay: observation.class_display || null })}
-                  onDelete={() => handleDeleteSource("observation", observation.id)}
-                />
-              ))}
+              <div className="space-y-2">
+                {filteredObservations.map((observation) => (
+                  <StudentCard
+                    key={observation.id}
+                    studentName={observation.student_name}
+                    classDisplay={observation.class_display}
+                    classNumber={observation.student_number || observation.class_key}
+                    note={observation.note}
+                    date={observation.observed_at || observation.created_at}
+                    isScheduled={isAppointmentScheduled(observation.student_name, observation.class_display, observation.class_key)}
+                    onClick={() => setSelectedItem(buildDetailModalItem("observation", observation))}
+                    onEdit={() => handleEditSource("observation", { id: observation.id, studentName: observation.student_name, classDisplay: observation.class_display || null })}
+                    onDelete={() => handleDeleteSource("observation", observation.id)}
+                    appointmentUrl={buildAppointmentUrl(observation.student_name, observation.class_display || null, observation.class_key || null, observation.note)}
+                  />
+                ))}
+              </div>
             </SectionBlock>
           </TabsContent>
 
@@ -843,15 +1100,23 @@ export default function PotansiyelGorusmelerPage() {
               count={filteredRequests.length}
               emptyText="Veli talebi bulunamadı"
             >
-              {filteredRequests.map((request) => (
-                <ParentRequestCard
-                  key={request.id}
-                  request={request}
-                  isScheduled={isAppointmentScheduled(request.student_name, request.class_display, request.class_key)}
-                  onEdit={() => handleEditSource("request", { studentName: request.student_name, classDisplay: request.class_display || null })}
-                  onDelete={() => handleDeleteSource("request", request.id)}
-                />
-              ))}
+              <div className="space-y-2">
+                {filteredRequests.map((request) => (
+                  <StudentCard
+                    key={request.id}
+                    studentName={request.student_name}
+                    classDisplay={request.class_display}
+                    classNumber={request.class_key}
+                    note={request.subject || request.detail}
+                    date={request.created_at}
+                    isScheduled={isAppointmentScheduled(request.student_name, request.class_display, request.class_key)}
+                    onClick={() => setSelectedItem(buildDetailModalItem("request", request))}
+                    onEdit={() => handleEditSource("request", { id: request.id, studentName: request.student_name, classDisplay: request.class_display || null })}
+                    onDelete={() => handleDeleteSource("request", request.id)}
+                    appointmentUrl={buildAppointmentUrl(request.student_name, request.class_display || null, request.class_key || null, request.detail)}
+                  />
+                ))}
+              </div>
             </SectionBlock>
           </TabsContent>
 
@@ -862,15 +1127,23 @@ export default function PotansiyelGorusmelerPage() {
               count={filteredIndividualRequests.length}
               emptyText="Bireysel başvuru bulunamadı"
             >
-              {filteredIndividualRequests.map((request) => (
-                <IndividualRequestCard
-                  key={request.id}
-                  request={request}
-                  isScheduled={isAppointmentScheduled(request.student_name, request.class_display, request.class_key)}
-                  onEdit={() => handleEditSource("individual-request", { id: request.id, studentName: request.student_name, classDisplay: request.class_display || null })}
-                  onDelete={() => handleDeleteSource("individual-request", request.id)}
-                />
-              ))}
+              <div className="space-y-2">
+                {filteredIndividualRequests.map((request) => (
+                  <StudentCard
+                    key={request.id}
+                    studentName={request.student_name}
+                    classDisplay={request.class_display}
+                    classNumber={request.class_key}
+                    note={request.note}
+                    date={request.request_date || request.created_at}
+                    isScheduled={isAppointmentScheduled(request.student_name, request.class_display, request.class_key)}
+                    onClick={() => setSelectedItem(buildDetailModalItem("individual", request))}
+                    onEdit={() => handleEditSource("individual-request", { id: request.id, studentName: request.student_name, classDisplay: request.class_display || null })}
+                    onDelete={() => handleDeleteSource("individual-request", request.id)}
+                    appointmentUrl={buildAppointmentUrl(request.student_name, request.class_display || null, request.class_key || null, request.note)}
+                  />
+                ))}
+              </div>
             </SectionBlock>
           </TabsContent>
 
@@ -1058,7 +1331,16 @@ export default function PotansiyelGorusmelerPage() {
             </Card>
           </TabsContent>
         </Tabs>
+
       )}
+
+      <DetailModal
+        open={Boolean(selectedItem)}
+        item={selectedItem}
+        onOpenChange={(open) => {
+          if (!open) setSelectedItem(null);
+        }}
+      />
     </div>
   );
 }
@@ -1089,282 +1371,5 @@ function SectionBlock({
         {count === 0 ? <p className="py-8 text-center text-slate-500">{emptyText}</p> : children}
       </CardContent>
     </Card>
-  );
-}
-
-function IncidentCard({
-  incident,
-  onEdit,
-  onDelete,
-  isScheduled = false
-}: {
-  incident: StudentIncidentRecord;
-  onEdit: () => void;
-  onDelete: () => void;
-  isScheduled?: boolean;
-}) {
-  const isLinkedReporter = incident.record_role === "linked_reporter";
-  const roleLabel = isLinkedReporter ? "Bildirimi yapan" : "Hakkında bildirim yapılan";
-  const roleBadgeClass = isLinkedReporter
-    ? "border-emerald-200 bg-emerald-100 text-emerald-700"
-    : "border-orange-200 bg-orange-100 text-orange-700";
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-semibold text-slate-800">{incident.target_student_name}</h3>
-            <Badge variant="outline" className={roleBadgeClass}>{roleLabel}</Badge>
-            <div className="w-full sm:ml-auto sm:w-auto">
-              <AppointmentButton
-                href={buildAppointmentUrl(
-                  incident.target_student_name,
-                  incident.target_class_display || null,
-                  incident.target_class_key || null,
-                  incident.description
-                )}
-                isScheduled={isScheduled}
-              />
-            </div>
-          </div>
-          <p className="mt-2 text-sm leading-6 text-slate-700">{incident.description}</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onEdit}
-            >
-              <Edit2 className="mr-2 h-4 w-4" />
-              Düzenle
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onDelete}
-              className="text-red-600 hover:bg-red-50"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Sil
-            </Button>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge variant="outline">
-            <Clock className="mr-1 h-3.5 w-3.5" />
-            {formatDateTime(incident.created_at || incident.incident_date)}
-          </Badge>
-          {incident.is_confidential && <Badge variant="destructive">Gizli</Badge>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ReferralCard({
-  referral,
-  onEdit,
-  onDelete,
-  isScheduled = false
-}: {
-  referral: ReferralRecord;
-  onEdit: () => void;
-  onDelete: () => void;
-  isScheduled?: boolean;
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-semibold text-slate-800">{referral.student_name}</h3>
-            <Badge variant="outline">Öğretmen yönlendirmesi</Badge>
-            <div className="w-full sm:ml-auto sm:w-auto">
-              <AppointmentButton href={buildAppointmentUrl(referral.student_name, referral.class_display || null, referral.class_key || null, referral.note || referral.reason)} isScheduled={isScheduled} />
-            </div>
-          </div>
-          <p className="mt-2 text-sm text-slate-600">
-            {referral.teacher_name} - {referral.class_display}
-          </p>
-          <p className="mt-2 text-sm leading-6 text-slate-700">{referral.reason}</p>
-          {referral.note && <p className="mt-2 text-xs text-slate-500">Not: {referral.note}</p>}
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={onEdit}>
-              <Edit2 className="mr-2 h-4 w-4" />
-              Düzenle
-            </Button>
-            <Button size="sm" variant="outline" onClick={onDelete} className="text-red-600 hover:bg-red-50">
-              <Trash2 className="mr-2 h-4 w-4" />
-              Sil
-            </Button>
-          </div>
-        </div>
-        <Badge variant="outline">
-          <Calendar className="mr-1 h-3.5 w-3.5" />
-          {formatDateTime(referral.created_at)}
-        </Badge>
-      </div>
-    </div>
-  );
-}
-
-function ObservationCard({
-  observation,
-  onEdit,
-  onDelete,
-  isScheduled = false
-}: {
-  observation: ObservationPoolRecord;
-  onEdit: () => void;
-  onDelete: () => void;
-  isScheduled?: boolean;
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-semibold text-slate-800">{observation.student_name}</h3>
-            <Badge variant="outline">
-              {OBSERVATION_TYPES.find((item) => item.value === observation.observation_type)?.label}
-            </Badge>
-            <Badge variant="outline">
-              {OBSERVATION_PRIORITIES.find((item) => item.value === observation.priority)?.label}
-            </Badge>
-            <Badge variant="outline">
-              {OBSERVATION_STATUSES.find((item) => item.value === observation.status)?.label}
-            </Badge>
-            <div className="w-full sm:ml-auto sm:w-auto">
-              <AppointmentButton href={buildAppointmentUrl(observation.student_name, observation.class_display || null, observation.class_key || null, observation.note)} isScheduled={isScheduled} />
-            </div>
-          </div>
-          <p className="mt-2 text-sm text-slate-600">
-            {observation.class_display || observation.class_key || "-"}{observation.student_number ? ` - ${observation.student_number}` : ""}
-          </p>
-          <p className="mt-2 text-sm leading-6 text-slate-700">{observation.note}</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={onEdit}>
-              <Edit2 className="mr-2 h-4 w-4" />
-              Düzenle
-            </Button>
-            <Button size="sm" variant="outline" onClick={onDelete} className="text-red-600 hover:bg-red-50">
-              <Trash2 className="mr-2 h-4 w-4" />
-              Sil
-            </Button>
-          </div>
-        </div>
-        <Badge variant="outline">
-          <Clock className="mr-1 h-3.5 w-3.5" />
-          {formatDateTime(observation.observed_at)}
-        </Badge>
-      </div>
-    </div>
-  );
-}
-
-function ParentRequestCard({
-  request,
-  onEdit,
-  onDelete,
-  isScheduled = false
-}: {
-  request: ParentMeetingRequestRecord;
-  onEdit: () => void;
-  onDelete: () => void;
-  isScheduled?: boolean;
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-semibold text-slate-800">{request.student_name}</h3>
-            <Badge variant="outline">
-              {PARENT_REQUEST_STATUSES.find((item) => item.value === request.status)?.label || request.status}
-            </Badge>
-            <div className="w-full sm:ml-auto sm:w-auto">
-              <AppointmentButton href={buildAppointmentUrl(request.student_name, request.class_display || null, request.class_key || null, request.detail)} isScheduled={isScheduled} />
-            </div>
-          </div>
-          <p className="mt-2 text-sm text-slate-600">
-            {request.class_display || request.class_key || "-"}
-            {request.parent_name ? ` - ${request.parent_name}` : ""}
-          </p>
-          <p className="mt-2 text-sm leading-6 text-slate-700">{request.subject}</p>
-          <p className="mt-1 text-sm text-slate-500">{request.detail}</p>
-          {request.preferred_contact && (
-            <p className="mt-2 text-xs text-slate-500">Tercih edilen iletişim: {request.preferred_contact}</p>
-          )}
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={onEdit}>
-              <Edit2 className="mr-2 h-4 w-4" />
-              Düzenle
-            </Button>
-            <Button size="sm" variant="outline" onClick={onDelete} className="text-red-600 hover:bg-red-50">
-              <Trash2 className="mr-2 h-4 w-4" />
-              Sil
-            </Button>
-          </div>
-        </div>
-        <Badge variant="outline">
-          <Clock className="mr-1 h-3.5 w-3.5" />
-          {formatDateTime(request.created_at)}
-        </Badge>
-      </div>
-    </div>
-  );
-}
-
-function IndividualRequestCard({
-  request,
-  onEdit,
-  onDelete,
-  isScheduled = false
-}: {
-  request: IndividualRequestRecord;
-  onEdit: () => void;
-  onDelete: () => void;
-  isScheduled?: boolean;
-}) {
-  const formatDate = (value?: string | null) => {
-    if (!value) return "-";
-    return new Date(value).toLocaleDateString("tr-TR", {
-      year: "numeric",
-      month: "short",
-      day: "2-digit"
-    });
-  };
-
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-semibold text-slate-800">{request.student_name}</h3>
-            <Badge variant="outline">Bireysel başvuru</Badge>
-            <div className="w-full sm:ml-auto sm:w-auto">
-              <AppointmentButton href={buildAppointmentUrl(request.student_name, request.class_display || null, request.class_key || null, request.note)} isScheduled={isScheduled} />
-            </div>
-          </div>
-          <p className="mt-2 text-sm text-slate-600">
-            {request.class_display || request.class_key || "Sınıf bilinmiyor"}
-          </p>
-          {request.note && <p className="mt-2 text-sm leading-6 text-slate-700">{request.note}</p>}
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={onEdit}>
-              <Edit2 className="mr-2 h-4 w-4" />
-              Düzenle
-            </Button>
-            <Button size="sm" variant="outline" onClick={onDelete} className="text-red-600 hover:bg-red-50">
-              <Trash2 className="mr-2 h-4 w-4" />
-              Sil
-            </Button>
-          </div>
-        </div>
-        <Badge variant="outline">
-          <Calendar className="mr-1 h-3.5 w-3.5" />
-          {formatDate(request.request_date)}
-        </Badge>
-      </div>
-    </div>
   );
 }

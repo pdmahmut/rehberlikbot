@@ -447,7 +447,7 @@ export default function RandevuRaporlariPage() {
       );
     }
 
-    return filtered.sort((a, b) => new Date(b.appointment_date).getTime() - new Date(a.appointment_date).getTime());
+    return filtered.sort((a, b) => new Date(b.created_at || b.appointment_date).getTime() - new Date(a.created_at || a.appointment_date).getTime());
   }, [filteredByDate, activeTab, searchTerm]);
 
   // İstatistikler

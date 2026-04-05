@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Plus, Loader2, CheckCircle2, Eye } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 type StudentSuggestion = { value: string; text: string; class_display?: string; class_key?: string };
 
@@ -15,7 +17,9 @@ const emptyForm = {
   class_display: "",
   class_key: "",
   observed_at: new Date().toISOString().slice(0, 10),
-  note: ""
+  note: "",
+  observation_type: "behavior",
+  priority: "medium"
 };
 
 const formatErrorMessage = (error: unknown) => {
@@ -25,7 +29,10 @@ const formatErrorMessage = (error: unknown) => {
 };
 
 export default function GozlemHavuzuPage() {
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("editId");
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({ ...emptyForm });
   const [studentSuggestions, setStudentSuggestions] = useState<StudentSuggestion[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -63,6 +70,49 @@ export default function GozlemHavuzuPage() {
     };
   }, [activeStudentQuery]);
 
+  useEffect(() => {
+    if (!editId) {
+      resetForm();
+      return;
+    }
+
+    let cancelled = false;
+    const loadEditData = async () => {
+      setLoading(true);
+      try {
+        const { data: observation, error } = await supabase
+          .from("observation_pool")
+          .select("*")
+          .eq("id", editId)
+          .single();
+
+        if (error) throw error;
+        if (cancelled) return;
+
+        setFormData({
+          student_name: observation.student_name || "",
+          class_display: observation.class_display || "",
+          class_key: observation.class_key || "",
+          observed_at:
+            observation.observed_at || observation.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+          note: observation.note || "",
+          observation_type: observation.observation_type || "behavior",
+          priority: observation.priority || "medium"
+        });
+      } catch (error) {
+        console.error("Gözlem edit verisi yüklenemedi:", error);
+        toast.error("Düzenlenecek gözlem yüklenemedi");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadEditData();
+    return () => {
+      cancelled = true;
+    };
+  }, [editId]);
+
   const selectSuggestion = (student: StudentSuggestion) => {
     setFormData((prev) => ({
       ...prev,
@@ -88,17 +138,19 @@ export default function GozlemHavuzuPage() {
 
     try {
       setSaving(true);
+      const isEdit = !!editId;
       const res = await fetch("/api/gozlem-havuzu", {
-        method: "POST",
+        method: isEdit ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(isEdit ? { id: editId } : {}),
           student_name: formData.student_name.trim(),
           class_key: formData.class_key || null,
           class_display: formData.class_display || null,
           observed_at: formData.observed_at,
           note: formData.note || null,
-          observation_type: "behavior",
-          priority: "medium"
+          observation_type: formData.observation_type,
+          priority: formData.priority
         })
       });
 
@@ -108,7 +160,7 @@ export default function GozlemHavuzuPage() {
       }
 
       resetForm();
-      toast.success("Gözlem başarıyla eklendi");
+      toast.success(isEdit ? "Gözlem başarıyla güncellendi" : "Gözlem başarıyla eklendi");
     } catch (error) {
       console.error(`Gözlem eklenirken hata: ${formatErrorMessage(error)}`);
       toast.error(formatErrorMessage(error));
@@ -139,7 +191,7 @@ export default function GozlemHavuzuPage() {
         <CardHeader className="bg-gradient-to-r from-cyan-50 to-teal-50 border-b">
           <CardTitle className="text-lg flex items-center gap-2">
             <Eye className="h-5 w-5 text-cyan-600" />
-            Yeni Gözlem Ekle
+            {editId ? "Gözlem Düzenle" : "Yeni Gözlem Ekle"}
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-6">
@@ -207,18 +259,18 @@ export default function GozlemHavuzuPage() {
           <div className="flex gap-2 mt-6">
             <Button
               onClick={handleSave}
-              disabled={saving || !formData.student_name.trim()}
+              disabled={saving || loading || !formData.student_name.trim()}
               className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white"
             >
               {saving ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Ekleniyor...
+                  {editId ? "Güncelleniyor..." : "Ekleniyor..."}
                 </>
               ) : (
                 <>
                   <Plus className="h-4 w-4 mr-2" />
-                  Gözlem Ekle
+                  {editId ? "Gözlem Güncelle" : "Gözlem Ekle"}
                 </>
               )}
             </Button>

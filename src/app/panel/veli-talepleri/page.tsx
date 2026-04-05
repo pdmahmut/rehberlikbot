@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Plus, Loader2, CheckCircle2, PhoneCall } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 type StudentSuggestion = { value: string; text: string; class_display?: string; class_key?: string };
 
@@ -26,7 +28,10 @@ const formatErrorMessage = (error: unknown) => {
 };
 
 export default function VeliTalepleriPage() {
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("editId");
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({ ...emptyForm });
   const [studentSuggestions, setStudentSuggestions] = useState<StudentSuggestion[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -62,6 +67,48 @@ export default function VeliTalepleriPage() {
     return () => { cancelled = true; };
   }, [activeStudentQuery]);
 
+  useEffect(() => {
+    if (!editId) {
+      resetForm();
+      return;
+    }
+
+    let cancelled = false;
+    const loadEditData = async () => {
+      setLoading(true);
+      try {
+        const { data: request, error } = await supabase
+          .from("parent_meeting_requests")
+          .select("*")
+          .eq("id", editId)
+          .single();
+
+        if (error) throw error;
+        if (cancelled) return;
+
+        setFormData({
+          student_name: request.student_name || "",
+          class_display: request.class_display || "",
+          class_key: request.class_key || "",
+          parent_name: request.parent_name || "",
+          request_date:
+            request.request_date || request.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+          note: request.note || request.detail || ""
+        });
+      } catch (error) {
+        console.error("Veli talebi edit verisi yüklenemedi:", error);
+        toast.error("Düzenlenecek veli talebi yüklenemedi");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadEditData();
+    return () => {
+      cancelled = true;
+    };
+  }, [editId]);
+
   const selectSuggestion = (student: StudentSuggestion) => {
     setFormData((prev) => ({
       ...prev,
@@ -87,15 +134,19 @@ export default function VeliTalepleriPage() {
 
     try {
       setSaving(true);
+      const isEdit = !!editId;
       const res = await fetch("/api/parent-meeting-requests", {
-        method: "POST",
+        method: isEdit ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(isEdit ? { id: editId } : {}),
           student_name: formData.student_name.trim(),
           class_key: formData.class_key || null,
           class_display: formData.class_display || null,
+          parent_name: formData.parent_name || null,
           request_date: formData.request_date,
-          note: formData.note
+          note: formData.note || null,
+          subject: formData.note
             ? `Veli Talebi${formData.parent_name ? ` (${formData.parent_name})` : ""}: ${formData.note}`
             : formData.parent_name
             ? `Veli Talebi (${formData.parent_name})`
@@ -110,7 +161,7 @@ export default function VeliTalepleriPage() {
       }
 
       resetForm();
-      toast.success("Veli talebi başarıyla eklendi");
+      toast.success(isEdit ? "Veli talebi başarıyla güncellendi" : "Veli talebi başarıyla eklendi");
     } catch (error) {
       console.error(`Veli talebi eklenirken hata: ${formatErrorMessage(error)}`);
       toast.error(formatErrorMessage(error));
@@ -140,7 +191,7 @@ export default function VeliTalepleriPage() {
         <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
           <CardTitle className="text-lg flex items-center gap-2">
             <PhoneCall className="h-5 w-5 text-green-600" />
-            Yeni Veli Talebi Ekle
+            {editId ? "Veli Talebi Düzenle" : "Yeni Veli Talebi Ekle"}
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-6">
@@ -218,18 +269,18 @@ export default function VeliTalepleriPage() {
           <div className="flex gap-2 mt-6">
             <Button
               onClick={handleSave}
-              disabled={saving || !formData.student_name.trim()}
+              disabled={saving || loading || !formData.student_name.trim()}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white"
             >
               {saving ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Ekleniyor...
+                  {editId ? "Güncelleniyor..." : "Ekleniyor..."}
                 </>
               ) : (
                 <>
                   <Plus className="h-4 w-4 mr-2" />
-                  Veli Talebi Ekle
+                  {editId ? "Veli Talebi Güncelle" : "Veli Talebi Ekle"}
                 </>
               )}
             </Button>

@@ -1,12 +1,14 @@
-﻿"use client";
+﻿﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Loader2, CheckCircle2, MessageSquare, User, Users } from "lucide-react";
+import { Plus, Loader2, CheckCircle2, MessageSquare, User, Users, Edit2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 type StudentSuggestion = { value: string; text: string; class_display?: string; class_key?: string };
 
@@ -29,6 +31,12 @@ const formatErrorMessage = (error: unknown) => {
 };
 
 export default function OgrenciBildirimleriPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const editId = searchParams.get('editId');
+  const referer = searchParams.get('referer');
+
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({ ...emptyForm });
   const [reporterSuggestions, setReporterSuggestions] = useState<StudentSuggestion[]>([]);
@@ -122,6 +130,46 @@ export default function OgrenciBildirimleriPage() {
     setActiveField(null);
   };
 
+  // Edit modu için veri yükleme
+  useEffect(() => {
+    if (editId) {
+      const fetchEditData = async () => {
+        setLoading(true);
+        try {
+          const { data: record, error } = await supabase
+            .from('student_incidents')
+            .select('*')
+            .eq('id', editId)
+            .single();
+
+          if (error) throw error;
+
+          if (record) {
+            setFormData({
+              reporter_student_name: record.reporter_student_name || "",
+              reporter_class_display: record.reporter_class_display || "",
+              reporter_class_key: record.reporter_class_key || "",
+              target_student_name: record.target_student_name || "",
+              target_class_display: record.target_class_display || "",
+              target_class_key: record.target_class_key || "",
+              incident_date: record.incident_date || record.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+              note: record.description || record.note || "",
+              wants_meeting: record.wants_meeting || false
+            });
+          }
+        } catch (error) {
+          console.error('Edit verisi yüklenirken hata:', error);
+          toast.error('Düzenlenecek kayıt yüklenemedi');
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchEditData();
+    } else {
+      resetForm();
+    }
+  }, [editId]);
+
   const resetForm = () => {
     setFormData({ ...emptyForm });
     setReporterSuggestions([]);
@@ -137,12 +185,14 @@ export default function OgrenciBildirimleriPage() {
 
     try {
       setSaving(true);
+      const isEdit = !!editId;
 
       // Bildirimi kaydet
       const incidentRes = await fetch("/api/student-incidents", {
-        method: "POST",
+        method: isEdit ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: editId,
           reporter_student_name: formData.reporter_student_name.trim(),
           reporter_class_key: formData.reporter_class_key || null,
           reporter_class_display: formData.reporter_class_display || null,
@@ -161,7 +211,7 @@ export default function OgrenciBildirimleriPage() {
       }
 
       // Eğer görüşme isteniyorsa bireysel başvuruyu da kaydet
-      if (formData.wants_meeting) {
+      if (formData.wants_meeting && !isEdit) {
         const requestRes = await fetch("/api/individual-requests", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -184,6 +234,15 @@ export default function OgrenciBildirimleriPage() {
 
       resetForm();
       toast.success("Kaydedildi");
+
+      if (isEdit) {
+        if (referer === 'potansiyel-gorusmeler') {
+          router.push('/panel/potansiyel-gorusmeler');
+        } else {
+          window.history.replaceState(null, '', '/panel/ogrenci-bildirimleri');
+          router.refresh();
+        }
+      }
     } catch (error) {
       console.error("Kaydedilirken hata:", error);
       toast.error(formatErrorMessage(error));
@@ -213,11 +272,18 @@ export default function OgrenciBildirimleriPage() {
       <Card className="border-0 shadow-lg">
         <CardHeader className="bg-gradient-to-r from-rose-50 to-pink-50 border-b">
           <CardTitle className="text-lg flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-rose-600" />
-            Yeni Öğrenci Bildirimi Ekle
+            {editId ? <Edit2 className="h-5 w-5 text-rose-600" /> : <MessageSquare className="h-5 w-5 text-rose-600" />}
+            {editId ? "Bildirimi Düzenle" : "Yeni Öğrenci Bildirimi Ekle"}
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-6">
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-rose-500" />
+              <span className="ml-2 text-slate-600">Veri yükleniyor...</span>
+            </div>
+          ) : (
+          <>
           <div className="grid gap-4 md:grid-cols-2">
             {/* Bildiren Öğrenci */}
             <div className="relative">
@@ -365,6 +431,8 @@ export default function OgrenciBildirimleriPage() {
               </div>
             </div>
           )}
+          </>
+          )}
         </CardContent>
 
         {/* Form Butonları */}
@@ -377,12 +445,12 @@ export default function OgrenciBildirimleriPage() {
             {saving ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Ekleniyor...
+                {editId ? "Güncelleniyor..." : "Ekleniyor..."}
               </>
             ) : (
               <>
-                <Plus className="h-4 w-4 mr-2" />
-                Kaydet
+                {editId ? <Edit2 className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                {editId ? "Değişiklikleri Kaydet" : "Kaydet"}
               </>
             )}
           </Button>
