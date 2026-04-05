@@ -102,12 +102,6 @@ const menuCategories: MenuCategory[] = [
     title: "Öğrenci Takip",
     items: [
       {
-        href: "/panel/ogrenci-yonlendirmesi",
-        label: "Öğrenci Yönlendirmesi",
-        icon: Sparkles,
-        color: "purple"
-      },
-      {
         href: "/panel/potansiyel-gorusmeler",
         label: "Potansiyel Görüşmeler",
         icon: MessageSquare,

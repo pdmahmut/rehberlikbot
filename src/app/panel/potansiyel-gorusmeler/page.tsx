@@ -30,6 +30,32 @@ import {
 
 type SourceTab = "all" | "incidents" | "referrals" | "observations" | "requests" | "individual-requests" | "applications" | "appointments";
 
+type SourceTabOption = {
+  value: SourceTab;
+  label: string;
+};
+
+const POTENTIAL_MEETINGS_TABS: SourceTabOption[] = [
+  { value: "all", label: "Tümü" },
+  { value: "incidents", label: "Öğrenci Bildirimleri" },
+  { value: "referrals", label: "Öğretmen Yönlendirmeleri" },
+  { value: "observations", label: "Gözlem Havuzu" },
+  { value: "requests", label: "Veli Talepleri" },
+  { value: "individual-requests", label: "Bireysel Başvurular" },
+  { value: "applications", label: "Başvurular" },
+  { value: "appointments", label: "Randevular" },
+];
+
+const VISIBLE_POTENTIAL_MEETINGS_TABS = POTENTIAL_MEETINGS_TABS.filter(
+  (tab) => tab.value !== "applications" && tab.value !== "appointments"
+);
+
+const POTENTIAL_MEETINGS_TAB_TRIGGER_CLASSES =
+  "inline-flex items-center justify-center whitespace-nowrap rounded-2xl px-3 py-2 text-sm font-semibold transition-all duration-200 " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 " +
+  "hover:bg-slate-200/70 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm data-[state=active]:border-b-2 data-[state=active]:border-slate-900 " +
+  "data-[state=inactive]:text-slate-500/70";
+
 type ApplicationRecord = {
   id: string;
   student_name: string;
@@ -658,15 +684,12 @@ export default function PotansiyelGorusmelerPage() {
         </Card>
       ) : (
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as SourceTab)}>
-          <TabsList className="grid h-auto w-full grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-2 md:grid-cols-8">
-            <TabsTrigger value="all">Tümü</TabsTrigger>
-            <TabsTrigger value="incidents">Öğrenci Bildirimleri</TabsTrigger>
-            <TabsTrigger value="referrals">Öğretmen Yönlendirmeleri</TabsTrigger>
-            <TabsTrigger value="observations">Gözlem Havuzu</TabsTrigger>
-            <TabsTrigger value="requests">Veli Talepleri</TabsTrigger>
-            <TabsTrigger value="individual-requests">Bireysel Başvurular</TabsTrigger>
-            <TabsTrigger value="applications">Başvurular</TabsTrigger>
-            <TabsTrigger value="appointments">Randevular</TabsTrigger>
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-2 md:grid-cols-6">
+            {VISIBLE_POTENTIAL_MEETINGS_TABS.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value} className={POTENTIAL_MEETINGS_TAB_TRIGGER_CLASSES}>
+                {tab.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           <TabsContent value="all" className="mt-6 space-y-4">

@@ -143,6 +143,16 @@ const resolveStudentPrefill = async (studentName: string) => {
     const res = await fetch(`/api/students?query=${encodeURIComponent(studentName)}`, {
       headers: { Accept: "application/json" }
     });
+
+    // Debug için response içeriğini kontrol et
+    const responseText = await res.clone().text();
+    console.log("Students API Response:", {
+      status: res.status,
+      statusText: res.statusText,
+      contentType: res.headers.get("content-type"),
+      body: responseText.slice(0, 500)
+    });
+
     if (!res.ok) {
       const errorText = await parseResponseError(res);
       console.error("Öğrenci API hatası:", errorText);

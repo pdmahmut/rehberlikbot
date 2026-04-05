@@ -13,8 +13,9 @@ import { Badge } from "@/components/ui/badge";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
 
-import { SinifSube, Ogrenci, YONLENDIRME_KATEGORILERI } from "@/types";
+import { parseJsonResponse, parseResponseError } from "@/lib/utils";
 import { normalizeGuidanceStudent, notifyGuidanceReferralsChanged } from "@/lib/guidance";
+import { YONLENDIRME_KATEGORILERI } from "@/types";
 
 const formSchema = z.object({
   ogretmenAdi: z.string().min(2, "Öğretmen adı en az 2 karakter olmalıdır"),
@@ -57,12 +58,17 @@ export default function RPDYonlendirme() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('/api/data');
-        const data = await response.json();
+        const response = await fetch('/api/data', {
+          headers: { Accept: "application/json" }
+        });
+        const data = await parseJsonResponse<any>(response);
         setSinifSubeList(data.sinifSubeList);
+
         // load teachers
-        const tRes = await fetch('/api/teachers');
-        const tJson = await tRes.json();
+        const tRes = await fetch('/api/teachers', {
+          headers: { Accept: "application/json" }
+        });
+        const tJson = await parseJsonResponse<any>(tRes);
         if (tJson && Array.isArray(tJson.teachers)) setTeacherOptions(tJson.teachers);
         setLoading(false);
       } catch (error) {
@@ -83,8 +89,10 @@ export default function RPDYonlendirme() {
       // URL encode yaparak # karakterinin düzgün gönderilmesini sağla
       const encodedSinifSube = encodeURIComponent(sinifSube);
       console.log('📤 API çağrısı:', `/api/students?sinifSube=${encodedSinifSube}`);
-      const response = await fetch(`/api/students?sinifSube=${encodedSinifSube}`);
-      const data = await response.json();
+      const response = await fetch(`/api/students?sinifSube=${encodedSinifSube}`, {
+        headers: { Accept: "application/json" }
+      });
+      const data = await parseJsonResponse<any>(response);
       console.log('📚 API Yanıtı:', Array.isArray(data) ? `${data.length} öğrenci` : typeof data, data);
       // API'den gelen verinin array olduğundan emin ol
       const ogrenciArray = Array.isArray(data) ? data : [];
@@ -138,11 +146,12 @@ export default function RPDYonlendirme() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         body: JSON.stringify({ students }),
       });
 
-      const result = await response.json();
+      const result = await parseJsonResponse<any>(response);
 
       if (response.ok && result.success) {
         if (result.telegram && result.sheets) {

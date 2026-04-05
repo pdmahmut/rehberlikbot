@@ -59,9 +59,7 @@ export default function VeliTalepleriPage() {
     };
 
     loadSuggestions();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [activeStudentQuery]);
 
   const selectSuggestion = (student: StudentSuggestion) => {
@@ -96,12 +94,12 @@ export default function VeliTalepleriPage() {
           student_name: formData.student_name.trim(),
           class_key: formData.class_key || null,
           class_display: formData.class_display || null,
-          parent_name: formData.parent_name || null,
           request_date: formData.request_date,
-          note: formData.note || null,
-          request_type: "gorusme",
-          subject: "Veli talebi",
-          detail: formData.note || "",
+          note: formData.note
+            ? `Veli Talebi${formData.parent_name ? ` (${formData.parent_name})` : ""}: ${formData.note}`
+            : formData.parent_name
+            ? `Veli Talebi (${formData.parent_name})`
+            : "Veli talebi",
           status: "new"
         })
       });
@@ -127,7 +125,6 @@ export default function VeliTalepleriPage() {
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 via-slate-900 to-zinc-900 p-6 text-white shadow-xl">
         <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-green-500/20 blur-3xl" />
         <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-emerald-500/20 blur-3xl" />
-
         <div className="relative">
           <div className="flex items-center justify-between">
             <div>
@@ -236,26 +233,25 @@ export default function VeliTalepleriPage() {
                 </>
               )}
             </Button>
-            <Button
-              onClick={resetForm}
-              variant="outline"
-              className="flex-1"
-            >
+            <Button onClick={resetForm} variant="outline" className="flex-1">
               Temizle
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Başarı mesajı */}
+      {/* Bilgi mesajı */}
       <div className="text-center py-8">
         <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
           <CheckCircle2 className="h-5 w-5 text-green-600" />
           <span className="text-sm text-green-700">
-            Veli talepleri potansiyel görüşmeler sekmesindeki "Veli Talepleri" bölümünden takip edilebilir
+            Veli talepleri bireysel başvurular bölümünden takip edilebilir
           </span>
         </div>
       </div>
     </div>
   );
 }
+
+
+
