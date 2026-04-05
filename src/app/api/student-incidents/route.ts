@@ -73,7 +73,51 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
 
+    if (!id) {
+      return NextResponse.json(
+        { error: 'ID parametresi gereklidir' },
+        { status: 400 }
+      );
+    }
+
+    if (!supabase) {
+      return NextResponse.json(
+        { error: 'Veritabanı bağlantısı yok' },
+        { status: 500 }
+      );
+    }
+
+    const { error } = await supabase
+      .from('student_incidents')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Student incident delete error:', error);
+      return NextResponse.json(
+        { error: 'Bildirim silinemedi: ' + error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Bildirim başarıyla silindi'
+    });
+
+  } catch (error) {
+    console.error('Student incidents DELETE API error:', error);
+    return NextResponse.json(
+      { error: 'Sunucu hatası' },
+      { status: 500 }
+    );
+  }
+}
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

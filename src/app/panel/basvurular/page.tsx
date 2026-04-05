@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
-import { MessageSquare, Search, Loader2, Filter, X, User } from "lucide-react";
+import { MessageSquare, Search, Loader2, Filter, X, User, Trash2 } from "lucide-react";
 
 import { toast } from "sonner";
 import {
@@ -111,6 +111,64 @@ export default function BasvurularPage() {
   const [requests, setRequests] = useState<ParentMeetingRequestRecord[]>([]);
   const [individualRequests, setIndividualRequests] = useState<IndividualRequestRecord[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeleteApplication = async (application: ApplicationRecord) => {
+    if (!confirm(`${application.student_name} adlı öğrencinin ${application.source} başvurusunu silmek istediğinizden emin misiniz?`)) {
+      return;
+    }
+
+    setDeletingId(application.id);
+    try {
+      const dashIndex = application.id.indexOf('-');
+      const type = application.id.slice(0, dashIndex);
+      const id = application.id.slice(dashIndex + 1);
+      console.log('Silme işlemi:', { type, id, application });
+
+      let endpoint = '';
+      switch (type) {
+        case 'incident':
+          endpoint = '/api/student-incidents';
+          break;
+        case 'referral':
+          endpoint = '/api/referrals';
+          break;
+        case 'observation':
+          endpoint = '/api/gozlem-havuzu';
+          break;
+        case 'request':
+          endpoint = '/api/parent-meeting-requests';
+          break;
+        case 'individual':
+          endpoint = '/api/individual-requests';
+          break;
+        default:
+          throw new Error('Geçersiz başvuru türü');
+      }
+
+      console.log('API çağrısı:', `${endpoint}?id=${id}`);
+      const response = await fetch(`${endpoint}?id=${id}`, {
+        method: 'DELETE',
+      });
+
+      console.log('API yanıtı:', response.status, response.statusText);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Bilinmeyen hata' }));
+        console.log('API hata detayı:', errorData);
+        throw new Error(errorData.error || `Silme işlemi başarısız (${response.status})`);
+      }
+
+      toast.success('Başvuru başarıyla silindi');
+
+      // Listeyi yeniden yükle
+      await loadData();
+    } catch (error) {
+      console.error('Silme hatası:', error);
+      toast.error('Başvuru silinirken hata oluştu');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -582,12 +640,13 @@ export default function BasvurularPage() {
                     {isReferralActive && <th className="px-4 py-3 font-semibold">Yönlendiren</th>}
                     <th className="px-4 py-3 font-semibold">Tarih</th>
                     <th className="px-4 py-3 font-semibold">Durum</th>
+                    <th className="px-4 py-3 font-semibold">İşlemler</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredApplications.length === 0 ? (
                     <tr>
-                      <td colSpan={isReferralActive ? 6 : 5} className="p-8 text-center text-slate-500">
+                      <td colSpan={isReferralActive ? 7 : 6} className="p-8 text-center text-slate-500">
                         <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-30 text-purple-300" />
                         <p>Kayıt bulunamadı.</p>
                       </td>
@@ -628,6 +687,21 @@ export default function BasvurularPage() {
                           >
                             {item.status}
                           </Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Button
+                            onClick={() => handleDeleteApplication(item)}
+                            disabled={deletingId === item.id}
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            {deletingId === item.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
                         </td>
                       </tr>
                     ))
