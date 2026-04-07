@@ -73,6 +73,11 @@ export default function SinifRehberligiPage() {
   const [conflictWarning, setConflictWarning] = useState<string | null>(null)
   const [savingPlan, setSavingPlan] = useState(false)
 
+  const [showGradeManagementModal, setShowGradeManagementModal] = useState(false)
+  const [selectedTopicForGrades, setSelectedTopicForGrades] = useState<GuidanceTopic | null>(null)
+  const [managedGrades, setManagedGrades] = useState<number[]>([])
+  const [savingGrades, setSavingGrades] = useState(false)
+
   const fetchTopics = useCallback(async () => {
     setLoading(true)
     try {
@@ -325,6 +330,100 @@ export default function SinifRehberligiPage() {
     }
   }
 
+  const handleDeletePlan = async (plan: GuidancePlan) => {
+    if (!confirm(`${plan.class_display} sınıfı için oluşturulan bu kartı silmek istediğinize emin misiniz?`)) return
+    try {
+      // İlgili task'ı sil
+      await supabase
+        .from('tasks')
+        .delete()
+        .eq('related_guidance_plan_id', plan.id)
+
+      // Plan'ı sil
+      await supabase
+        .from('guidance_plans')
+        .delete()
+        .eq('id', plan.id)
+
+      setShowPlanModal(false)
+      setSelectedPlan(null)
+      fetchTopics()
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const openGradeManagementModal = (topic: GuidanceTopic) => {
+    setSelectedTopicForGrades(topic)
+    setManagedGrades([...topic.grade_levels].sort())
+    setShowGradeManagementModal(true)
+  }
+
+  const handleSaveGrades = async () => {
+    if (!selectedTopicForGrades) return
+    setSavingGrades(true)
+    try {
+      const currentGrades = selectedTopicForGrades.grade_levels
+      const gradesToAdd = managedGrades.filter(g => !currentGrades.includes(g))
+      const gradesToRemove = currentGrades.filter(g => !managedGrades.includes(g))
+
+      // Silinecek kademeler için ilgili plan ve task'ları sil
+      if (gradesToRemove.length > 0) {
+        const classesToRemove = CLASSES.filter(c => gradesToRemove.includes(c.grade))
+        const classKeysToRemove = classesToRemove.map(c => c.key)
+
+        // Plans'ları bul
+        const { data: plansToDelete } = await supabase
+          .from('guidance_plans')
+          .select('id')
+          .eq('topic_id', selectedTopicForGrades.id)
+          .in('class_key', classKeysToRemove)
+
+        if (plansToDelete && plansToDelete.length > 0) {
+          const planIds = plansToDelete.map(p => p.id)
+          // Tasks'ları sil
+          await supabase.from('tasks').delete().in('related_guidance_plan_id', planIds)
+          // Plans'ları sil
+          await supabase.from('guidance_plans').delete().in('id', planIds)
+        }
+      }
+
+      // Eklenecek kademeler için yeni plan'lar oluştur
+      if (gradesToAdd.length > 0) {
+        const classesToAdd = CLASSES.filter(c => gradesToAdd.includes(c.grade))
+        await supabase.from('guidance_plans').insert(
+          classesToAdd.map(c => ({
+            topic_id: selectedTopicForGrades.id,
+            class_key: c.key,
+            class_display: c.display,
+            status: 'unplanned'
+          }))
+        )
+      }
+
+      // Konunun grade_levels'ini güncelle
+      await supabase
+        .from('guidance_topics')
+        .update({ grade_levels: managedGrades })
+        .eq('id', selectedTopicForGrades.id)
+
+      setShowGradeManagementModal(false)
+      setSelectedTopicForGrades(null)
+      setManagedGrades([])
+      fetchTopics()
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSavingGrades(false)
+    }
+  }
+
+  const toggleManagedGrade = (grade: number) => {
+    setManagedGrades(prev =>
+      prev.includes(grade) ? prev.filter(g => g !== grade) : [...prev, grade].sort()
+    )
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -506,6 +605,13 @@ export default function SinifRehberligiPage() {
                   </div>
                   <span className="text-sm font-bold text-slate-700 w-10 text-right">{progress}%</span>
                   <button
+                    onClick={() => openGradeManagementModal(topic)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-all"
+                    title="Kademeler ekle/sil"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                  <button
                     onClick={() => handleDeleteTopic(topic.id)}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
                     title="Konuyu sil"
@@ -521,8 +627,7 @@ export default function SinifRehberligiPage() {
               {plans.map(plan => (
                 <div
                   key={plan.id}
-                  onClick={() => openPlanModal(plan)}
-                  className={`rounded-2xl border-2 p-4 flex flex-col transition-all cursor-pointer select-none h-40 ${
+                  className={`rounded-2xl border-2 p-4 flex flex-col transition-all select-none h-40 relative group ${
                     plan.status === 'completed'
                       ? 'bg-gradient-to-br from-emerald-400 to-teal-500 border-emerald-300 shadow-lg shadow-emerald-200'
                       : plan.status === 'planned'
@@ -530,15 +635,17 @@ export default function SinifRehberligiPage() {
                       : 'bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200 hover:border-amber-400 hover:shadow-md hover:scale-[1.03]'
                   }`}
                 >
-                  {/* Sınıf adı — üst */}
-                  <span className={`text-2xl font-black tracking-tight leading-none ${
-                    plan.status === 'unplanned' ? 'text-amber-800' : 'text-white drop-shadow'
-                  }`}>
-                    {plan.class_display}
-                  </span>
+                  {/* Kartın ana içeriği — tıklanabilir */}
+                  <div onClick={() => openPlanModal(plan)} className="cursor-pointer flex-1 flex flex-col">
+                    {/* Sınıf adı — üst */}
+                    <span className={`text-2xl font-black tracking-tight leading-none ${
+                      plan.status === 'unplanned' ? 'text-amber-800' : 'text-white drop-shadow'
+                    }`}>
+                      {plan.class_display}
+                    </span>
 
-                  {/* Alt içerik — flex-1 ile kalan alanı kaplar */}
-                  <div className="flex-1 flex flex-col justify-end gap-1.5">
+                    {/* Alt içerik — flex-1 ile kalan alanı kaplar */}
+                    <div className="flex-1 flex flex-col justify-end gap-1.5">
 
                     {/* Tamamlandı */}
                     {plan.status === 'completed' && (
@@ -587,7 +694,24 @@ export default function SinifRehberligiPage() {
                         <span className="text-base text-amber-600 font-semibold">Planlanmadı</span>
                       </div>
                     )}
+                    </div>
                   </div>
+
+                  {/* Silme Butonu — Sağ Üst Köşe */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeletePlan(plan)
+                    }}
+                    className={`absolute top-2 right-2 p-2 rounded-lg transition-all opacity-0 group-hover:opacity-100 ${
+                      plan.status === 'unplanned'
+                        ? 'hover:bg-red-100 text-red-500'
+                        : 'hover:bg-white/20 text-white'
+                    }`}
+                    title="Bu kartı sil"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
               ))}
             </div>
@@ -782,13 +906,77 @@ export default function SinifRehberligiPage() {
                 </div>
               )}
               {selectedPlan?.status === 'completed' && (
-                <button
-                  onClick={() => { handleCancelPlan(selectedPlan); setShowPlanModal(false) }}
-                  className="w-full py-2.5 rounded-xl border-2 border-amber-300 text-sm font-semibold text-amber-600 hover:bg-amber-50 transition-colors"
-                >
-                  🔄 Geri Al — Yeniden Planla
-                </button>
+                <>
+                  <button
+                    onClick={() => { handleCancelPlan(selectedPlan); setShowPlanModal(false) }}
+                    className="w-full py-2.5 rounded-xl border-2 border-amber-300 text-sm font-semibold text-amber-600 hover:bg-amber-50 transition-colors"
+                  >
+                    🔄 Geri Al — Yeniden Planla
+                  </button>
+                  <button
+                    onClick={() => handleDeletePlan(selectedPlan)}
+                    className="w-full py-2.5 rounded-xl border border-red-300 text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Kartı Sil
+                  </button>
+                </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Kademe Yönetimi Modalı */}
+      {showGradeManagementModal && selectedTopicForGrades && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h3 className="text-base font-bold text-slate-800">Kademeler — {selectedTopicForGrades.title}</h3>
+              <button onClick={() => setShowGradeManagementModal(false)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700">Hangi Kademeler?</label>
+                <p className="text-xs text-slate-500 mb-3">Seçili olanlar konuya eklenecek, seçilmeyenler silinecek</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {[5, 6, 7, 8].map(grade => (
+                    <button
+                      key={grade}
+                      onClick={() => toggleManagedGrade(grade)}
+                      className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${
+                        managedGrades.includes(grade)
+                          ? 'bg-blue-500 border-blue-500 text-white'
+                          : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300'
+                      }`}
+                    >
+                      {grade}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {managedGrades.length === 0 && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm text-amber-700 font-medium">⚠️ En az bir kademe seçmelisiniz</p>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 px-6 pb-6">
+              <button
+                onClick={() => setShowGradeManagementModal(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleSaveGrades}
+                disabled={managedGrades.length === 0 || savingGrades}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:from-blue-600 hover:to-indigo-700 transition-all"
+              >
+                {savingGrades ? 'Kaydediliyor...' : 'Kaydet'}
+              </button>
             </div>
           </div>
         </div>
