@@ -561,7 +561,7 @@ export default function SinifRehberligiPage() {
         <div className="space-y-6">
 
       {/* Boş durum */}
-      {topics.length === 0 && (
+      {topics.filter(t => t.status === 'active').length === 0 && (
         <div className="flex flex-col items-center justify-center h-64 bg-white rounded-2xl border border-slate-200 shadow-sm">
           <BookOpen className="h-12 w-12 text-slate-300 mb-3" />
           <p className="text-slate-500 font-medium">Henüz konu eklenmemiş</p>
@@ -570,7 +570,7 @@ export default function SinifRehberligiPage() {
       )}
 
       {/* Konular */}
-      {topics.map(topic => {
+      {topics.filter(t => t.status === 'active').map(topic => {
         const plans = topic.plans || []
         const completedCount = plans.filter(p => p.status === 'completed').length
         const totalCount = plans.length
