@@ -116,7 +116,7 @@ export default function SinifRehberligiPage() {
         .from('guidance_topics')
         .select('*')
         .contains('grade_levels', [grade])
-        .in('status', ['active', 'completed'])
+        .eq('status', 'completed')
         .order('school_year', { ascending: false })
         .order('created_at', { ascending: false })
       setHistoryTopics(data || [])
