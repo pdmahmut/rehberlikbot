@@ -568,7 +568,15 @@ export default function RandevuPage() {
       const nameParts = appointment.participant_name.split(" (");
       if (nameParts.length > 1) {
         const parentPart = nameParts[0];
-        const studentPart = nameParts[1].replace(" velisi)", "");
+        let studentPart = nameParts[1];
+        // Handle both old format " velisi)" and new format "'ın velisi)"
+        if (studentPart.includes("'ın velisi)")) {
+          studentPart = studentPart.replace("'ın velisi)", "");
+        } else if (studentPart.includes(" velisi)")) {
+          studentPart = studentPart.replace(" velisi)", "");
+        } else {
+          studentPart = studentPart.replace(")", "");
+        }
         setParentName(parentPart);
         setSelectedStudentName(studentPart);
       } else {
@@ -1187,7 +1195,7 @@ export default function RandevuPage() {
                           if (newParentName.trim() && selectedStudentName) {
                             setFormData({
                               ...formData,
-                              participant_name: `${newParentName} (${selectedStudentName} velisi)`
+                              participant_name: `${newParentName} (${selectedStudentName}'ın velisi)`
                             });
                           } else {
                             setFormData({
