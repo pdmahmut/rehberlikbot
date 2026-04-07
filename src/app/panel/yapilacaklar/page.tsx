@@ -88,6 +88,21 @@ export default function YapilacaklarPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>(getLocalDateString(new Date()));
+
+  // Program verileri
+  const [appointments, setAppointments] = useState<{id: string; student_name?: string; start_time: string}[]>([]);
+  const [guidancePlans, setGuidancePlans] = useState<{id: string; class_display: string; lesson_period: number}[]>([]);
+
+  const loadSchedule = async (date: string) => {
+    const [aptRes, planRes] = await Promise.all([
+      supabase.from('appointments').select('id, student_name, start_time').eq('appointment_date', date).eq('status', 'scheduled'),
+      supabase.from('guidance_plans').select('id, class_display, lesson_period').eq('plan_date', date).eq('status', 'planned')
+    ]);
+    setAppointments(aptRes.data || []);
+    setGuidancePlans(planRes.data || []);
+  };
+
+  useEffect(() => { loadSchedule(selectedDate); }, [selectedDate]);
   
   // Yeni görev formu
   const [newTask, setNewTask] = useState({
@@ -360,6 +375,46 @@ export default function YapilacaklarPage() {
         );
       })()}
       
+      {/* Ana İçerik: Sol = Program, Sağ = Görevler */}
+      <div className="flex gap-5 items-start">
+
+        {/* SOL — 7 Saatlik Program */}
+        <div className="w-64 shrink-0 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+            <p className="text-sm font-bold text-slate-700">Günlük Program</p>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {[1,2,3,4,5,6,7].map(period => {
+              const periodStr = `${period}. Ders`;
+              const apt = appointments.find(a => a.start_time === periodStr);
+              const plan = guidancePlans.find(p => p.lesson_period === period);
+              return (
+                <div key={period} className="flex items-center gap-3 px-4 py-3">
+                  <span className="text-xs font-bold text-slate-400 w-4">{period}</span>
+                  {apt ? (
+                    <div className="flex-1 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5">
+                      <p className="text-xs font-bold text-blue-700 leading-tight">Görüşme</p>
+                      <p className="text-xs text-blue-600 truncate">{apt.student_name || '—'}</p>
+                    </div>
+                  ) : plan ? (
+                    <div className="flex-1 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">
+                      <p className="text-xs font-bold text-emerald-700 leading-tight">Sınıf Rehberliği</p>
+                      <p className="text-xs text-emerald-600">{plan.class_display}</p>
+                    </div>
+                  ) : (
+                    <div className="flex-1 border border-dashed border-slate-200 rounded-lg px-3 py-1.5">
+                      <p className="text-xs text-slate-300">Boş</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* SAĞ — Görev Listesi */}
+        <div className="flex-1 min-w-0 space-y-4">
+
       {/* Görev Ekleme Formu */}
       {showForm && (
         <Card className="border-2 border-green-200 bg-green-50/50">
@@ -615,6 +670,9 @@ export default function YapilacaklarPage() {
           })}
         </div>
       )}
+
+        </div> {/* sağ kolon sonu */}
+      </div> {/* flex wrapper sonu */}
     </div>
   );
 }
