@@ -384,6 +384,11 @@ export default function SinifRehberligiPage() {
 
       await supabase.from('guidance_topics').delete().eq('id', topicId)
       fetchTopics()
+      
+      // Eğer geçmiş sekmesi açıksa, geçmiş listesini de yenile
+      if (activeTab === 'gecmis' && selectedGrade) {
+        fetchHistory(selectedGrade)
+      }
     } catch (err) {
       console.error(err)
     }
