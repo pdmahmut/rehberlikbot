@@ -11,6 +11,7 @@ type GuidanceTopic = {
   status: 'active' | 'completed' | 'archived'
   notes: string | null
   created_at: string
+  school_year: string | null
   plans?: GuidancePlan[]
 }
 
@@ -52,11 +53,17 @@ function formatDateTR(dateStr: string): string {
 export default function SinifRehberligiPage() {
   const [topics, setTopics] = useState<GuidanceTopic[]>([])
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'planlama' | 'gecmis'>('planlama')
 
   const [showNewTopicModal, setShowNewTopicModal] = useState(false)
   const [newTopicTitle, setNewTopicTitle] = useState("")
   const [newTopicGrades, setNewTopicGrades] = useState<number[]>([])
+  const [newTopicYear, setNewTopicYear] = useState("2025-2026")
   const [creating, setCreating] = useState(false)
+
+  const [selectedGrade, setSelectedGrade] = useState<number | null>(null)
+  const [historyTopics, setHistoryTopics] = useState<GuidanceTopic[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const [showPlanModal, setShowPlanModal] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<GuidancePlan | null>(null)
@@ -72,7 +79,7 @@ export default function SinifRehberligiPage() {
       const { data: topicsData, error } = await supabase
         .from('guidance_topics')
         .select('*')
-        .in('status', ['active', 'completed'])
+        .eq('status', 'active')
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -97,6 +104,28 @@ export default function SinifRehberligiPage() {
 
   useEffect(() => { fetchTopics() }, [fetchTopics])
 
+  const fetchHistory = useCallback(async (grade: number) => {
+    setHistoryLoading(true)
+    try {
+      const { data } = await supabase
+        .from('guidance_topics')
+        .select('*')
+        .contains('grade_levels', [grade])
+        .in('status', ['active', 'completed'])
+        .order('school_year', { ascending: false })
+        .order('created_at', { ascending: false })
+      setHistoryTopics(data || [])
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (selectedGrade) fetchHistory(selectedGrade)
+  }, [selectedGrade, fetchHistory])
+
   // guidance_plans tablosu değişince kartları otomatik yenile
   useEffect(() => {
     const channel = supabase
@@ -117,7 +146,7 @@ export default function SinifRehberligiPage() {
     try {
       const { data: topic, error } = await supabase
         .from('guidance_topics')
-        .insert({ title: newTopicTitle.trim(), grade_levels: newTopicGrades })
+        .insert({ title: newTopicTitle.trim(), grade_levels: newTopicGrades, school_year: newTopicYear })
         .select()
         .single()
       if (error) throw error
@@ -134,6 +163,7 @@ export default function SinifRehberligiPage() {
       setShowNewTopicModal(false)
       setNewTopicTitle("")
       setNewTopicGrades([])
+      setNewTopicYear("2025-2026")
       fetchTopics()
     } catch (err) {
       console.error(err)
@@ -316,14 +346,119 @@ export default function SinifRehberligiPage() {
             <p className="text-sm text-slate-500">Konu bazlı sınıf takip ve planlama</p>
           </div>
         </div>
+        {activeTab === 'planlama' && (
+          <button
+            onClick={() => setShowNewTopicModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-emerald-500/25 hover:from-emerald-600 hover:to-teal-700 transition-all"
+          >
+            <Plus className="h-4 w-4" />
+            Yeni Konu
+          </button>
+        )}
+      </div>
+
+      {/* Sekmeler */}
+      <div className="flex gap-2 border-b border-slate-200">
         <button
-          onClick={() => setShowNewTopicModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-emerald-500/25 hover:from-emerald-600 hover:to-teal-700 transition-all"
+          onClick={() => setActiveTab('planlama')}
+          className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-all ${
+            activeTab === 'planlama'
+              ? 'border-emerald-500 text-emerald-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
         >
-          <Plus className="h-4 w-4" />
-          Yeni Konu
+          📋 Bu Yıl
+        </button>
+        <button
+          onClick={() => setActiveTab('gecmis')}
+          className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-all ${
+            activeTab === 'gecmis'
+              ? 'border-emerald-500 text-emerald-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          🗂️ Geçmiş Kayıtlar
         </button>
       </div>
+
+      {/* GEÇMİŞ SEKMESİ */}
+      {activeTab === 'gecmis' && (
+        <div className="space-y-5">
+          {/* Kademe seçimi */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <p className="text-sm font-semibold text-slate-600 mb-3">Hangi kademenin geçmişini görmek istiyorsunuz?</p>
+            <div className="flex gap-3">
+              {[5, 6, 7, 8].map(grade => (
+                <button
+                  key={grade}
+                  onClick={() => setSelectedGrade(grade)}
+                  className={`flex-1 py-3 rounded-xl text-sm font-bold border-2 transition-all ${
+                    selectedGrade === grade
+                      ? 'bg-emerald-500 border-emerald-500 text-white shadow-md'
+                      : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-300'
+                  }`}
+                >
+                  {grade}. Sınıf
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sonuçlar */}
+          {selectedGrade && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
+                <h2 className="text-base font-bold text-slate-800">{selectedGrade}. Sınıf — Tüm Yıllar</h2>
+                <p className="text-sm text-slate-500">Bu kademeye daha önce anlatılan konular</p>
+              </div>
+              {historyLoading ? (
+                <div className="flex items-center justify-center h-32">
+                  <div className="w-6 h-6 border-4 border-emerald-500/30 rounded-full animate-spin border-t-emerald-500" />
+                </div>
+              ) : historyTopics.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-32 text-slate-400">
+                  <p className="font-medium">Kayıt bulunamadı</p>
+                  <p className="text-sm mt-1">Bu kademe için henüz konu girilmemiş</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {Object.entries(
+                    historyTopics.reduce((acc, topic) => {
+                      const year = topic.school_year || 'Bilinmiyor'
+                      if (!acc[year]) acc[year] = []
+                      acc[year].push(topic)
+                      return acc
+                    }, {} as Record<string, GuidanceTopic[]>)
+                  ).map(([year, yearTopics]) => (
+                    <div key={year} className="p-5">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">{year} Okul Yılı</p>
+                      <div className="space-y-2">
+                        {yearTopics.map(topic => (
+                          <div key={topic.id} className="flex items-center gap-3">
+                            <div className={`w-2 h-2 rounded-full shrink-0 ${topic.status === 'completed' ? 'bg-emerald-500' : 'bg-blue-400'}`} />
+                            <span className="text-sm text-slate-700 font-medium">{topic.title}</span>
+                            <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-medium ${
+                              topic.status === 'completed'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {topic.status === 'completed' ? 'Tamamlandı' : 'Bu yıl devam ediyor'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PLANLAMA SEKMESİ */}
+      {activeTab === 'planlama' && (
+        <div className="space-y-6">
 
       {/* Boş durum */}
       {topics.length === 0 && (
@@ -460,6 +595,9 @@ export default function SinifRehberligiPage() {
         )
       })}
 
+        </div>
+      )}
+
       {/* Yeni Konu Modalı */}
       {showNewTopicModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -500,6 +638,18 @@ export default function SinifRehberligiPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700">Okul Yılı</label>
+                <select
+                  value={newTopicYear}
+                  onChange={e => setNewTopicYear(e.target.value)}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                >
+                  {['2022-2023','2023-2024','2024-2025','2025-2026','2026-2027'].map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="flex gap-3 px-6 pb-6">
