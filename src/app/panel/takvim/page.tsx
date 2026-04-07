@@ -154,6 +154,20 @@ export default function TakvimPage() {
     if (!confirm('Bu görevi silmek istediğinize emin misiniz?')) return;
 
     try {
+      // Sınıf rehberliği planıyla bağlantılı mı kontrol et
+      const { data: taskData } = await supabase
+        .from('tasks')
+        .select('related_guidance_plan_id')
+        .eq('id', taskId)
+        .maybeSingle();
+
+      if (taskData?.related_guidance_plan_id) {
+        await supabase
+          .from('guidance_plans')
+          .update({ status: 'unplanned', plan_date: null, lesson_period: null, teacher_name: null })
+          .eq('id', taskData.related_guidance_plan_id);
+      }
+
       const res = await supabase
         .from('tasks')
         .delete()

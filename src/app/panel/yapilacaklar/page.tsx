@@ -49,6 +49,7 @@ interface Task {
   completed_at?: string;
   related_student_name?: string;
   related_appointment_id?: string;
+  related_guidance_plan_id?: string;
 }
 
 // Kategori seçenekleri
@@ -181,6 +182,24 @@ export default function YapilacaklarPage() {
         .eq('id', task.id);
       
       if (error) throw error;
+
+      // Sınıf rehberliği planıyla bağlantılı mı?
+      console.log('related_guidance_plan_id:', task.related_guidance_plan_id);
+      if (task.related_guidance_plan_id) {
+        if (newStatus === 'completed') {
+          const { error: planError } = await supabase
+            .from('guidance_plans')
+            .update({ status: 'completed', completed_at: new Date().toISOString() })
+            .eq('id', task.related_guidance_plan_id);
+          console.log('plan update error:', planError);
+        } else {
+          const { error: planError } = await supabase
+            .from('guidance_plans')
+            .update({ status: 'planned', completed_at: null })
+            .eq('id', task.related_guidance_plan_id);
+          console.log('plan update error:', planError);
+        }
+      }
       
       toast.success(newStatus === 'completed' ? 'Görev tamamlandı!' : 'Görev yeniden açıldı');
       loadTasks();
@@ -191,11 +210,19 @@ export default function YapilacaklarPage() {
   };
   
   // Görev sil
-  const deleteTask = async (taskId: string) => {
+  const deleteTask = async (task: Task) => {
     if (!confirm('Bu görevi silmek istediğinize emin misiniz?')) return;
     
     try {
-      const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+      // Bağlantılı plan varsa unplanned'a döndür
+      if (task.related_guidance_plan_id) {
+        await supabase
+          .from('guidance_plans')
+          .update({ status: 'unplanned', plan_date: null, lesson_period: null, teacher_name: null })
+          .eq('id', task.related_guidance_plan_id);
+      }
+
+      const { error } = await supabase.from('tasks').delete().eq('id', task.id);
       if (error) throw error;
       
       toast.success('Görev silindi');
@@ -638,7 +665,7 @@ export default function YapilacaklarPage() {
                     
                     <button
                       type="button"
-                      onClick={() => deleteTask(task.id)}
+                      onClick={() => deleteTask(task)}
                       className="absolute right-3 top-3 rounded-full p-2 text-slate-300 opacity-0 transition-all hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
                       aria-label="Görevi sil"
                     >

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -95,6 +95,17 @@ const menuCategories: MenuCategory[] = [
         label: "Yapılacaklar", 
         icon: ListTodo,
         color: "orange"
+      },
+    ]
+  },
+  {
+    title: "Sınıf Rehberliği",
+    items: [
+      {
+        href: "/panel/sinif-rehberligi",
+        label: "Sınıf Rehberliği",
+        icon: BookOpen,
+        color: "emerald"
       },
     ]
   },
@@ -244,7 +255,7 @@ const menuCategories: MenuCategory[] = [
 // Tüm menü öğelerini düz liste olarak al
 const allMenuItems = menuCategories.flatMap(cat => cat.items);
 
-// Renk haritasÄ±
+// Renk haritası
 const colorMap: Record<string, { gradient: string; bg: string; text: string; border: string }> = {
   blue: { gradient: "from-blue-500 to-blue-600", bg: "bg-blue-50", text: "text-blue-600", border: "border-blue-200" },
   amber: { gradient: "from-amber-500 to-orange-600", bg: "bg-amber-50", text: "text-amber-600", border: "border-amber-200" },
@@ -273,7 +284,7 @@ export default function PanelLayout({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
-  const [expandedCategories, setExpandedCategories] = useState<string[]>(["Genel", "Öğrenci Takip", "Randevular", "Süreç Yönetimi", "Analiz & Raporlar", "İşlemler"]);
+  const [expandedCategories, setExpandedCategories] = useState<string[]>(["Genel", "Sınıf Rehberliği", "Öğrenci Takip", "Randevular", "Süreç Yönetimi", "Analiz & Raporlar", "İşlemler"]);
   
   // Şifre koruması state'leri
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -836,4 +847,3 @@ export default function PanelLayout({
     </div>
   );
 }
-
