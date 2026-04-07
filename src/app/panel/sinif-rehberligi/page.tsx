@@ -99,6 +99,21 @@ export default function SinifRehberligiPage() {
           return { ...topic, plans: plans || [] }
         })
       )
+
+      // Tüm kartları completed olan konuları otomatik olarak completed yap
+      for (const topic of topicsWithPlans) {
+        if (topic.plans.length > 0) {
+          const allPlansCompleted = topic.plans.every(p => p.status === 'completed')
+          if (allPlansCompleted && topic.status !== 'completed') {
+            console.log(`Auto-completing topic: ${topic.title}`)
+            await supabase
+              .from('guidance_topics')
+              .update({ status: 'completed' })
+              .eq('id', topic.id)
+          }
+        }
+      }
+
       setTopics(topicsWithPlans)
     } catch (err) {
       console.error(err)
