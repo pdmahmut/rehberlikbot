@@ -236,8 +236,8 @@ export default function SinifRehberligiPage() {
         })
       }
 
-      setShowPlanModal(false)
-      setSelectedPlan(null)
+      // Plan'ı güncelle ve modalı yenile et (kapanma!)
+      setSelectedPlan({ ...selectedPlan, status: 'planned' as const })
       fetchTopics()
     } catch (err) {
       console.error(err)
