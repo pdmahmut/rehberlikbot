@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Plus, Loader2, CheckCircle2, Edit2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { notifyPotentialMeetingsChanged } from "@/lib/potentialMeetings";
 
 type StudentSuggestion = { value: string; text: string; class_display?: string; class_key?: string };
 
@@ -304,6 +305,12 @@ export default function BireyselBasvurularPage() {
 
       resetForm();
       toast.success(isEdit ? "Kayıt başarıyla güncellendi" : "Kayıt başarıyla eklendi");
+      notifyPotentialMeetingsChanged({
+        action: isEdit ? "update" : "create",
+        id: editId || undefined,
+        source: "individual-request",
+        studentName: formData.student_name.trim()
+      });
       
       // Edit modundan çık - referer'a göre yönlendir
       if (isEdit) {

@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
-    const status = searchParams.get('status') || 'pending';
+    const status = searchParams.get('status');
 
     if (id) {
       // Tek kayıt getir
@@ -37,8 +37,11 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('individual_requests')
       .select('*')
-      .eq('status', status)
       .order('created_at', { ascending: false });
+
+    if (status) {
+      query = query.eq('status', status);
+    }
 
     const { data, error } = await query;
 

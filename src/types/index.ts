@@ -285,13 +285,13 @@ export type AppointmentLocation = 'guidance_office' | 'classroom' | 'admin' | 'p
 
 // Ders saatleri
 export const LESSON_SLOTS = [
-  { value: '1. Ders', label: '1. Ders' },
-  { value: '2. Ders', label: '2. Ders' },
-  { value: '3. Ders', label: '3. Ders' },
-  { value: '4. Ders', label: '4. Ders' },
-  { value: '5. Ders', label: '5. Ders' },
-  { value: '6. Ders', label: '6. Ders' },
-  { value: '7. Ders', label: '7. Ders' },
+  { value: '1', label: '1. Ders' },
+  { value: '2', label: '2. Ders' },
+  { value: '3', label: '3. Ders' },
+  { value: '4', label: '4. Ders' },
+  { value: '5', label: '5. Ders' },
+  { value: '6', label: '6. Ders' },
+  { value: '7', label: '7. Ders' },
 ] as const;
 
 // Konu etiketleri
@@ -488,5 +488,5 @@ export interface IndividualRequestRecord {
   class_display?: string | null;
   request_date: string;
   note?: string | null;
-  status: 'pending' | 'completed' | 'cancelled';
+  status: 'pending' | 'scheduled' | 'completed' | 'cancelled';
 }

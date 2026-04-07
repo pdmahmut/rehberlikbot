@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +34,8 @@ import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useAppointments, useAppointmentTasks, useCalendarHelpers } from "./hooks";
 import { parseJsonResponse, parseResponseError } from "@/lib/utils";
+import { notifyPotentialMeetingsChanged } from "@/lib/potentialMeetings";
+import { formatLessonSlotLabel, normalizeLessonSlot } from "@/lib/lessonSlots";
 import { 
   Appointment, 
   AppointmentFormData,
@@ -100,6 +102,97 @@ const normalizeClassText = (value: string) =>
     .replace(/ö/g, "o")
     .replace(/ü/g, "u")
     .trim();
+
+// Dolu saatleri kontrol etmek için hook
+function useBusySlots() {
+  const [busySlots, setBusySlots] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
+
+  const fetchBusySlots = useCallback(async (date: string, options?: { excludeAppointmentId?: string }) => {
+    try {
+      setLoading(true);
+      const allBusySlots = new Set<string>();
+      
+      // Randevuları getir
+      const appointmentRes = await fetch(`/api/appointments?date=${date}`, {
+        headers: { Accept: "application/json" }
+      });
+      
+      if (appointmentRes.ok) {
+        const appointmentData = await parseJsonResponse<{ appointments?: Appointment[] }>(appointmentRes);
+        appointmentData.appointments?.forEach(apt => {
+          if (apt.status !== 'cancelled' && apt.id !== options?.excludeAppointmentId) {
+            const normalizedTime = normalizeLessonSlot(apt.start_time);
+            if (normalizedTime) {
+              allBusySlots.add(normalizedTime);
+            }
+          }
+        });
+      }
+
+      // Sınıf rehberliği planlarını getir
+      try {
+        const { supabase } = await import("@/lib/supabase");
+        const { data: plans, error } = await supabase
+          .from("guidance_plans")
+          .select("id, lesson_period")
+          .eq("plan_date", date)
+          .eq("status", "planned");
+
+        if (!error && plans) {
+          plans.forEach(plan => {
+            if (plan.id !== options?.excludeAppointmentId) {
+              const normalizedTime = normalizeLessonSlot(plan.lesson_period);
+              if (normalizedTime) {
+                allBusySlots.add(normalizedTime);
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Sınıf rehberliği planları yüklenemedi:", err);
+      }
+
+      // Sınıf etkinliklerini getir
+      try {
+        const { supabase } = await import("@/lib/supabase");
+        const { data: activities, error } = await supabase
+          .from("class_activities")
+          .select("id, activity_time")
+          .eq("activity_date", date);
+
+        if (!error && activities) {
+          activities.forEach(activity => {
+            if (activity.id !== options?.excludeAppointmentId) {
+              const normalizedTime = normalizeLessonSlot(activity.activity_time);
+              if (normalizedTime) {
+                allBusySlots.add(normalizedTime);
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Sınıf etkinlikleri yüklenemedi:", err);
+      }
+
+      console.log("Dolu saatler:", Array.from(allBusySlots));
+      setBusySlots(allBusySlots);
+      return allBusySlots;
+    } catch (err) {
+      console.error("Dolu saatler alınamadı:", err);
+      setBusySlots(new Set());
+      return new Set<string>();
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return {
+    busySlots,
+    loading,
+    fetchBusySlots
+  };
+}
 
 const resolveClassKeyFromDisplay = (
   classDisplay: string,
@@ -210,6 +303,7 @@ export default function RandevuPage() {
   } = useAppointments();
   const { tasks, fetchTasks, createTask } = useAppointmentTasks();
   const { getWeekDays, formatDate, formatShortDate, getDayName, isToday } = useCalendarHelpers();
+  const { busySlots, loading: busyLoading, fetchBusySlots } = useBusySlots();
 
   const [viewMode, setViewMode] = useState<"day" | "week">("day");
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -227,6 +321,7 @@ export default function RandevuPage() {
   const hasAppliedPoolPrefill = useRef(false);
   const poolStudentName = searchParams.get("studentName") || poolPrefillStudentName;
   const poolClassDisplay = searchParams.get("classDisplay") || poolPrefillClassDisplay;
+  const sourceIndividualRequestId = searchParams.get("requestId") || "";
   const hasPoolPrefill = Boolean(poolStudentName);
 
   const [showNewAppointmentModal, setShowNewAppointmentModal] = useState(false);
@@ -242,7 +337,7 @@ export default function RandevuPage() {
 
   const [formData, setFormData] = useState<AppointmentFormData>({
     appointment_date: new Date().toISOString().slice(0, 10),
-    start_time: "1. Ders",
+    start_time: "1",
     participant_type: "student",
     participant_name: "",
     participant_class: "",
@@ -265,7 +360,7 @@ export default function RandevuPage() {
 
   const createEmptyFormData = (): AppointmentFormData => ({
     appointment_date: new Date().toISOString().slice(0, 10),
-    start_time: "1. Ders",
+    start_time: "1",
     participant_type: "student",
     participant_name: "",
     participant_class: "",
@@ -325,6 +420,13 @@ export default function RandevuPage() {
     };
     fetchClassesAndTeachers();
   }, []);
+
+  // Dolu saatleri getir
+  useEffect(() => {
+    if (formData.appointment_date) {
+      fetchBusySlots(formData.appointment_date, { excludeAppointmentId: editingAppointment?.id });
+    }
+  }, [formData.appointment_date, editingAppointment?.id, fetchBusySlots]);
 
   const searchParamsString = searchParams.toString();
   const classesSignature = useMemo(
@@ -552,7 +654,6 @@ export default function RandevuPage() {
   const openEditAppointmentModal = (appointment: Appointment) => {
     setEditingAppointment(appointment);
     setShowDetailModal(false);
-    setShowClosureModal(false);
     setSelectedAppointment(null);
     setFormData(getAppointmentFormData(appointment));
     setSelectedClass(
@@ -594,7 +695,6 @@ export default function RandevuPage() {
     if (success) {
       if (selectedAppointment?.id === appointment.id) {
         setShowDetailModal(false);
-        setShowClosureModal(false);
         setSelectedAppointment(null);
       }
       if (editingAppointment?.id === appointment.id) {
@@ -633,6 +733,32 @@ export default function RandevuPage() {
       : await createAppointment(payload);
 
     if (result) {
+      if (!editingAppointment && sourceIndividualRequestId) {
+        try {
+          const res = await fetch("/api/individual-requests", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: sourceIndividualRequestId,
+              status: "scheduled"
+            })
+          });
+
+          if (!res.ok) {
+            throw new Error("Bireysel başvuru güncellenemedi");
+          }
+        } catch (error) {
+          console.error("Individual request scheduled update error:", error);
+          toast.error("Randevu oluşturuldu ama bireysel başvuru güncellenemedi");
+        }
+        notifyPotentialMeetingsChanged({
+          action: "update",
+          id: sourceIndividualRequestId,
+          source: "individual-request",
+          studentName: resolvedParticipantName
+        });
+      }
+
       if (!editingAppointment && sourceObservationIds.length > 0) {
         try {
           const res = await fetch("/api/gozlem-havuzu", {
@@ -667,6 +793,20 @@ export default function RandevuPage() {
     }
   };
 
+  const handleAppointmentClick = (appointment: Appointment) => {
+    setSelectedAppointment(appointment);
+    setShowDetailModal(true);
+  };
+
+  const toggleAppointmentAttendance = async (appointment: Appointment) => {
+    const nextStatus: AppointmentStatus = appointment.status === "attended" ? "planned" : "attended";
+    const result = await updateAppointment(appointment.id, { status: nextStatus });
+    if (result) {
+      setSelectedAppointment((prev) => (prev?.id === appointment.id ? result : prev));
+      toast.success(nextStatus === "attended" ? "Geldi olarak işaretlendi" : "Tekrar planlandı");
+    }
+  };
+
   const handleCloseAppointment = async () => {
     if (!selectedAppointment) return;
     const result = await closeAppointment(selectedAppointment.id, closureData);
@@ -680,22 +820,6 @@ export default function RandevuPage() {
         next_action: "",
         create_follow_up: false
       });
-    }
-  };
-
-  const handleAppointmentClick = (appointment: Appointment) => {
-    setSelectedAppointment(appointment);
-    if (appointment.status === "planned") {
-      setClosureData({
-        status: "attended",
-        outcome_summary: "",
-        outcome_decision: [],
-        next_action: "",
-        create_follow_up: false
-      });
-      setShowClosureModal(true);
-    } else {
-      setShowDetailModal(true);
     }
   };
 
@@ -791,6 +915,22 @@ export default function RandevuPage() {
           </div>
 
           <div className="flex shrink-0 flex-col items-end gap-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                void toggleAppointmentAttendance(appointment);
+              }}
+              className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all ${
+                appointment.status === "attended"
+                  ? "border-emerald-500 bg-emerald-500 text-white shadow-sm"
+                  : "border-slate-300 bg-white text-slate-400 hover:border-emerald-400 hover:text-emerald-500"
+              }`}
+              aria-label={appointment.status === "attended" ? "Geldi olarak işaretli" : "Geldi olarak işaretle"}
+              title={appointment.status === "attended" ? "Geldi" : "Geldi olarak işaretle"}
+            >
+              <CheckCircle2 className="h-5 w-5" />
+            </button>
             <div className={`rounded-xl px-2 py-1 text-right ${colors.bg} ${colors.text}`}>
               <div className="text-[10px] uppercase tracking-wide text-current/70">Ders</div>
               <div className="text-sm font-bold leading-none">{appointment.start_time}</div>
@@ -1254,9 +1394,30 @@ export default function RandevuPage() {
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
                   >
                     {LESSON_SLOTS.map(slot => (
-                      <option key={slot.value} value={slot.value}>{slot.label}</option>
+                      <option 
+                        key={slot.value} 
+                        value={slot.value} 
+                        disabled={busySlots.has(slot.value)}
+                        className={busySlots.has(slot.value) ? "text-slate-400 bg-slate-100" : ""}
+                      >
+                        {slot.label} {busySlots.has(slot.value) ? "(Dolu)" : ""}
+                      </option>
                     ))}
                   </select>
+                  {busySlots.size > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {Array.from(busySlots)
+                        .sort((a, b) => Number(a) - Number(b))
+                        .map((slot) => (
+                          <span
+                            key={slot}
+                            className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500"
+                          >
+                            {formatLessonSlotLabel(slot)} dolu
+                          </span>
+                        ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

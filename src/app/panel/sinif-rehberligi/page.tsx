@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { Plus, CheckCircle2, Clock, Calendar, BookOpen, X, AlertTriangle, Sparkles, CircleDashed, Trash2 } from "lucide-react"
+import { normalizeLessonSlot } from "@/lib/lessonSlots"
 
 type GuidanceTopic = {
   id: string
@@ -50,6 +51,78 @@ function formatDateTR(dateStr: string): string {
   return `${d.getDate()} ${MONTHS_TR[d.getMonth()]} ${DAYS_TR[d.getDay()]}`
 }
 
+function useBusySlots() {
+  const [busySlots, setBusySlots] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(false)
+
+  const fetchBusySlots = useCallback(async (date: string, options?: { excludePlanId?: string }) => {
+    if (!date) {
+      setBusySlots(new Set())
+      return new Set<string>()
+    }
+
+    try {
+      setLoading(true)
+      const allBusySlots = new Set<string>()
+
+      const [appointmentRes, plansRes] = await Promise.all([
+        fetch(`/api/appointments?date=${date}`, { headers: { Accept: "application/json" } }),
+        supabase
+          .from("guidance_plans")
+          .select("id, lesson_period")
+          .eq("plan_date", date)
+          .eq("status", "planned")
+      ])
+
+      if (appointmentRes.ok) {
+        const appointmentData = await appointmentRes.json()
+        appointmentData.appointments?.forEach((apt: { id: string; status: string; start_time: string }) => {
+          if (apt.status !== "cancelled") {
+            const normalized = normalizeLessonSlot(apt.start_time)
+            if (normalized) allBusySlots.add(normalized)
+          }
+        })
+      }
+
+      if (!plansRes.error && plansRes.data) {
+        plansRes.data.forEach((plan: { id: string; lesson_period: number | null }) => {
+          if (plan.id !== options?.excludePlanId) {
+            const normalized = normalizeLessonSlot(plan.lesson_period)
+            if (normalized) allBusySlots.add(normalized)
+          }
+        })
+      }
+
+      try {
+        const { data: activities, error } = await supabase
+          .from("class_activities")
+          .select("id, activity_time")
+          .eq("activity_date", date)
+
+        if (!error && activities) {
+          activities.forEach((activity: { id: string; activity_time: string | null }) => {
+            const normalized = normalizeLessonSlot(activity.activity_time)
+            if (normalized) allBusySlots.add(normalized)
+          })
+        }
+      } catch (err) {
+        console.error(err)
+      }
+
+      setBusySlots(allBusySlots)
+      return allBusySlots
+    } catch (err) {
+      console.error(err)
+      setBusySlots(new Set())
+      return new Set<string>()
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  return { busySlots, loading, fetchBusySlots }
+}
+
 export default function SinifRehberligiPage() {
   const [topics, setTopics] = useState<GuidanceTopic[]>([])
   const [loading, setLoading] = useState(true)
@@ -72,6 +145,7 @@ export default function SinifRehberligiPage() {
   const [planTeacher, setPlanTeacher] = useState("")
   const [conflictWarning, setConflictWarning] = useState<string | null>(null)
   const [savingPlan, setSavingPlan] = useState(false)
+  const { busySlots, loading: busyLoading, fetchBusySlots } = useBusySlots()
 
   const [showGradeManagementModal, setShowGradeManagementModal] = useState(false)
   const [selectedTopicForGrades, setSelectedTopicForGrades] = useState<GuidanceTopic | null>(null)
@@ -104,7 +178,7 @@ export default function SinifRehberligiPage() {
       const completedTopicIds: string[] = []
       for (const topic of topicsWithPlans) {
         if (topic.plans.length > 0) {
-          const allPlansCompleted = topic.plans.every(p => p.status === 'completed')
+          const allPlansCompleted = topic.plans.every((p: any) => p.status === 'completed')
           if (allPlansCompleted && topic.status !== 'completed') {
             console.log(`Auto-completing topic: ${topic.title}`)
             await supabase
@@ -149,6 +223,33 @@ export default function SinifRehberligiPage() {
   useEffect(() => {
     if (selectedGrade) fetchHistory(selectedGrade)
   }, [selectedGrade, fetchHistory])
+
+  useEffect(() => {
+    if (!showPlanModal || !planDate) return
+
+    let cancelled = false
+
+    const syncBusySlots = async () => {
+      const latestBusySlots = await fetchBusySlots(planDate, { excludePlanId: selectedPlan?.id })
+      if (cancelled) return
+
+      if (planPeriod) {
+        setConflictWarning(
+          latestBusySlots.has(String(planPeriod))
+            ? "Bu saat zaten dolu görünüyor."
+            : null
+        )
+      } else {
+        setConflictWarning(null)
+      }
+    }
+
+    syncBusySlots()
+
+    return () => {
+      cancelled = true
+    }
+  }, [showPlanModal, planDate, planPeriod, selectedPlan?.id, fetchBusySlots])
 
   // guidance_plans veya guidance_topics tablosu değişince kartları otomatik yenile
   useEffect(() => {
@@ -202,25 +303,29 @@ export default function SinifRehberligiPage() {
   }
 
   const checkConflict = useCallback(async (date: string, period: number) => {
-    if (!date || !period) { setConflictWarning(null); return }
-    const { data } = await supabase
-      .from('guidance_plans')
-      .select('id, class_display')
-      .eq('status', 'planned')
-      .eq('plan_date', date)
-      .eq('lesson_period', period)
-      .neq('id', selectedPlan?.id || '')
-    if (data && data.length > 0) {
-      setConflictWarning(`Bu saatte zaten ${data[0].class_display} planlanmış!`)
+    if (!date || !period) {
+      setConflictWarning(null)
+      return
+    }
+
+    const latestBusySlots = await fetchBusySlots(date, { excludePlanId: selectedPlan?.id })
+    if (latestBusySlots.has(String(period))) {
+      setConflictWarning("Bu saat zaten başka bir plan tarafından kullanılıyor!")
     } else {
       setConflictWarning(null)
     }
-  }, [selectedPlan?.id])
+  }, [fetchBusySlots, selectedPlan?.id])
 
   const handleSavePlan = async () => {
     if (!selectedPlan || !planDate || !planPeriod || conflictWarning) return
     setSavingPlan(true)
     try {
+      const latestBusySlots = await fetchBusySlots(planDate, { excludePlanId: selectedPlan.id })
+      if (latestBusySlots.has(String(planPeriod))) {
+        setConflictWarning("Bu saat artık dolu görünüyor. Lütfen başka bir ders saati seçin.")
+        return
+      }
+
       // Planı kaydet
       await supabase
         .from('guidance_plans')
@@ -915,20 +1020,26 @@ export default function SinifRehberligiPage() {
                       {[1,2,3,4,5,6,7].map(p => (
                         <button
                           key={p}
+                          disabled={busyLoading || busySlots.has(String(p))}
                           onClick={() => {
                             setPlanPeriod(p)
                             if (planDate) checkConflict(planDate, p)
                           }}
                           className={`py-2 rounded-lg text-sm font-bold border-2 transition-all ${
-                            planPeriod === p
+                            busyLoading || busySlots.has(String(p))
+                              ? 'bg-slate-100 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
+                              : planPeriod === p
                               ? 'bg-blue-500 border-blue-500 text-white'
                               : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300'
                           }`}
                         >
-                          {p}
+                          {p}{busySlots.has(String(p)) ? ' •' : ''}
                         </button>
                       ))}
                     </div>
+                    <p className="text-xs text-slate-500">
+                      Dolu saatler pasif gösterilir ve seçilemez.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-slate-700">Öğretmen Adı <span className="text-slate-400 font-normal">(isteğe bağlı)</span></label>
@@ -960,7 +1071,7 @@ export default function SinifRehberligiPage() {
                   </button>
                   <button
                     onClick={handleSavePlan}
-                    disabled={!planDate || !planPeriod || !!conflictWarning || savingPlan}
+                    disabled={!planDate || !planPeriod || !!conflictWarning || savingPlan || busyLoading}
                     className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:from-blue-600 hover:to-indigo-700 transition-all"
                   >
                     {savingPlan ? 'Kaydediliyor...' : 'Kaydet'}

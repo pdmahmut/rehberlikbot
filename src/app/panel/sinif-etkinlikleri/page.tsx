@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,96 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { normalizeLessonSlot } from "@/lib/lessonSlots";
+
+// Dolu saatleri kontrol etmek için hook
+function useBusySlots() {
+  const [busySlots, setBusySlots] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
+
+  const fetchBusySlots = useCallback(async (date: string, options?: { excludeActivityId?: string }) => {
+    try {
+      setLoading(true);
+      const allBusySlots = new Set<string>();
+      
+      // Randevuları getir
+      const appointmentRes = await fetch(`/api/appointments?date=${date}`, {
+        headers: { Accept: "application/json" }
+      });
+      
+      if (appointmentRes.ok) {
+        const appointmentData = await appointmentRes.json();
+        appointmentData.appointments?.forEach((apt: any) => {
+          if (apt.status !== 'cancelled') {
+            const normalizedTime = normalizeLessonSlot(apt.start_time);
+            if (normalizedTime) {
+            allBusySlots.add(normalizedTime);
+            }
+          }
+        });
+      }
+
+      // Sınıf rehberliği planlarını getir
+      try {
+        const { data: plans, error } = await supabase
+          .from("guidance_plans")
+          .select("id, lesson_period")
+          .eq("plan_date", date)
+          .eq("status", "planned");
+
+        if (!error && plans) {
+          plans.forEach((plan: any) => {
+            if (plan.id !== options?.excludeActivityId) {
+              const normalizedTime = normalizeLessonSlot(plan.lesson_period);
+              if (normalizedTime) {
+                allBusySlots.add(normalizedTime);
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Sınıf rehberliği planları yüklenemedi:", err);
+      }
+
+      // Sınıf etkinliklerini getir
+      try {
+        const { data: activities, error } = await supabase
+          .from("class_activities")
+          .select("id, activity_time")
+          .eq("activity_date", date);
+
+        if (!error && activities) {
+          activities.forEach(activity => {
+            if (activity.id !== options?.excludeActivityId) {
+              const normalizedTime = normalizeLessonSlot(activity.activity_time);
+              if (normalizedTime) {
+              allBusySlots.add(normalizedTime);
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Sınıf etkinlikleri yüklenemedi:", err);
+      }
+
+      console.log("Dolu saatler:", Array.from(allBusySlots));
+      setBusySlots(allBusySlots);
+      return allBusySlots;
+    } catch (err) {
+      console.error("Dolu saatler alınamadı:", err);
+      setBusySlots(new Set());
+      return new Set<string>();
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return {
+    busySlots,
+    loading,
+    fetchBusySlots
+  };
+}
 
 // Sınıf etkinliği tipi
 interface ClassActivity {
@@ -42,6 +132,7 @@ interface ClassActivity {
   class_key: string;
   class_display: string;
   activity_date: string;
+  activity_time: string;
   activity_type: string;
   title: string;
   description: string;
@@ -96,11 +187,14 @@ export default function SinifEtkinlikleriPage() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   
+  const { busySlots, loading: busyLoading, fetchBusySlots } = useBusySlots();
+  
   // Form verileri
   const [formData, setFormData] = useState({
     class_key: '',
     class_display: '',
     activity_date: new Date().toISOString().split('T')[0],
+    activity_time: '',
     activity_type: '',
     title: '',
     description: '',
@@ -119,6 +213,13 @@ export default function SinifEtkinlikleriPage() {
   useEffect(() => {
     loadActivities();
   }, []);
+  
+  // Dolu saatleri getir
+  useEffect(() => {
+    if (formData.activity_date) {
+      fetchBusySlots(formData.activity_date, { excludeActivityId: editingActivity?.id });
+    }
+  }, [formData.activity_date, editingActivity?.id, fetchBusySlots]);
   
   const loadActivities = async () => {
     setIsLoading(true);
@@ -184,6 +285,62 @@ export default function SinifEtkinlikleriPage() {
       toast.error('Etkinlik türü seçin');
       return;
     }
+    if (!formData.activity_time) {
+      toast.error('Ders saati seçin');
+      return;
+    }
+    
+    // Çakışma kontrolü - aynı tarih ve ders saatinde başka kayıt var mı?
+    try {
+      const latestBusySlots = await fetchBusySlots(formData.activity_date, { excludeActivityId: editingActivity?.id });
+
+      if (latestBusySlots.has(normalizeLessonSlot(formData.activity_time) || '')) {
+        toast.error('Bu tarih ve ders saatinde başka bir kayıt var');
+        return;
+      }
+
+      const [appointmentCheck, planCheck] = await Promise.all([
+        supabase
+          .from('appointments')
+          .select('id, participant_name, participant_type, start_time')
+          .eq('appointment_date', formData.activity_date)
+          .neq('status', 'cancelled'),
+        supabase
+          .from('guidance_plans')
+          .select('id, class_display, lesson_period')
+          .eq('plan_date', formData.activity_date)
+          .eq('status', 'planned')
+      ]);
+
+      if (appointmentCheck.error || planCheck.error) {
+        console.error('Çakışma kontrolü hatası:', appointmentCheck.error || planCheck.error);
+        toast.error('Çakışma kontrolü yapılamadı');
+        return;
+      }
+
+      const conflictingAppointments = (appointmentCheck.data || []).filter((apt: any) =>
+        normalizeLessonSlot(apt.start_time) === normalizeLessonSlot(formData.activity_time)
+      );
+
+      if (conflictingAppointments.length > 0) {
+        const appointment = conflictingAppointments[0];
+        toast.error(`Bu tarih ve ders saatinde zaten bir randevu var: ${appointment.participant_name} (${appointment.participant_type})`);
+        return;
+      }
+
+      const conflictingPlans = (planCheck.data || []).filter((plan: any) =>
+        normalizeLessonSlot(plan.lesson_period) === normalizeLessonSlot(formData.activity_time)
+      );
+
+      if (conflictingPlans.length > 0) {
+        toast.error(`Bu tarih ve ders saatinde zaten bir sınıf rehberliği planı var: ${conflictingPlans[0].class_display}`);
+        return;
+      }
+    } catch (error) {
+      console.error('Çakışma kontrolü hatası:', error);
+      toast.error('Çakışma kontrolü yapılamadı');
+      return;
+    }
     
     const saveData = {
       ...formData,
@@ -245,6 +402,7 @@ export default function SinifEtkinlikleriPage() {
       class_key: '',
       class_display: '',
       activity_date: new Date().toISOString().split('T')[0],
+      activity_time: '',
       activity_type: '',
       title: '',
       description: '',
@@ -267,6 +425,7 @@ export default function SinifEtkinlikleriPage() {
       class_key: activity.class_key || '',
       class_display: activity.class_display || '',
       activity_date: activity.activity_date || '',
+      activity_time: activity.activity_time || '',
       activity_type: activity.activity_type || '',
       title: activity.title || '',
       description: activity.description || '',
@@ -477,6 +636,38 @@ export default function SinifEtkinlikleriPage() {
               </div>
               
               <div className="space-y-2">
+                <Label>Ders Saati</Label>
+                  <select
+                    value={formData.activity_time}
+                    onChange={(e) => setFormData({ ...formData, activity_time: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-cyan-500"
+                  >
+                  <option value="">Seçin...</option>
+                  {[
+                    { value: '1. Ders', label: '1. Ders' },
+                    { value: '2. Ders', label: '2. Ders' },
+                    { value: '3. Ders', label: '3. Ders' },
+                    { value: '4. Ders', label: '4. Ders' },
+                    { value: '5. Ders', label: '5. Ders' },
+                    { value: '6. Ders', label: '6. Ders' },
+                    { value: '7. Ders', label: '7. Ders' },
+                  ].map(slot => {
+                    const normalizedSlot = normalizeLessonSlot(slot.value) || '';
+                    return (
+                      <option 
+                        key={slot.value} 
+                        value={slot.value} 
+                        disabled={busySlots.has(normalizedSlot)}
+                        className={busySlots.has(normalizedSlot) ? "text-slate-400 bg-slate-100" : ""}
+                      >
+                        {slot.label} {busySlots.has(normalizedSlot) ? "(Dolu)" : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              
+              <div className="space-y-2">
                 <Label>Süre (dk)</Label>
                 <Input
                   type="number"
@@ -516,6 +707,20 @@ export default function SinifEtkinlikleriPage() {
                       <option key={status.value} value={status.value}>{status.label}</option>
                     ))}
                   </select>
+                  {busySlots.size > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {Array.from(busySlots)
+                        .sort((a, b) => Number(a) - Number(b))
+                        .map((slot) => (
+                          <span
+                            key={slot}
+                            className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500"
+                          >
+                            {slot}. Ders dolu
+                          </span>
+                        ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

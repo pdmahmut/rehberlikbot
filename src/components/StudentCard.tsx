@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Button } from "@/components/ui/button";
 import { Edit2, Trash2, Calendar } from "lucide-react";
@@ -15,6 +15,7 @@ export interface StudentCardProps {
   onDelete: () => void;
   appointmentUrl: string;
   isScheduled?: boolean;
+  requestStatus?: "pending" | "scheduled" | "completed" | "cancelled";
   onClick?: () => void;
 }
 
@@ -52,8 +53,11 @@ export function StudentCard({
   onDelete,
   appointmentUrl,
   isScheduled = false,
+  requestStatus,
   onClick
 }: StudentCardProps) {
+  const effectiveStatus = requestStatus || (isScheduled ? "scheduled" : "pending");
+
   return (
     <div
       role={onClick ? "button" : undefined}
@@ -101,12 +105,7 @@ export function StudentCard({
 
           {/* Butonlar */}
           <div className="flex gap-2 items-center">
-            {isScheduled ? (
-              <Badge className="bg-amber-100 text-amber-700 border-0 text-xs whitespace-nowrap">
-                <Calendar className="h-3 w-3 mr-1" />
-                Randevu Verildi
-              </Badge>
-            ) : (
+            {effectiveStatus === "pending" ? (
               <Button
                 asChild
                 size="sm"
@@ -121,6 +120,21 @@ export function StudentCard({
                   Randevuya Dönüştür
                 </Link>
               </Button>
+            ) : effectiveStatus === "scheduled" ? (
+              <Badge className="bg-amber-100 text-amber-700 border-0 text-xs whitespace-nowrap">
+                <Calendar className="h-3 w-3 mr-1" />
+                Randevu Verildi
+              </Badge>
+            ) : effectiveStatus === "completed" ? (
+              <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs whitespace-nowrap">
+                <Calendar className="h-3 w-3 mr-1" />
+                Görüşüldü
+              </Badge>
+            ) : (
+              <Badge className="bg-slate-100 text-slate-700 border-0 text-xs whitespace-nowrap">
+                <Calendar className="h-3 w-3 mr-1" />
+                İptal Edildi
+              </Badge>
             )}
 
             <Button

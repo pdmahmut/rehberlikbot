@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +33,42 @@ type ApplicationRecord = {
   date: string;
   status: "Görüşüldü" | "Randevu verildi" | "Bekliyor";
   note?: string | null;
+};
+
+type ApplicationStatus = ApplicationRecord["status"];
+type ApplicationStatusOverrides = Record<string, ApplicationStatus>;
+
+const APPLICATION_STATUS_OVERRIDES_KEY = "application-status-overrides";
+
+const loadApplicationStatusOverrides = (): ApplicationStatusOverrides => {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem(APPLICATION_STATUS_OVERRIDES_KEY);
+    if (!raw) return {};
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+    return Object.entries(parsed as Record<string, unknown>).reduce<ApplicationStatusOverrides>((acc, [id, value]) => {
+      if (value === "Görüşüldü" || value === "Randevu verildi" || value === "Bekliyor") {
+        acc[id] = value;
+      }
+      return acc;
+    }, {});
+  } catch {
+    return {};
+  }
+};
+
+const saveApplicationStatusOverrides = (overrides: ApplicationStatusOverrides) => {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(APPLICATION_STATUS_OVERRIDES_KEY, JSON.stringify(overrides));
+  } catch {
+    // Local storage write failed; state still updates in this tab.
+  }
 };
 
 const formatDateTime = (value?: string | null) => {
@@ -112,6 +148,7 @@ export default function BasvurularPage() {
   const [individualRequests, setIndividualRequests] = useState<IndividualRequestRecord[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [statusOverrides, setStatusOverrides] = useState<ApplicationStatusOverrides>({});
 
   const handleDeleteApplication = async (application: ApplicationRecord) => {
     if (!confirm(`${application.student_name} adlı öğrencinin ${application.source} başvurusunu silmek istediğinizden emin misiniz?`)) {
@@ -233,6 +270,27 @@ export default function BasvurularPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    setStatusOverrides(loadApplicationStatusOverrides());
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === APPLICATION_STATUS_OVERRIDES_KEY) {
+        setStatusOverrides(loadApplicationStatusOverrides());
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  const updateApplicationStatusOverride = (applicationId: string, nextStatus: ApplicationStatus) => {
+    setStatusOverrides((prev) => {
+      const next = { ...prev, [applicationId]: nextStatus };
+      saveApplicationStatusOverrides(next);
+      return next;
+    });
+  };
+
   const applicationRecords: ApplicationRecord[] = useMemo(() => {
     const records: ApplicationRecord[] = [];
 
@@ -349,6 +407,13 @@ export default function BasvurularPage() {
     return records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [incidents, referrals, observations, requests, individualRequests, attendedAppointments, scheduledAppointments]);
 
+  const applicationRecordsWithOverrides = useMemo(() => {
+    return applicationRecords.map((record) => ({
+      ...record,
+      status: statusOverrides[record.id] || record.status
+    }));
+  }, [applicationRecords, statusOverrides]);
+
   const isReferralActive = applicationsSourceFilter === "Öğretmen Yönlendirmeleri";
 
   useEffect(() => {
@@ -358,7 +423,7 @@ export default function BasvurularPage() {
   }, [isReferralActive]);
 
   const filteredApplications = useMemo(() => {
-    return applicationRecords.filter((item) => {
+    return applicationRecordsWithOverrides.filter((item) => {
       const matchesSearch = !applicationsSearchQuery ||
         normalizeStudentName(item.student_name).includes(normalizeStudentName(applicationsSearchQuery));
 
@@ -376,12 +441,12 @@ export default function BasvurularPage() {
 
       return matchesSearch && matchesClass && matchesSource && matchesReferrer && matchesStatus;
     });
-  }, [applicationRecords, applicationsSearchQuery, applicationsClassFilter, applicationsSourceFilter, applicationsReferrerFilter, applicationsStatusFilter]);
+  }, [applicationRecordsWithOverrides, applicationsSearchQuery, applicationsClassFilter, applicationsSourceFilter, applicationsReferrerFilter, applicationsStatusFilter]);
 
   const applicationClassOptions = useMemo(() => {
     const classMap = new Map<string, string>();
 
-    applicationRecords.forEach((item) => {
+    applicationRecordsWithOverrides.forEach((item) => {
       const classValue = item.class_display || item.class_key;
       const normalized = normalizeClassText(classValue);
       if (!normalized) return;
@@ -394,15 +459,15 @@ export default function BasvurularPage() {
     return Array.from(classMap.entries())
       .map(([value, label]) => ({ value, label }))
       .sort((a, b) => a.label.localeCompare(b.label, "tr-TR"));
-  }, [applicationRecords]);
+  }, [applicationRecordsWithOverrides]);
 
   const applicationReferrerOptions = useMemo(() => {
     const referrers = new Set<string>();
-    applicationRecords.forEach((item) => {
+    applicationRecordsWithOverrides.forEach((item) => {
       if (item.referrer) referrers.add(item.referrer);
     });
     return Array.from(referrers).sort((a, b) => a.localeCompare(b, "tr-TR"));
-  }, [applicationRecords]);
+  }, [applicationRecordsWithOverrides]);
 
   const applicationStatistics = useMemo(() => {
     const totals = {
@@ -424,7 +489,7 @@ export default function BasvurularPage() {
       bySource: {} as Record<string, number>
     };
 
-    applicationRecords.forEach((item) => {
+    applicationRecordsWithOverrides.forEach((item) => {
       totals.total += 1;
       totals.status[item.status] += 1;
       totals.source[item.source] += 1;
@@ -444,7 +509,7 @@ export default function BasvurularPage() {
     });
 
     return totals;
-  }, [applicationRecords]);
+  }, [applicationRecordsWithOverrides]);
 
   if (loading) {
     return (
@@ -653,7 +718,7 @@ export default function BasvurularPage() {
                     </tr>
                   ) : (
                     filteredApplications.map((item, index) => (
-                      <tr key={item.id} className="border-b border-slate-100 hover:bg-gradient-to-r hover:from-purple-50/50 hover:to-pink-50/50 transition-all duration-200 group">
+                      <tr key={item.id} className="group/row border-b border-slate-100 hover:bg-gradient-to-r hover:from-purple-50/50 hover:to-pink-50/50 transition-all duration-200">
                         <td className="px-4 py-3 font-medium text-slate-800 group-hover:text-purple-700 transition-colors">{item.student_name}</td>
                         <td className="px-4 py-3 text-slate-600">
                           <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
@@ -676,17 +741,26 @@ export default function BasvurularPage() {
                           })}
                         </td>
                         <td className="px-4 py-3">
-                          <Badge
-                            className={
-                              item.status === "Görüşüldü"
-                                ? "bg-gradient-to-r from-emerald-500 to-green-600 text-white border-0 shadow-sm"
-                                : item.status === "Randevu verildi"
-                                ? "bg-gradient-to-r from-blue-500 to-cyan-600 text-white border-0 shadow-sm"
-                                : "bg-gradient-to-r from-amber-500 to-orange-600 text-white border-0 shadow-sm"
-                            }
-                          >
-                            {item.status}
-                          </Badge>
+                          {item.status === "Bekliyor" ? (
+                            <Button
+                              type="button"
+                              onClick={() => updateApplicationStatusOverride(item.id, "Görüşüldü")}
+                              className="inline-flex h-auto items-center rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition-all hover:from-emerald-500 hover:to-green-600 hover:shadow-md"
+                            >
+                              <span className="group-hover/row:hidden">Bekliyor</span>
+                              <span className="hidden group-hover/row:inline">Görüşüldü yap</span>
+                            </Button>
+                          ) : (
+                            <Badge
+                              className={
+                                item.status === "Görüşüldü"
+                                  ? "bg-gradient-to-r from-emerald-500 to-green-600 text-white border-0 shadow-sm"
+                                  : "bg-gradient-to-r from-blue-500 to-cyan-600 text-white border-0 shadow-sm"
+                              }
+                            >
+                              {item.status}
+                            </Badge>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <Button
@@ -714,3 +788,5 @@ export default function BasvurularPage() {
     </div>
   );
 }
+
+

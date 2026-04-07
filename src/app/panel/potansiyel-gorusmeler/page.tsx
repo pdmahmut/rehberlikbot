@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
@@ -16,6 +16,15 @@ import { toast } from "sonner";
 import { StudentCard } from "@/components/StudentCard";
 import { DetailModal, type DetailModalRecord } from "@/components/DetailModal";
 import { useAppointments } from "../randevu/hooks";
+import {
+  POTENTIAL_MEETINGS_CHANGED_EVENT,
+  POTENTIAL_MEETINGS_STORAGE_KEY,
+  POTENTIAL_MEETINGS_HIDDEN_CHANGED_EVENT,
+  POTENTIAL_MEETINGS_HIDDEN_STORAGE_KEY,
+  loadHiddenPotentialMeetingKeys,
+  buildPotentialMeetingStorageKey,
+  hidePotentialMeetingKey
+} from "@/lib/potentialMeetings";
 import {
   Appointment,
   ReferralRecord,
@@ -136,12 +145,19 @@ const matchesQuery = (fields: Array<string | null | undefined>, query: string) =
   return normalizeText(text).includes(query);
 };
 
-const buildAppointmentUrl = (studentName: string, classDisplay?: string | null, classKey?: string | null, note?: string | null) => {
+const buildAppointmentUrl = (
+  studentName: string,
+  classDisplay?: string | null,
+  classKey?: string | null,
+  note?: string | null,
+  sourceRequestId?: string
+) => {
   const params = new URLSearchParams();
   if (studentName) params.set("studentName", studentName);
   if (classDisplay) params.set("classDisplay", classDisplay);
   if (classKey) params.set("classKey", classKey);
   if (note) params.set("note", note);
+  if (sourceRequestId) params.set("requestId", sourceRequestId);
   return `/panel/randevu?${params.toString()}`;
 };
 
@@ -287,6 +303,7 @@ export default function PotansiyelGorusmelerPage() {
   const [loading, setLoading] = useState(true);
   const [attendedAppointments, setAttendedAppointments] = useState<Appointment[]>([]);
   const [scheduledAppointments, setScheduledAppointments] = useState<Appointment[]>([]);
+  const [hiddenPotentialMeetingKeys, setHiddenPotentialMeetingKeys] = useState<string[]>([]);
   const [referrals, setReferrals] = useState<ReferralRecord[]>([]);
   const [observations, setObservations] = useState<ObservationPoolRecord[]>([]);
   const [incidents, setIncidents] = useState<StudentIncidentRecord[]>([]);
@@ -329,7 +346,7 @@ export default function PotansiyelGorusmelerPage() {
           .eq("participant_type", "student")
           .order("appointment_date", { ascending: false })
           .order("created_at", { ascending: false }),
-        fetch("/api/individual-requests?status=pending")
+        fetch("/api/individual-requests")
       ]);
 
       if (referralResult.error) throw referralResult.error;
@@ -370,6 +387,44 @@ export default function PotansiyelGorusmelerPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    setHiddenPotentialMeetingKeys(loadHiddenPotentialMeetingKeys());
+  }, []);
+
+  useEffect(() => {
+    const handlePotentialMeetingsChanged = () => {
+      loadData();
+    };
+
+    const handleHiddenPotentialMeetingsChanged = () => {
+      setHiddenPotentialMeetingKeys(loadHiddenPotentialMeetingKeys());
+    };
+
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === POTENTIAL_MEETINGS_STORAGE_KEY) {
+        loadData();
+      }
+      if (event.key === POTENTIAL_MEETINGS_HIDDEN_STORAGE_KEY) {
+        setHiddenPotentialMeetingKeys(loadHiddenPotentialMeetingKeys());
+      }
+    };
+
+    window.addEventListener(POTENTIAL_MEETINGS_CHANGED_EVENT, handlePotentialMeetingsChanged);
+    window.addEventListener(POTENTIAL_MEETINGS_HIDDEN_CHANGED_EVENT, handleHiddenPotentialMeetingsChanged);
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.removeEventListener(POTENTIAL_MEETINGS_CHANGED_EVENT, handlePotentialMeetingsChanged);
+      window.removeEventListener(POTENTIAL_MEETINGS_HIDDEN_CHANGED_EVENT, handleHiddenPotentialMeetingsChanged);
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
+
+  const isPotentialMeetingHidden = (kind: "incident" | "referral" | "observation" | "request" | "individual-request", id?: string | null) => {
+    if (!id) return false;
+    return hiddenPotentialMeetingKeys.includes(buildPotentialMeetingStorageKey(kind, id));
+  };
 
   const query = normalizeText(searchQuery);
 
@@ -413,6 +468,7 @@ export default function PotansiyelGorusmelerPage() {
 
     if (source === "Bireysel Başvuru") {
       if (record.status === "completed") return "Görüşüldü";
+      if (record.status === "scheduled") return "Randevu verildi";
       if (record.status === "cancelled") return "Bekliyor";
       return "Bekliyor";
     }
@@ -422,6 +478,7 @@ export default function PotansiyelGorusmelerPage() {
 
   const filteredIncidents = useMemo(() => {
     return incidents.filter((incident) =>
+      !isPotentialMeetingHidden("incident", incident.id) &&
       !isAlreadyAttended(incident.target_student_name, incident.target_class_display, incident.target_class_key) &&
       !isAppointmentScheduled(incident.target_student_name, incident.target_class_display, incident.target_class_key) &&
       matchesQuery(
@@ -435,18 +492,20 @@ export default function PotansiyelGorusmelerPage() {
         query
       )
     );
-  }, [incidents, query, attendedAppointments, scheduledAppointments]);
+  }, [incidents, query, attendedAppointments, scheduledAppointments, hiddenPotentialMeetingKeys]);
 
   const filteredReferrals = useMemo(() => {
     return referrals.filter((referral) =>
+      !isPotentialMeetingHidden("referral", referral.id) &&
       !isAlreadyAttended(referral.student_name, referral.class_display, referral.class_key) &&
       !isAppointmentScheduled(referral.student_name, referral.class_display, referral.class_key) &&
       matchesQuery([referral.student_name, referral.teacher_name, referral.class_display, referral.reason, referral.note], query)
     );
-  }, [referrals, query, attendedAppointments, scheduledAppointments]);
+  }, [referrals, query, attendedAppointments, scheduledAppointments, hiddenPotentialMeetingKeys]);
 
   const filteredObservations = useMemo(() => {
     return observations.filter((observation) =>
+      !isPotentialMeetingHidden("observation", observation.id) &&
       !isAlreadyAttended(observation.student_name, observation.class_display, observation.class_key) &&
       !isAppointmentScheduled(observation.student_name, observation.class_display, observation.class_key) &&
       matchesQuery(
@@ -462,10 +521,11 @@ export default function PotansiyelGorusmelerPage() {
         query
       )
     );
-  }, [observations, query, attendedAppointments, scheduledAppointments]);
+  }, [observations, query, attendedAppointments, scheduledAppointments, hiddenPotentialMeetingKeys]);
 
   const filteredRequests = useMemo(() => {
     return requests.filter((request) =>
+      !isPotentialMeetingHidden("request", request.id) &&
       !isAlreadyAttended(request.student_name, request.class_display, request.class_key) &&
       !isAppointmentScheduled(request.student_name, request.class_display, request.class_key) &&
       matchesQuery(
@@ -480,12 +540,11 @@ export default function PotansiyelGorusmelerPage() {
         query
       )
     );
-  }, [requests, query, attendedAppointments, scheduledAppointments]);
+  }, [requests, query, attendedAppointments, scheduledAppointments, hiddenPotentialMeetingKeys]);
 
   const filteredIndividualRequests = useMemo(() => {
     return individualRequests.filter((request) =>
-      !isAlreadyAttended(request.student_name, request.class_display, request.class_key) &&
-      !isAppointmentScheduled(request.student_name, request.class_display, request.class_key) &&
+      !isPotentialMeetingHidden("individual-request", request.id) &&
       matchesQuery(
         [
           request.student_name,
@@ -496,7 +555,7 @@ export default function PotansiyelGorusmelerPage() {
         query
       )
     );
-  }, [individualRequests, query, attendedAppointments, scheduledAppointments]);
+  }, [individualRequests, query, hiddenPotentialMeetingKeys]);
 
   // Tüm kayıtları birleştir ve kronolojik sırala
   const allMergedRecords = useMemo(() => {
@@ -513,6 +572,7 @@ export default function PotansiyelGorusmelerPage() {
 
     // Öğrenci Bildirimleri
     filteredIncidents.forEach((incident) => {
+      if (isPotentialMeetingHidden("incident", incident.id)) return;
       records.push({
         id: `incident-${incident.id}`,
         studentName: incident.target_student_name || "",
@@ -527,6 +587,7 @@ export default function PotansiyelGorusmelerPage() {
 
     // Öğretmen Yönlendirmeleri
     filteredReferrals.forEach((referral) => {
+      if (isPotentialMeetingHidden("referral", referral.id)) return;
       records.push({
         id: `referral-${referral.id}`,
         studentName: referral.student_name,
@@ -541,6 +602,7 @@ export default function PotansiyelGorusmelerPage() {
 
     // Gözlem Havuzu
     filteredObservations.forEach((observation) => {
+      if (isPotentialMeetingHidden("observation", observation.id)) return;
       records.push({
         id: `observation-${observation.id}`,
         studentName: observation.student_name,
@@ -555,6 +617,7 @@ export default function PotansiyelGorusmelerPage() {
 
     // Veli Talepleri
     filteredRequests.forEach((request) => {
+      if (isPotentialMeetingHidden("request", request.id)) return;
       records.push({
         id: `request-${request.id}`,
         studentName: request.student_name,
@@ -568,7 +631,8 @@ export default function PotansiyelGorusmelerPage() {
     });
 
     // Bireysel Başvurular
-    filteredIndividualRequests.forEach((request) => {
+    individualRequests.forEach((request) => {
+      if (isPotentialMeetingHidden("individual-request", request.id)) return;
       records.push({
         id: `individual-${request.id}`,
         studentName: request.student_name,
@@ -587,7 +651,15 @@ export default function PotansiyelGorusmelerPage() {
       const dateB = new Date(b.date || 0).getTime();
       return dateB - dateA;
     });
-  }, [filteredIncidents, filteredReferrals, filteredObservations, filteredRequests, filteredIndividualRequests]);
+  }, [
+    filteredIncidents,
+    filteredReferrals,
+    filteredObservations,
+    filteredRequests,
+    filteredIndividualRequests,
+    individualRequests,
+    hiddenPotentialMeetingKeys
+  ]);
 
   const applicationRecords = useMemo<ApplicationRecord[]>(() => {
     const applications: ApplicationRecord[] = [];
@@ -660,20 +732,20 @@ export default function PotansiyelGorusmelerPage() {
       });
     });
 
-    individualRequests.forEach((req) => {
-      const student = req.student_name;
-      const classDisplay = req.class_display || req.class_key || "";
-      const isScheduled = isAppointmentScheduled(student, req.class_display, req.class_key);
+    individualRequests.forEach((request) => {
+      const student = request.student_name;
+      const classDisplay = request.class_display || request.class_key || "";
+      const isScheduled = isAppointmentScheduled(student, request.class_display, request.class_key);
       applications.push({
-        id: req.id || `individual-${student}-${req.request_date}`,
+        id: request.id || `individual-${student}-${request.request_date}`,
         student_name: student,
         class_display: classDisplay,
-        class_key: req.class_key || "",
+        class_key: request.class_key || "",
         source: "Bireysel Başvuru",
         referrer: "",
-        date: req.request_date || req.created_at || "",
-        status: getApplicationStatus("Bireysel Başvuru", req, isScheduled),
-        note: req.note || ""
+        date: request.request_date || request.created_at || "",
+        status: getApplicationStatus("Bireysel Başvuru", request, isScheduled),
+        note: request.note || ""
       });
     });
 
@@ -760,6 +832,13 @@ export default function PotansiyelGorusmelerPage() {
     if (!confirmed) return;
 
     try {
+      if (kind === "request" || kind === "individual-request") {
+        hidePotentialMeetingKey(kind, id);
+        setHiddenPotentialMeetingKeys(loadHiddenPotentialMeetingKeys());
+        toast.success("Kayıt potansiyel görüşmelerden kaldırıldı");
+        return;
+      }
+
       if (kind === "observation") {
         const res = await fetch(`/api/gozlem-havuzu?id=${encodeURIComponent(id)}`, { method: "DELETE" });
         if (!res.ok) throw new Error("Gözlem kaydı silinemedi");
@@ -769,12 +848,6 @@ export default function PotansiyelGorusmelerPage() {
       } else if (kind === "referral") {
         const { error } = await supabase.from("referrals").delete().eq("id", id);
         if (error) throw error;
-      } else if (kind === "request") {
-        const { error } = await supabase.from("parent_meeting_requests").delete().eq("id", id);
-        if (error) throw error;
-      } else if (kind === "individual-request") {
-        const res = await fetch(`/api/individual-requests?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-        if (!res.ok) throw new Error("Bireysel başvuru silinemedi");
       }
 
       toast.success("Kayıt silindi");
@@ -1129,6 +1202,12 @@ export default function PotansiyelGorusmelerPage() {
             >
               <div className="space-y-2">
                 {filteredIndividualRequests.map((request) => (
+                  (() => {
+                    const displayStatus = request.status === "scheduled"
+                      ? (isAlreadyAttended(request.student_name, request.class_display, request.class_key) ? "completed" : "scheduled")
+                      : request.status;
+
+                    return (
                   <StudentCard
                     key={request.id}
                     studentName={request.student_name}
@@ -1136,12 +1215,13 @@ export default function PotansiyelGorusmelerPage() {
                     classNumber={request.class_key}
                     note={request.note}
                     date={request.request_date || request.created_at}
-                    isScheduled={isAppointmentScheduled(request.student_name, request.class_display, request.class_key)}
+                    requestStatus={displayStatus}
                     onClick={() => setSelectedItem(buildDetailModalItem("individual", request))}
                     onEdit={() => handleEditSource("individual-request", { id: request.id, studentName: request.student_name, classDisplay: request.class_display || null })}
                     onDelete={() => handleDeleteSource("individual-request", request.id)}
-                    appointmentUrl={buildAppointmentUrl(request.student_name, request.class_display || null, request.class_key || null, request.note)}
-                  />
+                    appointmentUrl={buildAppointmentUrl(request.student_name, request.class_display || null, request.class_key || null, request.note, request.id)}
+                  />);
+                  })()
                 ))}
               </div>
             </SectionBlock>
@@ -1373,3 +1453,6 @@ function SectionBlock({
     </Card>
   );
 }
+
+
+
