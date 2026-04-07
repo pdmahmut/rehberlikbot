@@ -255,8 +255,15 @@ export default function SinifRehberligiPage() {
         })
       }
 
-      // Plan'ı güncelle ve modalı yenile et (kapanma!)
+      // Plan'ı güncelle ve modalı yenile et
       setSelectedPlan({ ...selectedPlan, status: 'planned' as const })
+      
+      // Kısa bir delay sonrası modal'ı kapat (Tamamlandı butonunun gösterilmesi sağlansın)
+      setTimeout(() => {
+        setShowPlanModal(false)
+        setSelectedPlan(null)
+      }, 500)
+      
       fetchTopics()
     } catch (err) {
       console.error(err)
