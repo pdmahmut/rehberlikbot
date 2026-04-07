@@ -71,8 +71,7 @@ const PRIORITIES = [
   { value: 'urgent', label: 'Acil', color: 'red', icon: AlertCircle }
 ];
 
-// Filtre tipi
-type FilterType = 'all' | 'today' | 'week' | 'overdue' | 'completed';
+// Filtre tipi kaldırıldı — artık gün bazlı filtreleme var
 
 const getLocalDateString = (date: Date) => {
   const year = date.getFullYear();
@@ -86,9 +85,9 @@ export default function YapilacaklarPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [filter, setFilter] = useState<FilterType>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<string>(getLocalDateString(new Date()));
   
   // Yeni görev formu
   const [newTask, setNewTask] = useState({
@@ -233,25 +232,11 @@ export default function YapilacaklarPage() {
     }
   };
   
-  // Filtrelenmiş görevler
+  // Filtrelenmiş görevler — seçili güne göre
   const filteredTasks = useMemo(() => {
-    const now = new Date();
-    const today = getLocalDateString(now);
-    const weekEnd = new Date(now);
-    weekEnd.setDate(weekEnd.getDate() + 7);
-    const weekEndStr = getLocalDateString(weekEnd);
-    
     return tasks.filter(task => {
-      // Durum filtresi
-      if (filter === 'completed' && task.status !== 'completed') return false;
-      if (filter === 'today' && task.due_date !== today) return false;
-      if (filter === 'week' && (!task.due_date || task.due_date > weekEndStr)) return false;
-      if (filter === 'overdue' && (!task.due_date || task.due_date >= today || task.status === 'completed')) return false;
-      
-      // Kategori filtresi
+      if (task.due_date !== selectedDate) return false;
       if (categoryFilter && task.category !== categoryFilter) return false;
-      
-      // Arama filtresi
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const matchesTitle = task.title.toLowerCase().includes(query);
@@ -259,31 +244,9 @@ export default function YapilacaklarPage() {
         const matchesStudent = task.related_student_name?.toLowerCase().includes(query);
         if (!matchesTitle && !matchesDesc && !matchesStudent) return false;
       }
-      
       return true;
     });
-  }, [tasks, filter, categoryFilter, searchQuery]);
-  
-  // İstatistikler
-  const stats = useMemo(() => {
-    const now = new Date();
-    const today = getLocalDateString(now);
-    
-    const pending = tasks.filter(t => t.status === 'pending');
-    const completed = tasks.filter(t => t.status === 'completed');
-    const overdue = pending.filter(t => t.due_date && t.due_date < today);
-    const todayTasks = pending.filter(t => t.due_date === today);
-    const urgent = pending.filter(t => t.priority === 'urgent');
-    
-    return {
-      total: tasks.length,
-      pending: pending.length,
-      completed: completed.length,
-      overdue: overdue.length,
-      today: todayTasks.length,
-      urgent: urgent.length
-    };
-  }, [tasks]);
+  }, [tasks, selectedDate, categoryFilter, searchQuery]);
   
   // Renk haritası
   const colorMap: Record<string, { bg: string; text: string; border: string }> = {
@@ -344,82 +307,58 @@ export default function YapilacaklarPage() {
         </Button>
       </div>
       
-      {/* İstatistik Kartları */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilter('all')}>
-          <CardContent className="p-4 text-center">
-            <div className={`p-3 rounded-xl w-12 h-12 mx-auto mb-2 flex items-center justify-center ${
-              filter === 'all' ? 'bg-blue-500' : 'bg-blue-100'
-            }`}>
-              <ListTodo className={`h-6 w-6 ${filter === 'all' ? 'text-white' : 'text-blue-600'}`} />
+      {/* Gün Seçici */}
+      {(() => {
+        const DAYS_TR = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+        const MONTHS_TR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+        const today = getLocalDateString(new Date());
+        const d = new Date(selectedDate + 'T00:00:00');
+        const label = selectedDate === today
+          ? 'Bugün'
+          : `${d.getDate()} ${MONTHS_TR[d.getMonth()]} ${DAYS_TR[d.getDay()]}`;
+
+        const goDay = (offset: number) => {
+          const next = new Date(selectedDate + 'T00:00:00');
+          next.setDate(next.getDate() + offset);
+          setSelectedDate(getLocalDateString(next));
+        };
+
+        const dayCount = tasks.filter(t => t.due_date === selectedDate).length;
+        const doneCount = tasks.filter(t => t.due_date === selectedDate && t.status === 'completed').length;
+
+        return (
+          <div className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4">
+            <button
+              onClick={() => goDay(-1)}
+              className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-all"
+            >
+              <ChevronDown className="h-5 w-5 rotate-90" />
+            </button>
+
+            <div className="flex-1 text-center">
+              <p className="text-xl font-bold text-slate-800">{label}</p>
+              {selectedDate !== today && (
+                <button
+                  onClick={() => setSelectedDate(today)}
+                  className="text-xs text-emerald-600 font-medium hover:underline mt-0.5"
+                >
+                  Bugüne dön
+                </button>
+              )}
+              {dayCount > 0 && (
+                <p className="text-xs text-slate-400 mt-0.5">{doneCount}/{dayCount} tamamlandı</p>
+              )}
             </div>
-            <p className="text-2xl font-bold text-slate-800">{stats.pending}</p>
-            <p className="text-xs text-slate-500">Bekleyen</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilter('today')}>
-          <CardContent className="p-4 text-center">
-            <div className={`p-3 rounded-xl w-12 h-12 mx-auto mb-2 flex items-center justify-center ${
-              filter === 'today' ? 'bg-amber-500' : 'bg-amber-100'
-            }`}>
-              <CalendarCheck className={`h-6 w-6 ${filter === 'today' ? 'text-white' : 'text-amber-600'}`} />
-            </div>
-            <p className="text-2xl font-bold text-slate-800">{stats.today}</p>
-            <p className="text-xs text-slate-500">Bugün</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilter('week')}>
-          <CardContent className="p-4 text-center">
-            <div className={`p-3 rounded-xl w-12 h-12 mx-auto mb-2 flex items-center justify-center ${
-              filter === 'week' ? 'bg-purple-500' : 'bg-purple-100'
-            }`}>
-              <Calendar className={`h-6 w-6 ${filter === 'week' ? 'text-white' : 'text-purple-600'}`} />
-            </div>
-              <p className="text-2xl font-bold text-slate-800">{tasks.filter(t => {
-                const weekEnd = new Date();
-                weekEnd.setDate(weekEnd.getDate() + 7);
-                return t.due_date && t.due_date <= getLocalDateString(weekEnd) && t.status !== 'completed';
-              }).length}</p>
-            <p className="text-xs text-slate-500">Bu Hafta</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilter('overdue')}>
-          <CardContent className="p-4 text-center">
-            <div className={`p-3 rounded-xl w-12 h-12 mx-auto mb-2 flex items-center justify-center ${
-              filter === 'overdue' ? 'bg-red-500' : 'bg-red-100'
-            }`}>
-              <AlertCircle className={`h-6 w-6 ${filter === 'overdue' ? 'text-white' : 'text-red-600'}`} />
-            </div>
-            <p className="text-2xl font-bold text-slate-800">{stats.overdue}</p>
-            <p className="text-xs text-slate-500">Gecikmiş</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="cursor-pointer hover:shadow-md transition-shadow">
-          <CardContent className="p-4 text-center">
-            <div className="p-3 bg-orange-100 rounded-xl w-12 h-12 mx-auto mb-2 flex items-center justify-center">
-              <Flag className="h-6 w-6 text-orange-600" />
-            </div>
-            <p className="text-2xl font-bold text-slate-800">{stats.urgent}</p>
-            <p className="text-xs text-slate-500">Acil</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilter('completed')}>
-          <CardContent className="p-4 text-center">
-            <div className={`p-3 rounded-xl w-12 h-12 mx-auto mb-2 flex items-center justify-center ${
-              filter === 'completed' ? 'bg-green-500' : 'bg-green-100'
-            }`}>
-              <CheckCircle2 className={`h-6 w-6 ${filter === 'completed' ? 'text-white' : 'text-green-600'}`} />
-            </div>
-            <p className="text-2xl font-bold text-slate-800">{stats.completed}</p>
-            <p className="text-xs text-slate-500">Tamamlanan</p>
-          </CardContent>
-        </Card>
-      </div>
+
+            <button
+              onClick={() => goDay(1)}
+              className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-all"
+            >
+              <ChevronDown className="h-5 w-5 -rotate-90" />
+            </button>
+          </div>
+        );
+      })()}
       
       {/* Görev Ekleme Formu */}
       {showForm && (
@@ -565,11 +504,9 @@ export default function YapilacaklarPage() {
           <CardContent className="py-12 text-center">
             <CheckSquare className="h-12 w-12 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-500">
-              {filter === 'completed' ? 'Tamamlanan görev yok' :
-               filter === 'overdue' ? 'Gecikmiş görev yok' :
-               'Görev bulunamadı'}
+              Bu güne ait görev bulunamadı
             </p>
-            {filter === 'all' && (
+            {true && (
               <Button 
                 variant="outline" 
                 className="mt-4"
