@@ -101,6 +101,7 @@ export default function SinifRehberligiPage() {
       )
 
       // Tüm kartları completed olan konuları otomatik olarak completed yap
+      const completedTopicIds: string[] = []
       for (const topic of topicsWithPlans) {
         if (topic.plans.length > 0) {
           const allPlansCompleted = topic.plans.every(p => p.status === 'completed')
@@ -110,11 +111,14 @@ export default function SinifRehberligiPage() {
               .from('guidance_topics')
               .update({ status: 'completed' })
               .eq('id', topic.id)
+            completedTopicIds.push(topic.id)
           }
         }
       }
 
-      setTopics(topicsWithPlans)
+      // Completed olanları state'ten çıkar
+      const filteredTopics = topicsWithPlans.filter(t => !completedTopicIds.includes(t.id))
+      setTopics(filteredTopics)
     } catch (err) {
       console.error(err)
     } finally {
