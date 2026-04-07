@@ -259,7 +259,8 @@ export default function SinifRehberligiPage() {
         .select('id, status')
         .eq('topic_id', plan.topic_id)
 
-      const allDone = allPlans?.every(p => p.id === plan.id ? true : p.status === 'completed')
+      // Tüm planların tamamlandı olup olmadığını kontrol et (güncel plan da dahil)
+      const allDone = allPlans?.every(p => p.status === 'completed')
       if (allDone) {
         await supabase
           .from('guidance_topics')
