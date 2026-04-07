@@ -238,6 +238,7 @@ export default function RandevuPage() {
   const [customTag, setCustomTag] = useState("");
   const [customTags, setCustomTags] = useState<string[]>([]);
   const [parentName, setParentName] = useState(""); // Veli adı için ayrı state
+  const [selectedStudentName, setSelectedStudentName] = useState(""); // Veli randevuları için öğrenci adı
 
   const [formData, setFormData] = useState<AppointmentFormData>({
     appointment_date: new Date().toISOString().slice(0, 10),
@@ -530,6 +531,7 @@ export default function RandevuPage() {
     setCustomTag("");
     setEditingAppointment(null);
     setParentName(""); // Veli adını reset et
+    setSelectedStudentName(""); // Öğrenci adını reset et
   };
 
   const closeNewAppointmentModal = () => {
@@ -560,6 +562,19 @@ export default function RandevuPage() {
     );
     setStudents([]);
     setCustomTag("");
+    setParentName("");
+    setSelectedStudentName("");
+    if (appointment.participant_type === "parent") {
+      const nameParts = appointment.participant_name.split(" (");
+      if (nameParts.length > 1) {
+        const parentPart = nameParts[0];
+        const studentPart = nameParts[1].replace(" velisi)", "");
+        setParentName(parentPart);
+        setSelectedStudentName(studentPart);
+      } else {
+        setParentName(appointment.participant_name);
+      }
+    }
     setShowNewAppointmentModal(true);
   };
 
@@ -1068,6 +1083,8 @@ export default function RandevuPage() {
                       setFormData({ ...formData, participant_type: newType, participant_name: "", participant_class: "" });
                       setSelectedClass("");
                       setStudents([]);
+                      setParentName("");
+                      setSelectedStudentName("");
                     }}
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
                   >
@@ -1134,8 +1151,15 @@ export default function RandevuPage() {
                       </div>
                     ) : (
                       <select
-                        value={formData.participant_name}
-                        onChange={(e) => setFormData({ ...formData, participant_name: e.target.value })}
+                        value={formData.participant_type === "parent" ? selectedStudentName : formData.participant_name}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (formData.participant_type === "parent") {
+                            setSelectedStudentName(value);
+                          } else {
+                            setFormData({ ...formData, participant_name: value });
+                          }
+                        }}
                         className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
                         disabled={!selectedClass}
                       >
@@ -1160,15 +1184,15 @@ export default function RandevuPage() {
                         onChange={(e) => {
                           const newParentName = e.target.value;
                           setParentName(newParentName);
-                          if (newParentName.trim()) {
+                          if (newParentName.trim() && selectedStudentName) {
                             setFormData({
                               ...formData,
-                              participant_name: `${newParentName} (${formData.participant_name.split(' (')[0]} velisi)`
+                              participant_name: `${newParentName} (${selectedStudentName} velisi)`
                             });
                           } else {
                             setFormData({
                               ...formData,
-                              participant_name: formData.participant_name.split(' (')[0]
+                              participant_name: newParentName.trim() || ""
                             });
                           }
                         }}
