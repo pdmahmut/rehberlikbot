@@ -237,6 +237,7 @@ export default function RandevuPage() {
 
   const [customTag, setCustomTag] = useState("");
   const [customTags, setCustomTags] = useState<string[]>([]);
+  const [parentName, setParentName] = useState(""); // Veli adı için ayrı state
 
   const [formData, setFormData] = useState<AppointmentFormData>({
     appointment_date: new Date().toISOString().slice(0, 10),
@@ -528,6 +529,7 @@ export default function RandevuPage() {
     setStudents([]);
     setCustomTag("");
     setEditingAppointment(null);
+    setParentName(""); // Veli adını reset et
   };
 
   const closeNewAppointmentModal = () => {
@@ -1152,14 +1154,16 @@ export default function RandevuPage() {
                       <label className="text-xs font-medium text-slate-600 mb-1 block">Veli Adı (opsiyonel)</label>
                       <input
                         type="text"
+                        value={parentName}
                         placeholder="Veli adını girin veya boş bırakın"
                         className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
                         onChange={(e) => {
-                          const parentName = e.target.value;
-                          if (parentName) {
+                          const newParentName = e.target.value;
+                          setParentName(newParentName);
+                          if (newParentName.trim()) {
                             setFormData({
                               ...formData,
-                              participant_name: `${parentName} (${formData.participant_name} velisi)`
+                              participant_name: `${newParentName} (${formData.participant_name.split(' (')[0]} velisi)`
                             });
                           } else {
                             setFormData({
