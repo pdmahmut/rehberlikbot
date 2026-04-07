@@ -592,7 +592,7 @@ export default function SinifRehberligiPage() {
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">{year} Okul Yılı</p>
                       <div className="space-y-2">
                         {yearTopics.map(topic => (
-                          <div key={topic.id} className="flex items-center gap-3">
+                          <div key={topic.id} className="flex items-center gap-3 group">
                             <div className={`w-2 h-2 rounded-full shrink-0 ${topic.status === 'completed' ? 'bg-emerald-500' : 'bg-blue-400'}`} />
                             <span className="text-sm text-slate-700 font-medium">{topic.title}</span>
                             <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -602,6 +602,13 @@ export default function SinifRehberligiPage() {
                             }`}>
                               {topic.status === 'completed' ? 'Tamamlandı' : 'Bu yıl devam ediyor'}
                             </span>
+                            <button
+                              onClick={() => handleDeleteTopic(topic.id)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"
+                              title="Konuyu sil"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
                         ))}
                       </div>
