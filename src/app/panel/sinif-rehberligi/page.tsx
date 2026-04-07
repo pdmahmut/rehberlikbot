@@ -248,6 +248,8 @@ export default function SinifRehberligiPage() {
 
   const handleCompletePlan = async (plan: GuidancePlan) => {
     try {
+      console.log('Starting to complete plan:', plan.id, 'for topic:', plan.topic_id)
+      
       // Plan'ı completed yap
       const { error: updateError } = await supabase
         .from('guidance_plans')
@@ -258,6 +260,7 @@ export default function SinifRehberligiPage() {
         console.error('Plan update error:', updateError)
         throw updateError
       }
+      console.log('Plan updated successfully')
 
       // İlgili görevi de tamamlandı yap
       await supabase
@@ -285,6 +288,7 @@ export default function SinifRehberligiPage() {
       console.log('All done?', allDone, 'Plans:', allPlans?.map(p => ({ id: p.id, status: p.status })))
       
       if (allDone) {
+        console.log('Marking topic as completed...')
         const { error: topicError } = await supabase
           .from('guidance_topics')
           .update({ status: 'completed' })
@@ -293,11 +297,16 @@ export default function SinifRehberligiPage() {
         if (topicError) {
           console.error('Topic update error:', topicError)
         } else {
-          console.log('Topic marked as completed')
+          console.log('Topic marked as completed successfully')
         }
+      } else {
+        console.log('Not all plans are completed, not marking topic as completed')
       }
       
-      fetchTopics()
+      console.log('Calling fetchTopics...')
+      setShowPlanModal(false)
+      await fetchTopics()
+      console.log('fetchTopics completed')
     } catch (err) {
       console.error('Complete plan error:', err)
     }
