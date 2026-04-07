@@ -131,13 +131,18 @@ export default function SinifRehberligiPage() {
     if (selectedGrade) fetchHistory(selectedGrade)
   }, [selectedGrade, fetchHistory])
 
-  // guidance_plans tablosu değişince kartları otomatik yenile
+  // guidance_plans veya guidance_topics tablosu değişince kartları otomatik yenile
   useEffect(() => {
     const channel = supabase
-      .channel('guidance-plans-sync')
+      .channel('guidance-sync')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'guidance_plans' },
+        () => { fetchTopics() }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'guidance_topics' },
         () => { fetchTopics() }
       )
       .subscribe()
@@ -243,10 +248,16 @@ export default function SinifRehberligiPage() {
 
   const handleCompletePlan = async (plan: GuidancePlan) => {
     try {
-      await supabase
+      // Plan'ı completed yap
+      const { error: updateError } = await supabase
         .from('guidance_plans')
         .update({ status: 'completed', completed_at: new Date().toISOString() })
         .eq('id', plan.id)
+      
+      if (updateError) {
+        console.error('Plan update error:', updateError)
+        throw updateError
+      }
 
       // İlgili görevi de tamamlandı yap
       await supabase
@@ -254,22 +265,41 @@ export default function SinifRehberligiPage() {
         .update({ status: 'completed', completed_at: new Date().toISOString() })
         .eq('related_guidance_plan_id', plan.id)
 
-      const { data: allPlans } = await supabase
+      // Biraz bekle - veri tabanı senkronizasyonu için
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      const { data: allPlans, error: fetchError } = await supabase
         .from('guidance_plans')
         .select('id, status')
         .eq('topic_id', plan.topic_id)
 
-      // Tüm planların tamamlandı olup olmadığını kontrol et (güncel plan da dahil)
+      if (fetchError) {
+        console.error('Fetch plans error:', fetchError)
+        throw fetchError
+      }
+
+      console.log('All plans:', allPlans)
+
+      // Tüm planların tamamlandı olup olmadığını kontrol et
       const allDone = allPlans?.every(p => p.status === 'completed')
+      console.log('All done?', allDone, 'Plans:', allPlans?.map(p => ({ id: p.id, status: p.status })))
+      
       if (allDone) {
-        await supabase
+        const { error: topicError } = await supabase
           .from('guidance_topics')
           .update({ status: 'completed' })
           .eq('id', plan.topic_id)
+        
+        if (topicError) {
+          console.error('Topic update error:', topicError)
+        } else {
+          console.log('Topic marked as completed')
+        }
       }
+      
       fetchTopics()
     } catch (err) {
-      console.error(err)
+      console.error('Complete plan error:', err)
     }
   }
 
