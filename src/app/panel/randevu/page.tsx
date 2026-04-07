@@ -1155,10 +1155,16 @@ export default function RandevuPage() {
                         placeholder="Veli adını girin veya boş bırakın"
                         className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
                         onChange={(e) => {
-                          if (e.target.value) {
+                          const parentName = e.target.value;
+                          if (parentName) {
                             setFormData({
                               ...formData,
-                              participant_name: `${e.target.value} (${formData.participant_name} velisi)`
+                              participant_name: `${parentName} (${formData.participant_name} velisi)`
+                            });
+                          } else {
+                            setFormData({
+                              ...formData,
+                              participant_name: formData.participant_name.split(' (')[0]
                             });
                           }
                         }}
