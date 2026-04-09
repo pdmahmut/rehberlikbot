@@ -495,8 +495,8 @@ export default function PotansiyelGorusmelerPage() {
     }
 
     if (source === "Gözlem Havuzu") {
-      if (record.status === "completed" || record.status === "active_follow" || record.status === "regular_meeting") return "Görüşüldü";
-      if (record.status === "converted" || record.status === "scheduled" || record.status === "randevu_verildi") return "Randevu verildi";
+      if (record.status === "completed") return "Görüşüldü";
+      if (record.status === "converted" || record.status === "scheduled") return "Randevu verildi";
       return "Bekliyor";
     }
 
@@ -522,8 +522,8 @@ export default function PotansiyelGorusmelerPage() {
     return incidents.filter((incident) =>
       !isPotentialMeetingHidden("incident", incident.id) &&
       !isCentralRecordCompleted("student_report", incident.id) &&
-      !hasArchivedAppointment(incident.target_student_name, incident.target_class_display, incident.target_class_key) &&
       !isAlreadyAttended(incident.target_student_name, incident.target_class_display, incident.target_class_key) &&
+      !isAppointmentScheduled(incident.target_student_name, incident.target_class_display, incident.target_class_key) &&
       matchesQuery(
         [
           incident.target_student_name,
@@ -541,15 +541,15 @@ export default function PotansiyelGorusmelerPage() {
     return referrals.filter((referral) =>
       !isPotentialMeetingHidden("referral", referral.id) &&
       !isCentralRecordCompleted("teacher_referral", referral.id) &&
-      !hasArchivedAppointment(referral.student_name, referral.class_display, referral.class_key) &&
       !isAlreadyAttended(referral.student_name, referral.class_display, referral.class_key) &&
+      !isAppointmentScheduled(referral.student_name, referral.class_display, referral.class_key) &&
       matchesQuery([referral.student_name, referral.teacher_name, referral.class_display, referral.reason, referral.note], query)
     );
   }, [referrals, observations, query, attendedAppointments, scheduledAppointments, hiddenPotentialMeetingKeys]);
 
   const filteredObservations = useMemo(() => {
     return observations.filter((observation) =>
-      (observation.status === "pending" || observation.status === "converted" || observation.status === "scheduled" || observation.status === "randevu_verildi") &&
+      observation.status === "pending" &&
       !isPotentialMeetingHidden("observation", observation.id) &&
       matchesQuery(
         [
@@ -570,7 +570,6 @@ export default function PotansiyelGorusmelerPage() {
     return requests.filter((request) =>
       !isPotentialMeetingHidden("request", request.id) &&
       !isCentralRecordCompleted("parent_request", request.id) &&
-      !hasArchivedAppointment(request.student_name, request.class_display, request.class_key) &&
       !isAlreadyAttended(request.student_name, request.class_display, request.class_key) &&
       matchesQuery(
         [
@@ -591,7 +590,7 @@ export default function PotansiyelGorusmelerPage() {
       !isPotentialMeetingHidden("individual-request", request.id) &&
       !isCentralRecordCompleted("self_application", request.id) &&
       request.status !== "completed" &&
-      !hasArchivedAppointment(request.student_name, request.class_display, request.class_key) &&
+      !isAlreadyAttended(request.student_name, request.class_display, request.class_key) &&
       matchesQuery(
         [
           request.student_name,
@@ -607,7 +606,7 @@ export default function PotansiyelGorusmelerPage() {
   const allObservationRecords = useMemo(() => {
     return observations
       .filter((observation) =>
-        (observation.status === "pending" || observation.status === "converted" || observation.status === "randevu_verildi") &&
+        (observation.status === "pending" || observation.status === "converted") &&
         matchesQuery(
           [
             observation.student_name,
@@ -1078,7 +1077,7 @@ export default function PotansiyelGorusmelerPage() {
                               record.type === "observation"
                                 ? (record.data.status === "completed"
                                     ? "completed"
-                                    : record.data.status === "converted" || record.data.status === "scheduled" || record.data.status === "randevu_verildi"
+                                    : record.data.status === "converted" || record.data.status === "scheduled"
                                     ? "scheduled"
                                     : "pending")
                                 : undefined

@@ -7,8 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
-import { MessageSquare, Search, Loader2, Filter, X, User, Trash2 } from "lucide-react";
+import { MessageSquare, Search, Loader2, Filter, User, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { AppointmentOutcomeModal, type AppointmentOutcomeChoice } from "@/components/AppointmentOutcomeModal";
 import {
   ReferralRecord,
   ObservationPoolRecord,
@@ -28,6 +29,7 @@ type ApplicationRecord = {
   status: "Görüşüldü" | "Randevu verildi" | "Bekliyor";
   outcome_label?: string | null;
   note?: string | null;
+  matched_appointment_id?: string | null;
 };
 
 type ApplicationStatus = ApplicationRecord["status"];
@@ -61,7 +63,8 @@ const normalizeStudentName = (value?: string | null) =>
   normalizeText((value || "").replace(/\s+/g, " "));
 
 const normalizeClassText = (value?: string | null) =>
-  (value || "").toLocaleLowerCase("tr-TR").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").replace(/[\/\-_.()]/g, "").trim();
+  (value || "").toLocaleLowerCase("tr-TR").normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ").replace(/[\/\-_.()]/g, "").trim();
 
 const normalizeDecisionText = (value: string) =>
   value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
@@ -85,7 +88,6 @@ const matchesAppointment = (
   return aClass === sClass || aClass.includes(sClass) || sClass.includes(aClass);
 };
 
-// outcome_decision dizisinden etiket çıkar
 const getOutcomeLabel = (decisions: string[] | null | undefined): string | null => {
   if (!decisions || decisions.length === 0) return null;
   for (const d of decisions) {
@@ -97,20 +99,15 @@ const getOutcomeLabel = (decisions: string[] | null | undefined): string | null 
   return null;
 };
 
-// Öğrencinin tamamlanmış randevusundan outcome_label bul
-const findOutcomeLabel = (
+const findMatchedAppointment = (
   attendedAppointments: any[],
   studentName?: string | null,
   classDisplay?: string | null,
   classKey?: string | null
-): string | null => {
-  for (const apt of attendedAppointments) {
-    if (matchesAppointment(apt, studentName, classDisplay, classKey)) {
-      const label = getOutcomeLabel(apt.outcome_decision);
-      if (label) return label;
-    }
-  }
-  return null;
+): any | null => {
+  return attendedAppointments.find((apt) =>
+    matchesAppointment(apt, studentName, classDisplay, classKey)
+  ) || null;
 };
 
 export default function BasvurularPage() {
@@ -122,6 +119,7 @@ export default function BasvurularPage() {
   const [applicationsOutcomeFilter, setApplicationsOutcomeFilter] = useState<"all" | "Tamamlandı" | "Aktif Takip" | "Düzenli Görüşme">("all");
 
   const [loading, setLoading] = useState(true);
+  const [savingOutcome, setSavingOutcome] = useState(false);
   const [attendedAppointments, setAttendedAppointments] = useState<any[]>([]);
   const [scheduledAppointments, setScheduledAppointments] = useState<any[]>([]);
   const [referrals, setReferrals] = useState<ReferralRecord[]>([]);
@@ -133,6 +131,113 @@ export default function BasvurularPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [statusOverrides, setStatusOverrides] = useState<ApplicationStatusOverrides>({});
 
+  // Modal state — tıklanan başvuru kaydı
+  const [outcomeModalRecord, setOutcomeModalRecord] = useState<ApplicationRecord | null>(null);
+
+  // Görüşüldü badge tıklandı → modal aç
+  const handleOpenOutcomeModal = (record: ApplicationRecord) => {
+    setOutcomeModalRecord(record);
+  };
+
+  // Modal seçimi → outcome_decision kaydet
+  const handleOutcomeSelect = async (choice: Exclude<AppointmentOutcomeChoice, "cancel">) => {
+    if (!outcomeModalRecord) return;
+    setSavingOutcome(true);
+
+    const choiceMap: Record<typeof choice, { outcome_decision: string[]; source_application_status: string }> = {
+      completed: { outcome_decision: ["Tamamlandı"], source_application_status: "completed" },
+      active_follow: { outcome_decision: ["Aktif Takip"], source_application_status: "active_follow" },
+      regular_meeting: { outcome_decision: ["Düzenli Görüşme"], source_application_status: "regular_meeting" }
+    };
+
+    const messages: Record<typeof choice, string> = {
+      completed: "Tamamlandı olarak işaretlendi",
+      active_follow: "Aktif Takip olarak işaretlendi",
+      regular_meeting: "Düzenli Görüşme olarak işaretlendi"
+    };
+
+    try {
+      const matched = findMatchedAppointment(
+        attendedAppointments,
+        outcomeModalRecord.student_name,
+        outcomeModalRecord.class_display,
+        outcomeModalRecord.class_key
+      );
+
+      let appointmentId = matched?.id || null;
+
+      // Eğer attended randevu yoksa → minimal randevu oluştur
+      if (!appointmentId) {
+        const today = new Date().toISOString().slice(0, 10);
+        const res = await fetch("/api/appointments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            appointment_date: today,
+            start_time: "1",
+            participant_type: "student",
+            participant_name: outcomeModalRecord.student_name,
+            participant_class: outcomeModalRecord.class_display || outcomeModalRecord.class_key || "",
+            status: "attended",
+            purpose: outcomeModalRecord.note || "Geçmiş görüşme kaydı",
+            ...choiceMap[choice]
+          })
+        });
+
+        if (!res.ok) {
+          // POST çakışma hatası olabilir (dolu slot vs.) — doğrudan Supabase'e yaz
+          const { data, error } = await supabase
+            .from("appointments")
+            .insert({
+              appointment_date: today,
+              start_time: "retro",
+              participant_type: "student",
+              participant_name: outcomeModalRecord.student_name,
+              participant_class: outcomeModalRecord.class_display || outcomeModalRecord.class_key || "",
+              status: "attended",
+              purpose: outcomeModalRecord.note || "Geçmiş görüşme kaydı",
+              outcome_decision: choiceMap[choice].outcome_decision
+            })
+            .select()
+            .single();
+          if (error) throw error;
+          appointmentId = data?.id;
+        } else {
+          const data = await res.json();
+          appointmentId = data?.appointment?.id;
+          // status'ü attended olarak güncelle
+          if (appointmentId) {
+            await supabase.from("appointments").update({
+              status: "attended",
+              outcome_decision: choiceMap[choice].outcome_decision
+            }).eq("id", appointmentId);
+          }
+        }
+      } else {
+        // Mevcut randevuya outcome_decision yaz
+        const res = await fetch("/api/appointments", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: appointmentId,
+            status: "attended",
+            ...choiceMap[choice]
+          })
+        });
+        if (!res.ok) throw new Error("Randevu güncellenemedi");
+      }
+
+      toast.success(messages[choice]);
+      setOutcomeModalRecord(null);
+      await loadData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "İşlem başarısız";
+      toast.error(message);
+    } finally {
+      setSavingOutcome(false);
+    }
+  };
+
   const handleDeleteApplication = async (application: ApplicationRecord) => {
     if (!confirm(`${application.student_name} adlı öğrencinin ${application.source} başvurusunu silmek istediğinizden emin misiniz?`)) return;
     setDeletingId(application.id);
@@ -141,56 +246,24 @@ export default function BasvurularPage() {
       const type = application.id.slice(0, dashIndex);
       const id = application.id.slice(dashIndex + 1);
       let endpoint = '';
-      let sourceApplicationType = '';
       switch (type) {
-        case 'incident':
-          endpoint = '/api/student-incidents';
-          sourceApplicationType = 'student_report';
-          break;
-        case 'referral':
-          endpoint = '/api/referrals';
-          sourceApplicationType = 'teacher_referral';
-          break;
-        case 'observation':
-          endpoint = '/api/gozlem-havuzu';
-          sourceApplicationType = 'observation';
-          break;
-        case 'request':
-          endpoint = '/api/parent-meeting-requests';
-          sourceApplicationType = 'parent_request';
-          break;
-        case 'individual':
-          endpoint = '/api/individual-requests';
-          sourceApplicationType = 'self_application';
-          break;
-        default:
-          throw new Error('Geçersiz başvuru türü');
+        case 'incident': endpoint = '/api/student-incidents'; break;
+        case 'referral': endpoint = '/api/referrals'; break;
+        case 'observation': endpoint = '/api/gozlem-havuzu'; break;
+        case 'request': endpoint = '/api/parent-meeting-requests'; break;
+        case 'individual': endpoint = '/api/individual-requests'; break;
+        default: throw new Error('Geçersiz başvuru türü');
       }
-
-      const response = await fetch(`${endpoint}?id=${id}`, { method: 'DELETE' });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Bilinmeyen hata' }));
-        throw new Error(errorData.error || 'İşlem başarısız');
-      }
-
-      try {
-        await fetch(
-          `/api/appointments?source_application_id=${encodeURIComponent(id)}&source_application_type=${encodeURIComponent(sourceApplicationType)}`,
-          { method: 'DELETE' }
-        );
-      } catch (cleanupError) {
-        console.error("Bağlı randevu silinirken hata oluştu:", cleanupError);
-      }
-
-      toast.success('Başvuru başarıyla silindi');
-      try {
-        await loadData();
-      } catch (refreshError) {
-        console.error("Başvurular yenilenemedi:", refreshError);
-      }
-    } catch (error) {
-      console.error('Başvuru silme hatası:', error);
-      toast.error(`Başvuru silinirken hata oluştu: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}`);
+      const isObservation = type === 'observation';
+      const body = isObservation ? { id, action: "status", status: "completed" } : null;
+      const response = isObservation
+        ? await fetch(endpoint, { method: 'PUT', headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+        : await fetch(`${endpoint}?id=${id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error("İşlem başarısız");
+      toast.success(isObservation ? 'Gözlem kaydı arşivlendi' : 'Başvuru başarıyla silindi');
+      await loadData();
+    } catch {
+      toast.error('Başvuru silinirken hata oluştu');
     } finally {
       setDeletingId(null);
     }
@@ -202,7 +275,7 @@ export default function BasvurularPage() {
       setLoadError(null);
       const [referralResult, observationResult, incidentResult, requestResult, attendedResult, scheduledResult, individualRequestResult] = await Promise.all([
         supabase.from("referrals").select("*").order("created_at", { ascending: false }),
-        fetch("/api/gozlem-havuzu"),
+        fetch("/api/gozlem-havuzu?status=pending"),
         supabase.from("student_incidents").select("*").in("status", ["new", "reviewing"]).order("incident_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("parent_meeting_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("appointments").select("*").eq("status", "attended").eq("participant_type", "student").order("appointment_date", { ascending: false }).order("created_at", { ascending: false }),
@@ -250,102 +323,65 @@ export default function BasvurularPage() {
   const applicationRecords: ApplicationRecord[] = useMemo(() => {
     const records: ApplicationRecord[] = [];
 
-    incidents.forEach((incident) => {
-      const isScheduled = scheduledAppointments.some((apt) => matchesAppointment(apt, incident.target_student_name, incident.target_class_display, incident.target_class_key));
-      const isAttended = attendedAppointments.some((apt) => matchesAppointment(apt, incident.target_student_name, incident.target_class_display, incident.target_class_key));
-      const outcomeLabel = isAttended ? findOutcomeLabel(attendedAppointments, incident.target_student_name, incident.target_class_display, incident.target_class_key) : null;
-      records.push({
-        id: `incident-${incident.id}`,
-        student_name: incident.target_student_name,
-        class_display: incident.target_class_display,
-        class_key: incident.target_class_key,
-        source: "Öğrenci Bildirimleri",
-        referrer: incident.record_role === "linked_reporter" ? incident.reporter_student_name || undefined : undefined,
-        date: incident.created_at || incident.incident_date || new Date().toISOString(),
+    const buildRecord = (
+      id: string,
+      student_name: string,
+      class_display: string | null | undefined,
+      class_key: string | null | undefined,
+      source: ApplicationRecord["source"],
+      referrer: string | undefined,
+      date: string,
+      note: string | null | undefined
+    ): ApplicationRecord => {
+      const isScheduled = scheduledAppointments.some((apt) => matchesAppointment(apt, student_name, class_display, class_key));
+      const matchedApt = findMatchedAppointment(attendedAppointments, student_name, class_display, class_key);
+      const isAttended = !!matchedApt;
+      const outcomeLabel = isAttended ? getOutcomeLabel(matchedApt?.outcome_decision) : null;
+      return {
+        id,
+        student_name,
+        class_display,
+        class_key,
+        source,
+        referrer,
+        date,
         status: isAttended ? "Görüşüldü" : isScheduled ? "Randevu verildi" : "Bekliyor",
         outcome_label: outcomeLabel,
-        note: incident.description
-      });
-    });
+        matched_appointment_id: matchedApt?.id || null,
+        note
+      };
+    };
 
-    referrals.forEach((referral) => {
-      const isScheduled = scheduledAppointments.some((apt) => matchesAppointment(apt, referral.student_name, referral.class_display, referral.class_key));
-      const isAttended = attendedAppointments.some((apt) => matchesAppointment(apt, referral.student_name, referral.class_display, referral.class_key));
-      const outcomeLabel = isAttended ? findOutcomeLabel(attendedAppointments, referral.student_name, referral.class_display, referral.class_key) : null;
-      records.push({
-        id: `referral-${referral.id}`,
-        student_name: referral.student_name,
-        class_display: referral.class_display,
-        class_key: referral.class_key,
-        source: "Öğretmen Yönlendirmeleri",
-        referrer: referral.teacher_name,
-        date: referral.created_at || new Date().toISOString(),
-        status: isAttended ? "Görüşüldü" : isScheduled ? "Randevu verildi" : "Bekliyor",
-        outcome_label: outcomeLabel,
-        note: referral.note || referral.reason
-      });
-    });
+    incidents.forEach((i) => records.push(buildRecord(
+      `incident-${i.id}`, i.target_student_name, i.target_class_display, i.target_class_key,
+      "Öğrenci Bildirimleri",
+      i.record_role === "linked_reporter" ? i.reporter_student_name || undefined : undefined,
+      i.created_at || i.incident_date || new Date().toISOString(), i.description
+    )));
 
-    observations.forEach((observation) => {
-      const normalizedStatus = observation.status === "randevu_verildi" || observation.status === "converted" ? "scheduled" : observation.status;
-      const appointmentScheduled = scheduledAppointments.some((apt) => matchesAppointment(apt, observation.student_name, observation.class_display, observation.class_key));
-      const appointmentAttended = attendedAppointments.some((apt) => matchesAppointment(apt, observation.student_name, observation.class_display, observation.class_key));
-      const isScheduled = normalizedStatus === "scheduled" || appointmentScheduled;
-      const isAttended =
-        normalizedStatus === "completed" ||
-        normalizedStatus === "active_follow" ||
-        normalizedStatus === "regular_meeting" ||
-        appointmentAttended;
-      const outcomeLabel = isAttended ? findOutcomeLabel(attendedAppointments, observation.student_name, observation.class_display, observation.class_key) : null;
-      records.push({
-        id: `observation-${observation.id}`,
-        student_name: observation.student_name,
-        class_display: observation.class_display,
-        class_key: observation.class_key,
-        source: "Gözlem Havuzu",
-        referrer: "",
-        date: observation.created_at || new Date().toISOString(),
-        status: isAttended ? "Görüşüldü" : isScheduled ? "Randevu verildi" : "Bekliyor",
-        outcome_label: outcomeLabel,
-        note: observation.note
-      });
-    });
+    referrals.forEach((r) => records.push(buildRecord(
+      `referral-${r.id}`, r.student_name, r.class_display, r.class_key,
+      "Öğretmen Yönlendirmeleri", r.teacher_name,
+      r.created_at || new Date().toISOString(), r.note || r.reason
+    )));
 
-    requests.forEach((request) => {
-      const isScheduled = scheduledAppointments.some((apt) => matchesAppointment(apt, request.student_name, request.class_display, request.class_key));
-      const isAttended = attendedAppointments.some((apt) => matchesAppointment(apt, request.student_name, request.class_display, request.class_key));
-      const outcomeLabel = isAttended ? findOutcomeLabel(attendedAppointments, request.student_name, request.class_display, request.class_key) : null;
-      records.push({
-        id: `request-${request.id}`,
-        student_name: request.student_name,
-        class_display: request.class_display,
-        class_key: request.class_key,
-        source: "Veli Talepleri",
-        referrer: request.parent_name || undefined,
-        date: request.created_at || new Date().toISOString(),
-        status: isAttended ? "Görüşüldü" : isScheduled ? "Randevu verildi" : "Bekliyor",
-        outcome_label: outcomeLabel,
-        note: request.detail || request.subject
-      });
-    });
+    observations.forEach((o) => records.push(buildRecord(
+      `observation-${o.id}`, o.student_name, o.class_display, o.class_key,
+      "Gözlem Havuzu", "",
+      o.created_at || new Date().toISOString(), o.note
+    )));
 
-    individualRequests.forEach((request) => {
-      const isScheduled = scheduledAppointments.some((apt) => matchesAppointment(apt, request.student_name, request.class_display, request.class_key));
-      const isAttended = attendedAppointments.some((apt) => matchesAppointment(apt, request.student_name, request.class_display, request.class_key));
-      const outcomeLabel = isAttended ? findOutcomeLabel(attendedAppointments, request.student_name, request.class_display, request.class_key) : null;
-      records.push({
-        id: `individual-${request.id}`,
-        student_name: request.student_name,
-        class_display: request.class_display,
-        class_key: request.class_key,
-        source: "Bireysel Başvuru",
-        referrer: undefined,
-        date: request.created_at || new Date().toISOString(),
-        status: isAttended ? "Görüşüldü" : isScheduled ? "Randevu verildi" : "Bekliyor",
-        outcome_label: outcomeLabel,
-        note: request.note
-      });
-    });
+    requests.forEach((r) => records.push(buildRecord(
+      `request-${r.id}`, r.student_name, r.class_display, r.class_key,
+      "Veli Talepleri", r.parent_name || undefined,
+      r.created_at || new Date().toISOString(), r.detail || r.subject
+    )));
+
+    individualRequests.forEach((r) => records.push(buildRecord(
+      `individual-${r.id}`, r.student_name, r.class_display, r.class_key,
+      "Bireysel Başvuru", undefined,
+      r.created_at || new Date().toISOString(), r.note
+    )));
 
     return records.filter((r) => r.student_name).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [incidents, referrals, observations, requests, individualRequests, attendedAppointments, scheduledAppointments]);
@@ -408,6 +444,26 @@ export default function BasvurularPage() {
     return totals;
   }, [applicationRecordsWithOverrides]);
 
+  // Modal için fake appointment nesnesi (sadece UI için)
+  const fakeAppointmentForModal = outcomeModalRecord ? {
+    id: outcomeModalRecord.matched_appointment_id || "new",
+    participant_name: outcomeModalRecord.student_name,
+    participant_class: outcomeModalRecord.class_display || outcomeModalRecord.class_key || "",
+    participant_type: "student",
+    start_time: "—",
+    appointment_date: new Date().toISOString().slice(0, 10),
+    status: "attended",
+    outcome_decision: [],
+    outcome_summary: null,
+    next_action: null,
+    location: null,
+    purpose: null,
+    preparation_note: null,
+    topic_tags: [],
+    priority: "normal",
+    created_at: new Date().toISOString()
+  } as any : null;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-14">
@@ -419,6 +475,7 @@ export default function BasvurularPage() {
 
   return (
     <div className="space-y-6">
+      {/* Başlık */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 p-6 text-white shadow-xl">
         <div className="absolute inset-0 bg-grid-white/10 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.5))]" />
         <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-blue-400/20 blur-3xl animate-float-slow" />
@@ -434,34 +491,20 @@ export default function BasvurularPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 mt-4">
-            <div className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-3 py-2 border border-white/10">
-              <p className="text-[10px] text-blue-200 uppercase tracking-wider">Toplam</p>
-              <p className="text-lg font-bold leading-none">{applicationRecords.length}</p>
-            </div>
-            <div className="flex items-center gap-2 rounded-lg bg-indigo-500/30 backdrop-blur-sm px-3 py-2 border border-indigo-400/30">
-              <p className="text-[10px] text-indigo-200 uppercase tracking-wider">Görüşüldü</p>
-              <p className="text-lg font-bold leading-none">{applicationStatistics.status["Görüşüldü"]}</p>
-            </div>
-            <div className="flex items-center gap-2 rounded-lg bg-violet-500/30 backdrop-blur-sm px-3 py-2 border border-violet-400/30">
-              <p className="text-[10px] text-violet-200 uppercase tracking-wider">Randevu</p>
-              <p className="text-lg font-bold leading-none">{applicationStatistics.status["Randevu verildi"]}</p>
-            </div>
-            <div className="flex items-center gap-2 rounded-lg bg-cyan-500/30 backdrop-blur-sm px-3 py-2 border border-cyan-400/30">
-              <p className="text-[10px] text-cyan-200 uppercase tracking-wider">Bekliyor</p>
-              <p className="text-lg font-bold leading-none">{applicationStatistics.status["Bekliyor"]}</p>
-            </div>
-            <div className="flex items-center gap-2 rounded-lg bg-emerald-500/30 backdrop-blur-sm px-3 py-2 border border-emerald-400/30">
-              <p className="text-[10px] text-emerald-200 uppercase tracking-wider">Tamamlandı</p>
-              <p className="text-lg font-bold leading-none">{applicationStatistics.outcome["Tamamlandı"]}</p>
-            </div>
-            <div className="flex items-center gap-2 rounded-lg bg-sky-500/30 backdrop-blur-sm px-3 py-2 border border-sky-400/30">
-              <p className="text-[10px] text-sky-200 uppercase tracking-wider">Aktif Takip</p>
-              <p className="text-lg font-bold leading-none">{applicationStatistics.outcome["Aktif Takip"]}</p>
-            </div>
-            <div className="flex items-center gap-2 rounded-lg bg-purple-500/30 backdrop-blur-sm px-3 py-2 border border-purple-400/30">
-              <p className="text-[10px] text-purple-200 uppercase tracking-wider">Düzenli Görüşme</p>
-              <p className="text-lg font-bold leading-none">{applicationStatistics.outcome["Düzenli Görüşme"]}</p>
-            </div>
+            {[
+              { label: "Toplam", value: applicationRecords.length, cls: "bg-white/10 border-white/10" },
+              { label: "Görüşüldü", value: applicationStatistics.status["Görüşüldü"], cls: "bg-indigo-500/30 border-indigo-400/30" },
+              { label: "Randevu", value: applicationStatistics.status["Randevu verildi"], cls: "bg-violet-500/30 border-violet-400/30" },
+              { label: "Bekliyor", value: applicationStatistics.status["Bekliyor"], cls: "bg-cyan-500/30 border-cyan-400/30" },
+              { label: "Tamamlandı", value: applicationStatistics.outcome["Tamamlandı"], cls: "bg-emerald-500/30 border-emerald-400/30" },
+              { label: "Aktif Takip", value: applicationStatistics.outcome["Aktif Takip"], cls: "bg-sky-500/30 border-sky-400/30" },
+              { label: "Düzenli Görüşme", value: applicationStatistics.outcome["Düzenli Görüşme"], cls: "bg-purple-500/30 border-purple-400/30" },
+            ].map(({ label, value, cls }) => (
+              <div key={label} className={`flex items-center gap-2 rounded-lg backdrop-blur-sm px-3 py-2 border ${cls}`}>
+                <p className="text-[10px] text-white/70 uppercase tracking-wider">{label}</p>
+                <p className="text-lg font-bold leading-none">{value}</p>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -479,6 +522,7 @@ export default function BasvurularPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-6 space-y-6">
+          {/* Filtreler */}
           <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Search className="h-4 w-4 text-purple-500" />Öğrenci Ara</Label>
@@ -531,6 +575,7 @@ export default function BasvurularPage() {
             </div>
           </div>
 
+          {/* Tablo */}
           <div className="overflow-x-auto bg-white rounded-xl border border-slate-200 shadow-sm">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-gradient-to-r from-purple-50 to-pink-50">
@@ -577,6 +622,16 @@ export default function BasvurularPage() {
                             <span className="group-hover/row:hidden">Bekliyor</span>
                             <span className="hidden group-hover/row:inline">Görüşüldü yap</span>
                           </Button>
+                        ) : item.status === "Görüşüldü" && !item.outcome_label ? (
+                          // Görüşüldü ama henüz sonuç seçilmemiş → tıklanabilir badge
+                          <button
+                            type="button"
+                            onClick={() => handleOpenOutcomeModal(item)}
+                            className="inline-flex h-auto items-center rounded-full bg-gradient-to-r from-emerald-500 to-green-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition-all hover:from-emerald-600 hover:to-green-700 hover:shadow-md cursor-pointer"
+                            title="Görüşme sonucunu belirle"
+                          >
+                            Görüşüldü ▾
+                          </button>
                         ) : (
                           <Badge className={item.status === "Görüşüldü" ? "bg-gradient-to-r from-emerald-500 to-green-600 text-white border-0 shadow-sm" : "bg-gradient-to-r from-blue-500 to-cyan-600 text-white border-0 shadow-sm"}>
                             {item.status}
@@ -609,6 +664,15 @@ export default function BasvurularPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Görüşme Sonucu Modalı */}
+      <AppointmentOutcomeModal
+        open={!!outcomeModalRecord}
+        appointment={fakeAppointmentForModal}
+        loading={savingOutcome}
+        onClose={() => setOutcomeModalRecord(null)}
+        onSelect={handleOutcomeSelect}
+      />
     </div>
   );
 }
