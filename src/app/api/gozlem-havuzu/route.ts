@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
       totalCount: observations.length,
       pendingCount: observations.filter((item) => item.status === "pending").length,
       completedCount: observations.filter((item) => item.status === "completed").length,
-      scheduledCount: observations.filter((item) => item.status === "scheduled" || item.status === ).length,
+      scheduledCount: observations.filter((item) => item.status === "scheduled" || item.status === "scheduled").length,
       activeFollowCount: observations.filter((item) => item.status === "active_follow").length,
       regularMeetingCount: observations.filter((item) => item.status === "regular_meeting").length,
       uniqueStudentCount: new Set(
@@ -305,7 +305,7 @@ export async function PUT(request: NextRequest) {
       }
 
       const updatePayload = {
-        status: ,
+        status: "completed",
         appointment_id: body.appointment_id || null,
         converted_at: new Date().toISOString()
       };
@@ -340,8 +340,8 @@ export async function PUT(request: NextRequest) {
       const updatePayload: Record<string, unknown> = {
         status,
         completed_at: status === "completed" ? new Date().toISOString() : null,
-        converted_at: status === "scheduled" || status ===  ? new Date().toISOString() : null,
-        appointment_id: status === "scheduled" || status ===  ? (body.appointment_id || null) : null
+        converted_at: status === "scheduled" ? new Date().toISOString() : null,
+        appointment_id: status === "scheduled" ? (body.appointment_id || null) : null
       };
 
       const { data, error } = await supabase
@@ -383,7 +383,7 @@ export async function PUT(request: NextRequest) {
     if (body.status === "completed") {
       updatePayload.completed_at = new Date().toISOString();
     }
-    if (body.status === "scheduled" || body.status === ) {
+    if (body.status === "scheduled" || body.status === "scheduled") {
       updatePayload.converted_at = new Date().toISOString();
       updatePayload.appointment_id = body.appointment_id || null;
     }
