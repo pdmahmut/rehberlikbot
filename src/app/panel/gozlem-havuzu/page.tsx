@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Plus, Loader2, CheckCircle2, Eye } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { notifyPotentialMeetingsChanged } from "@/lib/potentialMeetings";
 
 type StudentSuggestion = { value: string; text: string; class_display?: string; class_key?: string };
 
@@ -160,6 +161,12 @@ export default function GozlemHavuzuPage() {
       }
 
       resetForm();
+      notifyPotentialMeetingsChanged({
+        action: isEdit ? "update" : "create",
+        id: editId || undefined,
+        source: "observation",
+        studentName: formData.student_name.trim()
+      });
       toast.success(isEdit ? "Gözlem başarıyla güncellendi" : "Gözlem başarıyla eklendi");
     } catch (error) {
       console.error(`Gözlem eklenirken hata: ${formatErrorMessage(error)}`);
@@ -297,4 +304,3 @@ export default function GozlemHavuzuPage() {
     </div>
   );
 }
-

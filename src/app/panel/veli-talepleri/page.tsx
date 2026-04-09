@@ -143,14 +143,15 @@ export default function VeliTalepleriPage() {
           student_name: formData.student_name.trim(),
           class_key: formData.class_key || null,
           class_display: formData.class_display || null,
-          parent_name: formData.parent_name || null,
+          parent_name: formData.parent_name.trim(),
           request_date: formData.request_date,
-          note: formData.note || null,
-          subject: formData.note
-            ? `Veli Talebi${formData.parent_name ? ` (${formData.parent_name})` : ""}: ${formData.note}`
-            : formData.parent_name
-            ? `Veli Talebi (${formData.parent_name})`
+          note: formData.note.trim(),
+          subject: formData.note.trim()
+            ? `Veli Talebi${formData.parent_name.trim() ? ` (${formData.parent_name.trim()})` : ""}: ${formData.note.trim()}`
+            : formData.parent_name.trim()
+            ? `Veli Talebi (${formData.parent_name.trim()})`
             : "Veli talebi",
+          detail: formData.note.trim() || "",
           status: "new"
         })
       });
@@ -303,6 +304,3 @@ export default function VeliTalepleriPage() {
     </div>
   );
 }
-
-
-

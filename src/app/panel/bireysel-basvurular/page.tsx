@@ -303,6 +303,8 @@ export default function BireyselBasvurularPage() {
         throw new Error(error.error || `${isEdit ? "Kayıt güncellenemedi" : "Kayıt eklenemedi"}`);
       }
 
+      await res.json();
+
       resetForm();
       toast.success(isEdit ? "Kayıt başarıyla güncellendi" : "Kayıt başarıyla eklendi");
       notifyPotentialMeetingsChanged({

@@ -83,6 +83,26 @@ export interface ParentMeetingRequestRecord {
   preferred_contact?: string | null;
 }
 
+export const APPLICATION_SOURCE_TYPES = [
+  { value: "observation", label: "Gözlem Havuzu" },
+  { value: "student_report", label: "Öğrenci Bildirimi" },
+  { value: "teacher_referral", label: "Öğretmen Yönlendirmesi" },
+  { value: "parent_request", label: "Veli Talebi" },
+  { value: "self_application", label: "Bireysel Başvuru" }
+] as const;
+
+export type ApplicationSourceType = typeof APPLICATION_SOURCE_TYPES[number]["value"];
+
+export const APPLICATION_STATUSES = [
+  { value: "pending", label: "Bekliyor", color: "amber" },
+  { value: "scheduled", label: "Randevu Verildi", color: "blue" },
+  { value: "active_follow", label: "Aktif Takip", color: "cyan" },
+  { value: "regular_meeting", label: "Düzenli Görüşme", color: "violet" },
+  { value: "completed", label: "Görüşme Yapıldı", color: "emerald" }
+] as const;
+
+export type ApplicationStatus = typeof APPLICATION_STATUSES[number]["value"];
+
 // Yönlendirme Kategorileri ve Alt Nedenler (Hiyerarşik Yapı)
 export interface YonlendirmeKategori {
   id: string;
@@ -339,13 +359,9 @@ export const OBSERVATION_PRIORITIES = [
 
 export type ObservationPriority = 'low' | 'medium' | 'high';
 
-export const OBSERVATION_STATUSES = [
-  { value: 'pending', label: 'Bekliyor', color: 'amber' },
-  { value: 'completed', label: 'Tamamlandı', color: 'emerald' },
-  { value: 'converted', label: 'Randevuya Dönüştü', color: 'blue' }
-] as const;
+export const OBSERVATION_STATUSES = APPLICATION_STATUSES;
 
-export type ObservationStatus = 'pending' | 'completed' | 'converted';
+export type ObservationStatus = ApplicationStatus | 'converted' | 'randevu_verildi';
 
 export interface ObservationPoolRecord {
   id: string;
@@ -360,6 +376,9 @@ export interface ObservationPoolRecord {
   priority: ObservationPriority;
   note: string;
   status: ObservationStatus;
+  source_type?: ApplicationSourceType;
+  source_record_id?: string | null;
+  source_record_table?: string | null;
   completed_at?: string | null;
   converted_at?: string | null;
   appointment_id?: string | null;
@@ -374,6 +393,7 @@ export interface ObservationPoolFormData {
   priority: ObservationPriority;
   note: string;
   observed_at: string;
+  source_type?: ApplicationSourceType;
 }
 
 // Karar/yönlendirme seçenekleri
@@ -423,6 +443,9 @@ export interface Appointment {
   outcome_decision?: string[];
   next_action?: string;
   next_appointment_id?: string;
+  source_individual_request_id?: string;
+  source_application_id?: string;
+  source_application_type?: ApplicationSourceType;
 
   // Hatırlatma
   reminder_sent: boolean;
@@ -445,6 +468,9 @@ export interface AppointmentFormData {
   purpose?: string;
   preparation_note?: string;
   priority: PriorityLevel;
+  source_individual_request_id?: string;
+  source_application_id?: string;
+  source_application_type?: ApplicationSourceType;
 }
 
 // Görüşme kapanış formu için tip

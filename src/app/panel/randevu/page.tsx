@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +35,8 @@ import { toast } from "sonner";
 import { useAppointments, useAppointmentTasks, useCalendarHelpers } from "./hooks";
 import { parseJsonResponse, parseResponseError } from "@/lib/utils";
 import { notifyPotentialMeetingsChanged } from "@/lib/potentialMeetings";
+import { normalizeSourceType } from "@/lib/guidanceApplications";
+import { AppointmentOutcomeModal, type AppointmentOutcomeChoice } from "@/components/AppointmentOutcomeModal";
 import { formatLessonSlotLabel, normalizeLessonSlot } from "@/lib/lessonSlots";
 import { 
   Appointment, 
@@ -90,6 +92,28 @@ const normalizeStudentText = (value: string) =>
     .replace(/^[0-9]+\s+/, "")
     .trim();
 
+const normalizeOutcomeDecisionText = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ÅŸ/g, "s")
+    .replace(/Ã§/g, "c")
+    .replace(/ÄŸ/g, "g")
+    .replace(/Ä±/g, "i")
+    .replace(/Ã¶/g, "o")
+    .replace(/Ã¼/g, "u")
+    .trim();
+
+const normalizeOutcomeDecisionLookupText = (value: string) =>
+  normalizeOutcomeDecisionText(value)
+    .replace(/ç/g, "c")
+    .replace(/ğ/g, "g")
+    .replace(/ı/g, "i")
+    .replace(/ö/g, "o")
+    .replace(/ş/g, "s")
+    .replace(/ü/g, "u");
+
 const normalizeClassText = (value: string) =>
   value
     .toLocaleLowerCase("tr-TR")
@@ -121,7 +145,7 @@ function useBusySlots() {
       if (appointmentRes.ok) {
         const appointmentData = await parseJsonResponse<{ appointments?: Appointment[] }>(appointmentRes);
         appointmentData.appointments?.forEach(apt => {
-          if (apt.status !== 'cancelled' && apt.id !== options?.excludeAppointmentId) {
+          if (apt.status === 'planned' && apt.id !== options?.excludeAppointmentId) {
             const normalizedTime = normalizeLessonSlot(apt.start_time);
             if (normalizedTime) {
               allBusySlots.add(normalizedTime);
@@ -322,13 +346,17 @@ export default function RandevuPage() {
   const poolStudentName = searchParams.get("studentName") || poolPrefillStudentName;
   const poolClassDisplay = searchParams.get("classDisplay") || poolPrefillClassDisplay;
   const sourceIndividualRequestId = searchParams.get("requestId") || "";
+  const sourceApplicationId = searchParams.get("sourceId") || "";
+  const sourceApplicationType = searchParams.get("sourceType") || "";
   const hasPoolPrefill = Boolean(poolStudentName);
 
   const [showNewAppointmentModal, setShowNewAppointmentModal] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [showClosureModal, setShowClosureModal] = useState(false);
+  const [showAttendanceChoiceModal, setShowAttendanceChoiceModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [attendanceChoiceAppointment, setAttendanceChoiceAppointment] = useState<Appointment | null>(null);
 
   const [customTag, setCustomTag] = useState("");
   const [customTags, setCustomTags] = useState<string[]>([]);
@@ -608,8 +636,6 @@ export default function RandevuPage() {
       );
     }
 
-
-
     // Ders sırasına göre sırala (1. Ders, 2. Ders ...)
     return filtered.sort((a, b) => a.start_time.localeCompare(b.start_time));
   }, [appointments, viewMode, currentDate, searchQuery, getWeekDays]);
@@ -725,7 +751,14 @@ export default function RandevuPage() {
       participant_name: resolvedParticipantName,
       participant_class: resolvedParticipantClass,
       participant_type: formData.participant_type,
-      priority: formData.priority || "normal"
+      priority: formData.priority || "normal",
+      source_individual_request_id: sourceIndividualRequestId || undefined,
+      source_application_id: sourceApplicationId || sourceIndividualRequestId || undefined,
+      source_application_type: sourceApplicationType
+        ? normalizeSourceType(sourceApplicationType)
+        : sourceIndividualRequestId
+        ? "self_application"
+        : undefined
     };
 
     const result = editingAppointment
@@ -733,46 +766,39 @@ export default function RandevuPage() {
       : await createAppointment(payload);
 
     if (result) {
-      if (!editingAppointment && sourceIndividualRequestId) {
-        try {
-          const res = await fetch("/api/individual-requests", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              id: sourceIndividualRequestId,
-              status: "scheduled"
-            })
-          });
-
-          if (!res.ok) {
-            throw new Error("Bireysel başvuru güncellenemedi");
-          }
-        } catch (error) {
-          console.error("Individual request scheduled update error:", error);
-          toast.error("Randevu oluşturuldu ama bireysel başvuru güncellenemedi");
-        }
-        notifyPotentialMeetingsChanged({
-          action: "update",
-          id: sourceIndividualRequestId,
-          source: "individual-request",
-          studentName: resolvedParticipantName
-        });
-      }
-
       if (!editingAppointment && sourceObservationIds.length > 0) {
         try {
-          const res = await fetch("/api/gozlem-havuzu", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "convert",
-              ids: sourceObservationIds,
-              appointment_id: result.id
-            })
+          const mapStatus: Record<string, "active" | "regular" | "completed" | "converted" | "pending"> = {
+            aktif_takip: "active",
+            duzenli_gorusme: "regular",
+            tamamlandi: "completed",
+            scheduled: "converted",
+            tumu: "pending"
+          };
+          const selectedStatus = "scheduled";
+          const sourceStatus = mapStatus[selectedStatus] || "pending";
+          const body = {
+            studentId: sourceObservationIds[0],
+            ids: sourceObservationIds,
+            status: sourceStatus,
+            appointment_id: result.id
+          };
+
+          console.log("GİDEN DATA:", body);
+
+          const res = await fetch("/api/observation/convert", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
           });
 
+          const text = await res.text();
+          console.log("API CEVAP:", text);
+
           if (!res.ok) {
-            throw new Error("Gözlem kaydı güncellenemedi");
+            throw new Error(text || "Gözlem kaydı güncellenemedi");
           }
         } catch (error) {
           console.error("Observation pool convert error:", error);
@@ -798,12 +824,91 @@ export default function RandevuPage() {
     setShowDetailModal(true);
   };
 
-  const toggleAppointmentAttendance = async (appointment: Appointment) => {
-    const nextStatus: AppointmentStatus = appointment.status === "attended" ? "planned" : "attended";
-    const result = await updateAppointment(appointment.id, { status: nextStatus });
+  const openAttendanceChoiceModal = (appointment: Appointment) => {
+    setAttendanceChoiceAppointment(appointment);
+    setShowAttendanceChoiceModal(true);
+  };
+
+  const closeAttendanceChoiceModal = () => {
+    if (loading) return;
+    setShowAttendanceChoiceModal(false);
+    setAttendanceChoiceAppointment(null);
+  };
+
+  const handleAttendanceChoice = async (choice: Exclude<AppointmentOutcomeChoice, "cancel">) => {
+    if (!attendanceChoiceAppointment) return;
+
+    const choiceMap: Record<Exclude<AppointmentOutcomeChoice, "cancel">, Partial<Appointment> & { source_application_status?: string }> = {
+      completed: {
+        status: "attended",
+        outcome_decision: ["Tamamlandı"],
+        next_action: undefined,
+        source_application_status: "completed",
+        source_individual_request_id: attendanceChoiceAppointment.source_individual_request_id,
+        source_application_id: attendanceChoiceAppointment.source_application_id,
+        source_application_type: attendanceChoiceAppointment.source_application_type
+      },
+      active_follow: {
+        status: "attended",
+        outcome_decision: ["Aktif Takip"],
+        source_application_status: "active_follow",
+        source_individual_request_id: attendanceChoiceAppointment.source_individual_request_id,
+        source_application_id: attendanceChoiceAppointment.source_application_id,
+        source_application_type: attendanceChoiceAppointment.source_application_type
+      },
+      regular_meeting: {
+        status: "attended",
+        outcome_decision: ["Düzenli Görüşme"],
+        source_application_status: "regular_meeting",
+        source_individual_request_id: attendanceChoiceAppointment.source_individual_request_id,
+        source_application_id: attendanceChoiceAppointment.source_application_id,
+        source_application_type: attendanceChoiceAppointment.source_application_type
+      }
+    };
+
+    const messages: Record<Exclude<AppointmentOutcomeChoice, "cancel">, string> = {
+      completed: "Tamamlandı olarak işaretlendi",
+      active_follow: "Aktif Takip olarak işaretlendi",
+      regular_meeting: "Düzenli Görüşme olarak işaretlendi"
+    };
+
+    const result = await updateAppointment(attendanceChoiceAppointment.id, choiceMap[choice] as Partial<Appointment>);
     if (result) {
-      setSelectedAppointment((prev) => (prev?.id === appointment.id ? result : prev));
-      toast.success(nextStatus === "attended" ? "Geldi olarak işaretlendi" : "Tekrar planlandı");
+      if (choice === "completed" && result.source_individual_request_id) {
+        try {
+          const res = await fetch("/api/individual-requests", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: result.source_individual_request_id,
+              status: "completed"
+            })
+          });
+
+          if (!res.ok) {
+            throw new Error("Bireysel başvuru güncellenemedi");
+          }
+        } catch (error) {
+          console.error("Individual request completed update error:", error);
+          toast.error("Randevu tamamlandı ama bireysel başvuru güncellenemedi");
+        }
+        notifyPotentialMeetingsChanged({
+          action: "update",
+          id: result.source_individual_request_id,
+          source: "individual-request",
+          studentName: result.participant_name
+        });
+      }
+
+      setSelectedAppointment((prev) => (prev?.id === attendanceChoiceAppointment.id ? result : prev));
+      closeAttendanceChoiceModal();
+      notifyPotentialMeetingsChanged({
+        action: "update",
+        id: result.id,
+        source: "appointment",
+        studentName: result.participant_name
+      });
+      toast.success(messages[choice]);
     }
   };
 
@@ -919,7 +1024,7 @@ export default function RandevuPage() {
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                void toggleAppointmentAttendance(appointment);
+                openAttendanceChoiceModal(appointment);
               }}
               className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all ${
                 appointment.status === "attended"
@@ -1561,6 +1666,14 @@ export default function RandevuPage() {
         </div>
       )}
 
+      <AppointmentOutcomeModal
+        open={showAttendanceChoiceModal}
+        appointment={attendanceChoiceAppointment}
+        loading={loading}
+        onClose={closeAttendanceChoiceModal}
+        onSelect={handleAttendanceChoice}
+      />
+
       {/* GÖRÜŞME KAPANIŞ MODALI */}
       {showClosureModal && selectedAppointment && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -1829,3 +1942,4 @@ export default function RandevuPage() {
     </div>
   );
 }
+

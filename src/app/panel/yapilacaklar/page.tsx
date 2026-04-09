@@ -31,7 +31,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { notifyPotentialMeetingsChanged } from "@/lib/potentialMeetings";
 import { normalizeLessonSlot } from "@/lib/lessonSlots";
+import { AppointmentOutcomeModal, type AppointmentOutcomeChoice } from "@/components/AppointmentOutcomeModal";
 import { Appointment, AppointmentStatus } from "@/types";
 
 // Görev tipi
@@ -92,12 +94,15 @@ export default function YapilacaklarPage() {
 
   // Program verileri
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [guidancePlans, setGuidancePlans] = useState<{id: string; class_display: string; lesson_period: number; teacher_name?: string | null}[]>([]);
+  const [guidancePlans, setGuidancePlans] = useState<{id: string; class_display: string; lesson_period: number; teacher_name?: string | null; status?: string | null}[]>([]);
+  const [showAttendanceChoiceModal, setShowAttendanceChoiceModal] = useState(false);
+  const [attendanceChoiceAppointment, setAttendanceChoiceAppointment] = useState<Appointment | null>(null);
+  const [attendanceSaving, setAttendanceSaving] = useState(false);
 
   const loadSchedule = async (date: string) => {
     const [aptRes, planRes] = await Promise.all([
       supabase.from('appointments').select('*').eq('appointment_date', date).neq('status', 'cancelled'),
-      supabase.from('guidance_plans').select('id, class_display, lesson_period, teacher_name').eq('plan_date', date).eq('status', 'planned')
+      supabase.from('guidance_plans').select('id, class_display, lesson_period, teacher_name, status').eq('plan_date', date)
     ]);
     setAppointments(aptRes.data || []);
     setGuidancePlans(planRes.data || []);
@@ -211,7 +216,21 @@ export default function YapilacaklarPage() {
       closeTaskForm();
       loadTasks();
     } catch (error) {
-      console.error('Görev eklenemedi:', error);
+      const dbError = error as { message?: string; details?: string; hint?: string; code?: string } | null;
+      const errorSummary = [
+        dbError?.code ? `code=${dbError.code}` : null,
+        dbError?.message ? `message=${dbError.message}` : null,
+        dbError?.details ? `details=${dbError.details}` : null,
+        dbError?.hint ? `hint=${dbError.hint}` : null
+      ].filter(Boolean).join(' | ') || 'unknown error';
+
+      console.warn(`Görev eklenemedi: ${errorSummary}`);
+
+      if (dbError?.message?.includes('tasks_category_check') || dbError?.details?.includes('tasks_category_check')) {
+        toast.error('Veritabanı kategori kuralı güncel değil. Yeni görev kategorileri için migration 005 uygulanmalı.');
+        return;
+      }
+
       toast.error(editingTask ? 'Görev güncellenirken hata oluştu' : 'Görev eklenirken hata oluştu');
     }
   };
@@ -241,19 +260,7 @@ export default function YapilacaklarPage() {
       // Sınıf rehberliği planıyla bağlantılı mı?
       console.log('related_guidance_plan_id:', task.related_guidance_plan_id);
       if (task.related_guidance_plan_id) {
-        if (newStatus === 'completed') {
-          const { error: planError } = await supabase
-            .from('guidance_plans')
-            .update({ status: 'completed', completed_at: new Date().toISOString() })
-            .eq('id', task.related_guidance_plan_id);
-          console.log('plan update error:', planError);
-        } else {
-          const { error: planError } = await supabase
-            .from('guidance_plans')
-            .update({ status: 'planned', completed_at: null })
-            .eq('id', task.related_guidance_plan_id);
-          console.log('plan update error:', planError);
-        }
+        console.log('Sınıf rehberliği plan durumu değiştirilmiyor; günlük programda sabit kalacak.');
       }
       
       toast.success(newStatus === 'completed' ? 'Görev tamamlandı!' : 'Görev yeniden açıldı');
@@ -264,24 +271,106 @@ export default function YapilacaklarPage() {
     }
   };
 
-  const toggleAppointmentStatus = async (appointment: Appointment) => {
+  const openAttendanceChoiceModal = (appointment: Appointment) => {
+    setAttendanceChoiceAppointment(appointment);
+    setShowAttendanceChoiceModal(true);
+  };
+
+  const closeAttendanceChoiceModal = () => {
+    if (attendanceSaving) return;
+    setShowAttendanceChoiceModal(false);
+    setAttendanceChoiceAppointment(null);
+  };
+
+  const handleAttendanceChoice = async (choice: Exclude<AppointmentOutcomeChoice, "cancel">) => {
+    if (!attendanceChoiceAppointment) return;
+
+    const choiceMap: Record<Exclude<AppointmentOutcomeChoice, "cancel">, Partial<Appointment> & { source_application_status?: string }> = {
+      completed: {
+        status: "attended",
+        outcome_decision: ["Tamamlandı"],
+        source_application_status: "completed"
+      },
+      active_follow: {
+        status: "attended",
+        outcome_decision: ["Aktif Takip"],
+        source_application_status: "active_follow"
+      },
+      regular_meeting: {
+        status: "attended",
+        outcome_decision: ["Düzenli Görüşme"],
+        source_application_status: "regular_meeting"
+      }
+    };
+
+    const messages: Record<Exclude<AppointmentOutcomeChoice, "cancel">, string> = {
+      completed: "Tamamlandı olarak işaretlendi",
+      active_follow: "Aktif Takip olarak işaretlendi",
+      regular_meeting: "Düzenli Görüşme olarak işaretlendi"
+    };
+
     try {
-      const nextStatus: AppointmentStatus = appointment.status === 'attended' ? 'planned' : 'attended';
-      const { error } = await supabase
-        .from('appointments')
-        .update({
-          status: nextStatus,
-          updated_at: new Date().toISOString()
+      setAttendanceSaving(true);
+      const res = await fetch("/api/appointments", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: attendanceChoiceAppointment.id,
+          ...choiceMap[choice],
+          source_individual_request_id: attendanceChoiceAppointment.source_individual_request_id,
+          source_application_id: attendanceChoiceAppointment.source_application_id,
+          source_application_type: attendanceChoiceAppointment.source_application_type
         })
-        .eq('id', appointment.id);
+      });
 
-      if (error) throw error;
+      if (!res.ok) {
+        throw new Error("Randevu güncellenemedi");
+      }
 
-      toast.success(nextStatus === 'attended' ? 'Randevu geldi olarak işaretlendi' : 'Randevu tekrar planlandı');
+      const data = await res.json();
+      if (data.appointment) {
+        setAppointments(prev => prev.map(apt => apt.id === attendanceChoiceAppointment.id ? data.appointment : apt));
+      }
+
+      toast.success(messages[choice]);
       await loadSchedule(selectedDate);
+      notifyPotentialMeetingsChanged({
+        action: "update",
+        id: attendanceChoiceAppointment.id,
+        source: "appointment",
+        studentName: attendanceChoiceAppointment.participant_name
+      });
+      closeAttendanceChoiceModal();
     } catch (error) {
       console.error('Randevu durumu değiştirilemedi:', error);
       toast.error('Randevu durumu değiştirilirken hata oluştu');
+    } finally {
+      setAttendanceSaving(false);
+    }
+  };
+
+  const handleDeleteAppointment = async (appointment: Appointment) => {
+    if (!confirm("Bu randevuyu silmek istediğinize emin misiniz?")) return;
+
+    try {
+      const { error } = await supabase
+        .from("appointments")
+        .delete()
+        .eq("id", appointment.id);
+
+      if (error) throw error;
+
+      toast.success("Randevu silindi");
+      setAppointments((prev) => prev.filter((item) => item.id !== appointment.id));
+      notifyPotentialMeetingsChanged({
+        action: "delete",
+        id: appointment.id,
+        source: "appointment",
+        studentName: appointment.participant_name
+      });
+    } catch (error) {
+      console.error("Randevu silinemedi:", error);
+      toast.error("Randevu silinirken hata oluştu");
     }
   };
   
@@ -315,7 +404,7 @@ export default function YapilacaklarPage() {
   );
 
   const guidanceTasks = useMemo(
-    () => selectedDayTasks.filter(task => !!task.related_guidance_plan_id),
+    () => selectedDayTasks.filter(task => task.related_guidance_plan_id),
     [selectedDayTasks]
   );
 
@@ -323,6 +412,16 @@ export default function YapilacaklarPage() {
     () => selectedDayTasks.filter(task => !task.related_guidance_plan_id),
     [selectedDayTasks]
   );
+
+  const guidanceTaskByPlanId = useMemo(() => {
+    const map = new Map<string, Task>();
+    selectedDayTasks.forEach((task) => {
+      if (task.related_guidance_plan_id) {
+        map.set(task.related_guidance_plan_id, task);
+      }
+    });
+    return map;
+  }, [selectedDayTasks]);
   
   // Renk haritası
   const colorMap: Record<string, { bg: string; text: string; border: string }> = {
@@ -332,10 +431,14 @@ export default function YapilacaklarPage() {
   amber: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200' },
   purple: { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
   orange: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' },
+  cyan: { bg: 'bg-cyan-100', text: 'text-cyan-700', border: 'border-cyan-200' },
+  rose: { bg: 'bg-rose-100', text: 'text-rose-700', border: 'border-rose-200' },
   red: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200' },
   gray: { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-200' },
   green: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' }
 };
+
+  const getCategoryStyle = (color?: string) => (color && colorMap[color]) ? colorMap[color] : colorMap.gray;
   
   // Tarih formatla
   const formatDate = (dateStr: string) => {
@@ -445,7 +548,9 @@ export default function YapilacaklarPage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-bold text-slate-700">Günlük Program</p>
-                <p className="text-xs text-slate-500">1–7 ders satırı</p>
+                <p className="text-xs text-slate-500">
+                  1–7 ders satırı · {appointments.length} randevu · {guidanceTasks.length} rehberlik
+                </p>
               </div>
               <div className="h-10 w-10 rounded-2xl bg-white/80 border border-slate-200 flex items-center justify-center shadow-sm shrink-0">
                 <CalendarCheck className="h-5 w-5 text-emerald-600" />
@@ -456,6 +561,8 @@ export default function YapilacaklarPage() {
             {[1,2,3,4,5,6,7].map(period => {
               const apt = appointments.find(a => normalizeLessonSlot(a.start_time) === String(period));
               const plan = guidancePlans.find(p => p.lesson_period === period);
+              const linkedTask = plan ? guidanceTaskByPlanId.get(plan.id) ?? null : null;
+              const isCompletedPlan = linkedTask ? linkedTask.status === 'completed' : plan?.status === 'completed';
               return (
                 <div
                   key={period}
@@ -464,212 +571,141 @@ export default function YapilacaklarPage() {
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 border border-slate-200">
                     <span className="text-sm font-black text-slate-600">{period}</span>
                   </div>
-                  {apt ? (
-                    <div className="flex-1 min-w-0 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-50 px-3 py-2.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[11px] font-black uppercase tracking-[0.12em] text-blue-700">Görüşme</p>
-                        <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-blue-600 border border-blue-100">
-                          Randevu
-                        </span>
+                  <div className="flex-1 min-w-0 space-y-2">
+                    {apt && (
+                      <div className={`group/apt relative rounded-2xl border px-3 py-2.5 ${
+                        apt.status === 'attended'
+                          ? 'border-emerald-200 bg-emerald-50/70'
+                          : 'border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-50'
+                      }`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-[11px] font-black uppercase tracking-[0.12em] text-blue-700">
+                                Görüşme
+                              </p>
+                              <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-blue-600 border border-blue-100">
+                                Randevu
+                              </span>
+                              <span className={`text-[10px] font-semibold ${apt.status === 'attended' ? 'text-emerald-700' : 'text-slate-500'}`}>
+                                {apt.status === 'attended' ? 'Geldi' : 'Planlandı'}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-sm font-semibold text-blue-900 truncate">{apt.participant_name || '—'}</p>
+                            {apt.participant_type && (
+                              <p className="mt-0.5 text-[11px] text-blue-700/80 capitalize">{apt.participant_type}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openAttendanceChoiceModal(apt)}
+                            className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
+                              apt.status === 'attended'
+                                ? 'border-emerald-500 bg-emerald-500 text-white'
+                                : 'border-slate-300 bg-white text-slate-400 hover:border-emerald-400 hover:text-emerald-500'
+                            }`}
+                            aria-label={apt.status === 'attended' ? 'Geldi olarak işaretli' : 'Geldi olarak işaretle'}
+                            title={apt.status === 'attended' ? 'Geldi' : 'Geldi olarak işaretle'}
+                          >
+                            {apt.status === 'attended' && <CheckCircle2 className="h-4 w-4" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAppointment(apt)}
+                            className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-red-300 bg-white text-red-500 transition-all hover:border-red-400 hover:bg-red-50 hover:text-red-600"
+                            aria-label="Randevuyu sil"
+                            title="Randevuyu sil"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
-                      <p className="mt-1 text-sm font-semibold text-blue-900 truncate">{apt.participant_name || '—'}</p>
-                      {apt.participant_type && (
-                        <p className="mt-0.5 text-[11px] text-blue-700/80 capitalize">{apt.participant_type}</p>
-                      )}
-                    </div>
-                  ) : plan ? (
-                    <div className="flex-1 min-w-0 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[11px] font-black uppercase tracking-[0.12em] text-emerald-700">Sınıf Rehberliği</p>
-                        <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 border border-emerald-100">
-                          Plan
-                        </span>
+                    )}
+
+                    {plan && (
+                      <div className={`group/plan relative rounded-2xl border px-3 py-2.5 ${
+                        isCompletedPlan
+                          ? 'border-slate-200 bg-slate-50 opacity-75'
+                          : 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50'
+                      }`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className={`text-[11px] font-black uppercase tracking-[0.12em] ${
+                                isCompletedPlan ? 'text-slate-500' : 'text-emerald-700'
+                              }`}>
+                                Sınıf Rehberliği
+                              </p>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
+                                isCompletedPlan
+                                  ? 'bg-slate-100 text-slate-600 border-slate-200'
+                                  : 'bg-white/80 text-emerald-600 border-emerald-100'
+                              }`}>
+                                {isCompletedPlan ? 'Tamamlandı' : 'Plan'}
+                              </span>
+                            </div>
+                            <p className={`mt-1 text-sm font-semibold truncate ${
+                              isCompletedPlan ? 'text-slate-700' : 'text-emerald-900'
+                            }`}>{plan.class_display}</p>
+                            {linkedTask && (
+                              <p className={`mt-0.5 text-[11px] ${
+                                isCompletedPlan ? 'text-slate-500' : 'text-emerald-700/80'
+                              }`}>
+                                {linkedTask.title}
+                              </p>
+                            )}
+                            {plan.teacher_name?.trim() && (
+                              <p className={`mt-0.5 text-[11px] ${
+                                isCompletedPlan ? 'text-slate-500' : 'text-emerald-700/80'
+                              }`}>
+                                👨‍🏫 {plan.teacher_name.trim()}
+                              </p>
+                            )}
+                          </div>
+                          {linkedTask ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleTaskStatus(linkedTask)}
+                              className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
+                                linkedTask.status === 'completed'
+                                  ? 'border-emerald-500 bg-emerald-500 text-white'
+                                  : 'border-slate-300 bg-white text-slate-400 hover:border-emerald-400 hover:text-emerald-500'
+                              }`}
+                              aria-label={linkedTask.status === 'completed' ? 'Tamamlandı' : 'Tamamla'}
+                              title={linkedTask.status === 'completed' ? 'Tamamlandı' : 'Tamamla'}
+                            >
+                              {linkedTask.status === 'completed' && <CheckCircle2 className="h-4 w-4" />}
+                            </button>
+                          ) : (
+                            <span className="mt-0.5 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-400">
+                              Görev yok
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <p className="mt-1 text-sm font-semibold text-emerald-900">{plan.class_display}</p>
-                    </div>
-                  ) : (
-                    <div className="flex-1 min-w-0 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Boş</p>
-                      <p className="mt-1 text-sm text-slate-500">Bu saat açık</p>
-                    </div>
-                  )}
+                    )}
+
+                    {!apt && !plan && (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Boş</p>
+                        <p className="mt-1 text-sm text-slate-500">Bu saat açık</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* SAĞ — Görev Listesi */}
         <div className="flex-1 min-w-0 space-y-4 xl:pt-0">
-      <Card className="border-slate-200 shadow-sm overflow-hidden">
-        <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-cyan-50 border-b border-slate-100">
-          <div className="flex items-center justify-between gap-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-blue-600" />
-              Randevular
-            </CardTitle>
-            <Badge className="bg-blue-100 text-blue-700 border-0">{appointments.length}</Badge>
-          </div>
-          <p className="text-sm text-slate-500">Buradan gelen öğrenciyi yuvarlak işaretle tamamla.</p>
-        </CardHeader>
-        <CardContent className="p-4 space-y-3">
-          {appointments.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-              Bu güne ait randevu yok
-            </div>
-          ) : (
-            appointments
-              .slice()
-              .sort((a, b) => (normalizeLessonSlot(a.start_time) || '').localeCompare(normalizeLessonSlot(b.start_time) || ''))
-              .map((appointment) => {
-                const attended = appointment.status === 'attended';
-                return (
-                  <div
-                    key={appointment.id}
-                    className={`group relative rounded-2xl border bg-white p-4 shadow-sm transition-all hover:shadow-md ${
-                      attended ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3 pr-10">
-                      <button
-                        type="button"
-                        onClick={() => void toggleAppointmentStatus(appointment)}
-                        className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
-                          attended
-                            ? 'border-emerald-500 bg-emerald-500 text-white'
-                            : 'border-slate-300 bg-white text-slate-400 hover:border-emerald-400 hover:text-emerald-500'
-                        }`}
-                        aria-label={attended ? 'Geldi olarak işaretli' : 'Geldi olarak işaretle'}
-                        title={attended ? 'Geldi' : 'Geldi olarak işaretle'}
-                      >
-                        {attended && <CheckCircle2 className="h-4 w-4" />}
-                      </button>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
-                            {appointment.start_time}
-                          </span>
-                          <Badge variant="outline" className="text-xs">
-                            {appointment.participant_type === 'student' ? 'Öğrenci' : appointment.participant_type === 'parent' ? 'Veli' : 'Öğretmen'}
-                          </Badge>
-                          <span className={`text-xs font-medium ${attended ? 'text-emerald-700' : 'text-slate-500'}`}>
-                            {attended ? 'Geldi' : 'Planlandı'}
-                          </span>
-                        </div>
-                        <div className="mt-1 text-sm font-semibold text-slate-800 truncate">
-                          {appointment.participant_name}
-                        </div>
-                        {appointment.participant_class && (
-                          <div className="mt-0.5 text-xs text-slate-500">
-                            {appointment.participant_class}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Görev Ekleme Formu */}
-      {false && (
-        <Card className="border-2 border-green-200 bg-green-50/50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Plus className="h-5 w-5 text-green-600" />
-              Yeni Görev Ekle
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Input
-                placeholder="Görev başlığı..."
-                value={newTask.title}
-                onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                className="text-lg"
-              />
-            </div>
-            
-            <div>
-              <textarea
-                placeholder="Açıklama (opsiyonel)..."
-                value={newTask.description}
-                onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                rows={2}
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <label className="text-sm text-slate-600 mb-1 block">Kategori</label>
-                <select
-                  value={newTask.category}
-                  onChange={(e) => setNewTask({ ...newTask, category: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
-                >
-                  {CATEGORIES.map(cat => (
-                    <option key={cat.value} value={cat.value}>{cat.icon} {cat.label}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="text-sm text-slate-600 mb-1 block">Öncelik</label>
-                <select
-                  value={newTask.priority}
-                  onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
-                >
-                  {PRIORITIES.map(pri => (
-                    <option key={pri.value} value={pri.value}>{pri.label}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="text-sm text-slate-600 mb-1 block">Tarih</label>
-                <Input
-                  type="date"
-                  value={newTask.due_date}
-                  onChange={(e) => setNewTask({ ...newTask, due_date: e.target.value })}
-                />
-              </div>
-              
-              <div>
-                <label className="text-sm text-slate-600 mb-1 block">Saat</label>
-                <Input
-                  type="time"
-                  value={newTask.due_time}
-                  onChange={(e) => setNewTask({ ...newTask, due_time: e.target.value })}
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label className="text-sm text-slate-600 mb-1 block">İlgili Öğrenci (opsiyonel)</label>
-              <Input
-                placeholder="Öğrenci adı..."
-                value={newTask.related_student_name}
-                onChange={(e) => setNewTask({ ...newTask, related_student_name: e.target.value })}
-              />
-            </div>
-            
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowForm(false)}>
-                İptal
-              </Button>
-              <Button onClick={handleAddTask} className="bg-green-600 hover:bg-green-700">
-                <Plus className="h-4 w-4 mr-1" />
-                Ekle
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <AppointmentOutcomeModal
+        open={showAttendanceChoiceModal}
+        appointment={attendanceChoiceAppointment}
+        loading={attendanceSaving}
+        onClose={closeAttendanceChoiceModal}
+        onSelect={handleAttendanceChoice}
+      />
       
 
       {/* Görev Ekleme Modalı */}
@@ -779,110 +815,6 @@ export default function YapilacaklarPage() {
       )}
 
       <div className="space-y-4">
-        {guidanceTasks.length > 0 && (
-        <Card className="border-slate-200 shadow-sm overflow-hidden">
-          <CardHeader className="pb-3 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-slate-100">
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-emerald-600" />
-                Sınıf Rehberliği
-              </CardTitle>
-              <Badge className="bg-emerald-100 text-emerald-700 border-0">{guidanceTasks.length}</Badge>
-            </div>
-            <p className="text-sm text-slate-500">Seçili güne ait sınıf rehberliği görevleri.</p>
-          </CardHeader>
-          <CardContent className="p-4 space-y-3">
-            {isLoading ? (
-              <div className="py-8 flex items-center justify-center">
-                <Loader2 className="h-7 w-7 text-emerald-500 animate-spin" />
-              </div>
-            ) : (
-              guidanceTasks.map((task) => {
-                const category = CATEGORIES.find(c => c.value === task.category);
-                const priority = PRIORITIES.find(p => p.value === task.priority);
-                const overdue = isOverdue(task);
-                const linkedPlan = task.related_guidance_plan_id
-                  ? guidancePlans.find(plan => plan.id === task.related_guidance_plan_id)
-                  : null;
-                const teacherName = linkedPlan?.teacher_name?.trim();
-                return (
-                  <Card
-                    key={task.id}
-                    className={`group relative hover:shadow-md transition-all ${
-                      task.status === 'completed' ? 'bg-slate-50 opacity-75' : ''
-                    } ${overdue ? 'border-red-300 bg-red-50/50' : ''}`}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-4 pr-10">
-                        <button
-                          onClick={() => toggleTaskStatus(task)}
-                          className={`mt-1 flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                            task.status === 'completed'
-                              ? 'bg-green-500 border-green-500 text-white'
-                              : 'border-slate-300 hover:border-green-500'
-                          }`}
-                        >
-                          {task.status === 'completed' && <CheckCircle2 className="h-4 w-4" />}
-                        </button>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className={`font-medium ${task.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
-                              {task.title}
-                            </h3>
-                            {category && (
-                              <Badge variant="outline" className={`text-xs ${colorMap[category.color].bg} ${colorMap[category.color].text}`}>
-                                {category.icon} {category.value === 'ogretmen' && teacherName ? teacherName : category.label}
-                              </Badge>
-                            )}
-                            {priority && priority.value !== 'normal' && (
-                              <Badge variant="outline" className={`text-xs ${colorMap[priority.color].bg} ${colorMap[priority.color].text}`}>
-                                <priority.icon className="h-3 w-3 mr-1" />
-                                {priority.label}
-                              </Badge>
-                            )}
-                            {overdue && (
-                              <Badge variant="destructive" className="text-xs">Gecikmiş</Badge>
-                            )}
-                          </div>
-                          {task.description && (
-                            <p className="text-sm text-slate-500 mt-1">{task.description}</p>
-                          )}
-                          <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
-                            {task.due_date && (
-                              <span className={`flex items-center gap-1 ${overdue ? 'text-red-500' : ''}`}>
-                                <Calendar className="h-3 w-3" />
-                                {formatDate(task.due_date)}
-                                {task.due_time && ` ${task.due_time.slice(0, 5)}`}
-                              </span>
-                            )}
-                            {task.related_student_name && (
-                              <span className="flex items-center gap-1">
-                                <User className="h-3 w-3" />
-                                {task.related_student_name}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => deleteTask(task)}
-                          className="absolute right-3 top-3 rounded-full p-2 text-slate-300 opacity-0 transition-all hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
-                          aria-label="Görevi sil"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
-            )}
-          </CardContent>
-        </Card>
-        )}
-
         {otherTasks.length > 0 && (
           <Card className="border-slate-200 shadow-sm overflow-hidden">
             <CardHeader className="pb-3 bg-gradient-to-r from-amber-50 to-orange-50 border-b border-slate-100">
@@ -931,12 +863,12 @@ export default function YapilacaklarPage() {
                                 {task.title}
                               </h3>
                               {category && (
-                                <Badge variant="outline" className={`text-xs ${colorMap[category.color].bg} ${colorMap[category.color].text}`}>
+                                <Badge variant="outline" className={`text-xs ${getCategoryStyle(category.color).bg} ${getCategoryStyle(category.color).text}`}>
                                   {category.icon} {category.label}
                                 </Badge>
                               )}
                               {priority && priority.value !== 'normal' && (
-                                <Badge variant="outline" className={`text-xs ${colorMap[priority.color].bg} ${colorMap[priority.color].text}`}>
+                                <Badge variant="outline" className={`text-xs ${getCategoryStyle(priority.color).bg} ${getCategoryStyle(priority.color).text}`}>
                                   <priority.icon className="h-3 w-3 mr-1" />
                                   {priority.label}
                                 </Badge>

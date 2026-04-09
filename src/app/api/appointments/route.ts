@@ -1,6 +1,57 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { normalizeLessonSlot } from "@/lib/lessonSlots";
+import { normalizeSourceType } from "@/lib/guidanceApplications";
+
+const isMissingColumnError = (error: { message?: string } | null | undefined, columnName: string) => {
+  const message = error?.message || "";
+  return message.toLowerCase().includes("column") && message.toLowerCase().includes(columnName.toLowerCase());
+};
+
+const syncApplicationStatus = async (
+  sourceApplicationType?: string | null,
+  sourceApplicationId?: string | null,
+  status?: string,
+  appointmentId?: string | null
+) => {
+  if (!supabase || !sourceApplicationType || !sourceApplicationId) return;
+
+  try {
+    const normalizedType = normalizeSourceType(sourceApplicationType);
+    const effectiveStatus = status;
+    const updatePayload: Record<string, unknown> = {
+      status: effectiveStatus,
+      appointment_id: appointmentId || null
+    };
+
+    if (status === "scheduled") {
+      updatePayload.converted_at = new Date().toISOString();
+    }
+
+    if (effectiveStatus === "completed") {
+      updatePayload.completed_at = new Date().toISOString();
+    }
+
+    let query = supabase
+      .from("observation_pool")
+      .update(updatePayload);
+
+    if (normalizedType === "observation") {
+      // For observation type, match by id if source_record_id is null
+      query = query.or(`and(source_type.eq.${normalizedType},source_record_id.eq.${sourceApplicationId}),and(source_type.eq.${normalizedType},id.eq.${sourceApplicationId})`);
+    } else {
+      query = query.eq("source_type", normalizedType).eq("source_record_id", sourceApplicationId);
+    }
+
+    const { error } = await query;
+
+    if (error) {
+      console.error("syncApplicationStatus error:", error);
+    }
+  } catch (error) {
+    console.error("syncApplicationStatus exception:", error);
+  }
+};
 
 // GET - Randevuları listele
 export async function GET(request: NextRequest) {
@@ -99,8 +150,13 @@ export async function POST(request: NextRequest) {
       purpose,
       preparation_note,
       priority = "normal",
-      template_type
+      template_type,
+      source_individual_request_id,
+      source_application_id,
+      source_application_type
     } = body;
+    const resolvedSourceApplicationId = source_application_id || source_individual_request_id || null;
+    const resolvedSourceApplicationType = source_application_type || (source_individual_request_id ? "self_application" : null);
 
     if (!appointment_date || !start_time || !participant_type || !participant_name) {
       return NextResponse.json(
@@ -122,7 +178,7 @@ export async function POST(request: NextRequest) {
         .from("appointments")
         .select("id, participant_name, participant_type, start_time")
         .eq("appointment_date", appointment_date)
-        .neq("status", "cancelled"),
+        .eq("status", "planned"),
       supabase
         .from("guidance_plans")
         .select("id, class_display, lesson_period")
@@ -183,25 +239,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
+    const insertPayload = {
+      appointment_date,
+      start_time,
+      participant_type,
+      participant_name,
+      participant_class,
+      participant_phone,
+      topic_tags,
+      location,
+      purpose,
+      preparation_note,
+      priority,
+      status: "planned",
+      template_type,
+      source_individual_request_id: source_individual_request_id || null,
+      source_application_id: resolvedSourceApplicationId,
+      source_application_type: resolvedSourceApplicationType
+    };
+
+    let { data, error } = await supabase
       .from("appointments")
-      .insert({
-        appointment_date,
-        start_time,
-        participant_type,
-        participant_name,
-        participant_class,
-        participant_phone,
-        topic_tags,
-        location,
-        purpose,
-        preparation_note,
-        priority,
-        status: "planned",
-        template_type
-      })
+      .insert(insertPayload)
       .select()
       .single();
+
+    if (error) {
+      const {
+        source_individual_request_id: _ignoredRequestId,
+        source_application_id: _ignoredApplicationId,
+        source_application_type: _ignoredApplicationType,
+        ...fallbackPayload
+      } = insertPayload;
+      const fallbackResult = await supabase
+        .from("appointments")
+        .insert(fallbackPayload)
+        .select()
+        .single();
+      data = fallbackResult.data;
+      error = fallbackResult.error;
+    }
 
     if (error) {
       console.error("Supabase insert error:", error);
@@ -210,6 +287,8 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    await syncApplicationStatus(resolvedSourceApplicationType, resolvedSourceApplicationId, "scheduled", data?.id || null);
 
     return NextResponse.json({ appointment: data, message: "Randevu oluşturuldu" });
   } catch (error) {
@@ -232,7 +311,14 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, ...updateData } = body;
+    const {
+      id,
+      source_application_status,
+      source_application_id,
+      source_application_type,
+      source_individual_request_id,
+      ...updateData
+    } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -241,25 +327,29 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const { data: currentAppointment, error: currentError } = await supabase
-      .from("appointments")
-      .select("id, appointment_date, start_time, status")
-      .eq("id", id)
-      .single();
+    const needsConflictCheck = Boolean(updateData.appointment_date || updateData.start_time);
+    const currentAppointment = needsConflictCheck
+      ? await supabase
+          .from("appointments")
+          .select("id, appointment_date, start_time, status")
+          .eq("id", id)
+          .maybeSingle()
+      : { data: null, error: null };
 
-    if (currentError || !currentAppointment) {
-      console.error("Mevcut randevu alınamadı:", currentError);
+    if (needsConflictCheck && (currentAppointment.error || !currentAppointment.data)) {
+      console.error("Mevcut randevu alınamadı:", currentAppointment.error);
       return NextResponse.json(
-        { error: "Randevu bulunamadı", details: currentError?.message },
+        { error: "Randevu bulunamadı", details: currentAppointment.error?.message },
         { status: 404 }
       );
     }
 
-    const nextAppointmentDate = updateData.appointment_date || currentAppointment.appointment_date;
-    const nextStartTime = updateData.start_time || currentAppointment.start_time;
+    const currentAppointmentData = currentAppointment.data;
+    const nextAppointmentDate = updateData.appointment_date || currentAppointmentData?.appointment_date;
+    const nextStartTime = updateData.start_time || currentAppointmentData?.start_time;
     const normalizedSlot = normalizeLessonSlot(nextStartTime);
 
-    if (normalizedSlot && (updateData.appointment_date || updateData.start_time)) {
+    if (normalizedSlot && needsConflictCheck) {
       const [appointmentConflicts, guidanceConflictsResult, activityConflictsResult] = await Promise.all([
         supabase
           .from("appointments")
@@ -328,18 +418,50 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("appointments")
       .update(updateData)
       .eq("id", id)
-      .select()
+      .select("*")
       .single();
+
+    if (error) {
+      const { source_individual_request_id: _ignored, ...fallbackUpdate } = updateData as Record<string, unknown>;
+      const fallbackResult = await supabase
+        .from("appointments")
+        .update(fallbackUpdate)
+        .eq("id", id)
+        .select()
+        .single();
+      data = fallbackResult.data;
+      error = fallbackResult.error;
+    }
 
     if (error) {
       console.error("Supabase update error:", error);
       return NextResponse.json(
         { error: "Randevu güncellenemedi", details: error.message },
         { status: 500 }
+      );
+    }
+
+    const resolvedSourceApplicationId =
+      source_application_id ||
+      source_individual_request_id ||
+      data?.source_application_id ||
+      data?.source_individual_request_id ||
+      null;
+    const resolvedSourceApplicationType =
+      source_application_type ||
+      data?.source_application_type ||
+      (source_individual_request_id ? "self_application" : null);
+
+    if (source_application_status) {
+      await syncApplicationStatus(
+        resolvedSourceApplicationType,
+        resolvedSourceApplicationId,
+        source_application_status,
+        id
       );
     }
 
@@ -365,18 +487,66 @@ export async function DELETE(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const id = searchParams.get("id");
+    const sourceApplicationId = searchParams.get("source_application_id");
+    const sourceApplicationType = searchParams.get("source_application_type");
 
-    if (!id) {
+    if (!id && !sourceApplicationId) {
       return NextResponse.json(
         { error: "Randevu ID zorunludur" },
         { status: 400 }
       );
     }
 
-    const { error } = await supabase
-      .from("appointments")
-      .delete()
-      .eq("id", id);
+    const appointmentIds: string[] = [];
+
+    if (id) {
+      appointmentIds.push(id);
+    } else {
+      const { data: appointmentRecords, error: appointmentLookupError } = await supabase
+        .from("appointments")
+        .select("id")
+        .eq("source_application_id", sourceApplicationId)
+        .eq("source_application_type", sourceApplicationType || "observation");
+
+      if (appointmentLookupError) {
+        console.error("Appointments lookup error before delete:", appointmentLookupError);
+        return NextResponse.json(
+          { error: "Randevular sorgulanırken hata oluştu", details: appointmentLookupError.message },
+          { status: 500 }
+        );
+      }
+
+      (appointmentRecords || []).forEach((appointment) => {
+        if (appointment?.id) appointmentIds.push(appointment.id);
+      });
+    }
+
+    if (appointmentIds.length > 0) {
+      const { error: taskDeleteError } = await supabase
+        .from("appointment_tasks")
+        .delete()
+        .in("appointment_id", appointmentIds);
+
+      if (taskDeleteError) {
+        console.error("Appointment tasks delete error:", taskDeleteError);
+        return NextResponse.json(
+          { error: "Randevu görevleri silinirken hata oluştu", details: taskDeleteError.message },
+          { status: 500 }
+        );
+      }
+    }
+
+    let query = supabase.from("appointments").delete();
+
+    if (id) {
+      query = query.eq("id", id);
+    } else {
+      query = query
+        .eq("source_application_id", sourceApplicationId)
+        .eq("source_application_type", sourceApplicationType || "observation");
+    }
+
+    const { error } = await query;
 
     if (error) {
       console.error("Supabase delete error:", error);

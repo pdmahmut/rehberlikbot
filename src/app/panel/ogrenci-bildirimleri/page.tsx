@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Loader2, CheckCircle2, MessageSquare, User, Users, Edit2 } from "lucide-react";
+import { Plus, Loader2, CheckCircle2, MessageSquare, User, Edit2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type StudentSuggestion = { value: string; text: string; class_display?: string; class_key?: string };
@@ -46,66 +46,41 @@ export default function OgrenciBildirimleriPage() {
   const activeReporterQuery = useMemo(() => formData.reporter_student_name.trim(), [formData.reporter_student_name]);
   const activeTargetQuery = useMemo(() => formData.target_student_name.trim(), [formData.target_student_name]);
 
-  useEffect(() => {
-    const query = activeReporterQuery;
-    if (query.length < 2) {
-      setReporterSuggestions([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadSuggestions = async () => {
-      try {
-        const res = await fetch(`/api/students?query=${encodeURIComponent(query)}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled && Array.isArray(data)) {
-          setReporterSuggestions(data.slice(0, 8));
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error(`Öğrenci önerileri yüklenemedi: ${formatErrorMessage(error)}`);
-          setReporterSuggestions([]);
-        }
+  // Öğrenci arama mantığını tek bir fonksiyonda birleştirelim
+  const fetchSuggestions = async (query: string, setter: (data: StudentSuggestion[]) => void, signal: AbortSignal) => {
+    try {
+      const res = await fetch(`/api/students?query=${encodeURIComponent(query)}`, { signal });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setter(data.slice(0, 8));
       }
-    };
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error(`Öğrenci önerileri yüklenemedi: ${formatErrorMessage(error)}`);
+        setter([]);
+      }
+    }
+  };
 
-    loadSuggestions();
-    return () => {
-      cancelled = true;
-    };
+  useEffect(() => {
+    const controller = new AbortController();
+    if (activeReporterQuery.length >= 2) {
+      fetchSuggestions(activeReporterQuery, setReporterSuggestions, controller.signal);
+    } else {
+      setReporterSuggestions([]);
+    }
+    return () => controller.abort();
   }, [activeReporterQuery]);
 
   useEffect(() => {
-    const query = activeTargetQuery;
-    if (query.length < 2) {
+    const controller = new AbortController();
+    if (activeTargetQuery.length >= 2) {
+      fetchSuggestions(activeTargetQuery, setTargetSuggestions, controller.signal);
+    } else {
       setTargetSuggestions([]);
-      return;
     }
-
-    let cancelled = false;
-
-    const loadSuggestions = async () => {
-      try {
-        const res = await fetch(`/api/students?query=${encodeURIComponent(query)}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled && Array.isArray(data)) {
-          setTargetSuggestions(data.slice(0, 8));
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error(`Öğrenci önerileri yüklenemedi: ${formatErrorMessage(error)}`);
-          setTargetSuggestions([]);
-        }
-      }
-    };
-
-    loadSuggestions();
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, [activeTargetQuery]);
 
   const selectReporterSuggestion = (student: StudentSuggestion) => {
@@ -178,8 +153,16 @@ export default function OgrenciBildirimleriPage() {
   };
 
   const handleSave = async () => {
-    if (!formData.reporter_student_name.trim() || !formData.target_student_name.trim()) {
-      toast.error("Bildiren ve hedef öğrenci adları gereklidir");
+    const reporterName = formData.reporter_student_name.trim();
+    const targetName = formData.target_student_name.trim();
+
+    if (!reporterName || !targetName) {
+      toast.error("Bildiren ve bildirilen öğrenci adları gereklidir");
+      return;
+    }
+
+    if (reporterName === targetName) {
+      toast.error("Bildiren ve bildirilen öğrenci aynı kişi olamaz");
       return;
     }
 
@@ -193,10 +176,10 @@ export default function OgrenciBildirimleriPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: editId,
-          reporter_student_name: formData.reporter_student_name.trim(),
+          reporter_student_name: reporterName,
           reporter_class_key: formData.reporter_class_key || null,
           reporter_class_display: formData.reporter_class_display || null,
-          target_student_name: formData.target_student_name.trim(),
+          target_student_name: targetName,
           target_class_key: formData.target_class_key || null,
           target_class_display: formData.target_class_display || null,
           incident_date: formData.incident_date,
@@ -208,28 +191,6 @@ export default function OgrenciBildirimleriPage() {
       if (!incidentRes.ok) {
         const error = await incidentRes.json();
         throw new Error(error.error || "Bildirim eklenemedi");
-      }
-
-      // Eğer görüşme isteniyorsa bireysel başvuruyu da kaydet
-      if (formData.wants_meeting && !isEdit) {
-        const requestRes = await fetch("/api/individual-requests", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            student_name: formData.reporter_student_name.trim(),
-            class_key: formData.reporter_class_key || null,
-            class_display: formData.reporter_class_display || null,
-            request_date: formData.incident_date,
-            note: `Öğrenci bildirimi sonrası görüşme isteği: ${formData.note || ""}`
-          })
-        });
-
-        if (!requestRes.ok) {
-          const error = await requestRes.json();
-          console.error("Bireysel başvuru kaydedilemedi:", error);
-          toast.error("Bildirim kaydedildi ancak bireysel başvuru kaydedilemedi");
-          return;
-        }
       }
 
       resetForm();
@@ -420,13 +381,13 @@ export default function OgrenciBildirimleriPage() {
                   <User className="h-5 w-5" />
                   Bildiren Öğrenci İçin Bireysel Başvuru
                 </h3>
-                <IndividualRequestForm
-                  prefilledData={{
-                    student_name: formData.reporter_student_name,
-                    class_display: formData.reporter_class_display,
-                    class_key: formData.reporter_class_key,
-                    note: `Öğrenci bildirimi sonrası görüşme isteği: ${formData.note || ""}`
-                  }}
+                <div className="text-sm text-blue-700 mb-2">
+                  Bu seçenek işaretlendiğinde, bildiren öğrenci için otomatik olarak bir görüşme talebi oluşturulacaktır.
+                </div>
+                <Input 
+                  value={formData.reporter_student_name}
+                  readOnly
+                  className="bg-white/50 border-blue-200"
                 />
               </div>
             </div>
@@ -439,7 +400,12 @@ export default function OgrenciBildirimleriPage() {
         <div className="flex gap-2 mt-6 px-6 pb-6">
           <Button
             onClick={handleSave}
-            disabled={saving || !formData.reporter_student_name.trim() || !formData.target_student_name.trim()}
+            disabled={
+              saving || 
+              !formData.reporter_student_name.trim() || 
+              !formData.target_student_name.trim() ||
+              formData.reporter_student_name.trim() === formData.target_student_name.trim()
+            }
             className="flex-1 bg-rose-600 hover:bg-rose-700 text-white"
           >
             {saving ? (
@@ -469,63 +435,6 @@ export default function OgrenciBildirimleriPage() {
           <span className="text-sm text-rose-700">
             Bildirimler potansiyel görüşmeler sekmesindeki "Öğrenci Bildirimleri" bölümünden takip edilebilir
           </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Bireysel Başvuru Formu Bileşeni
-function IndividualRequestForm({ prefilledData }: {
-  prefilledData: any;
-}) {
-  const [formData, setFormData] = useState({
-    student_name: prefilledData.student_name || "",
-    class_display: prefilledData.class_display || "",
-    class_key: prefilledData.class_key || "",
-    request_date: new Date().toISOString().slice(0, 10),
-    note: prefilledData.note || ""
-  });
-
-  return (
-    <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <Label className="text-sm font-medium mb-2 block">Öğrenci Adı *</Label>
-          <Input
-            value={formData.student_name}
-            onChange={(e) => setFormData((prev) => ({ ...prev, student_name: e.target.value }))}
-            className="border-slate-200"
-          />
-        </div>
-
-        <div>
-          <Label className="text-sm font-medium mb-2 block">Başvuru Tarihi *</Label>
-          <Input
-            type="date"
-            value={formData.request_date}
-            onChange={(e) => setFormData((prev) => ({ ...prev, request_date: e.target.value }))}
-            className="border-slate-200"
-          />
-        </div>
-
-        <div className="md:col-span-2">
-          <Label className="text-sm font-medium mb-2 block">Sınıf</Label>
-          <Input
-            value={formData.class_display || ""}
-            readOnly
-            className="border-slate-200 bg-slate-50"
-          />
-        </div>
-
-        <div className="md:col-span-2">
-          <Label className="text-sm font-medium mb-2 block">Kısa Not (Opsiyonel)</Label>
-          <textarea
-            value={formData.note || ""}
-            onChange={(e) => setFormData((prev) => ({ ...prev, note: e.target.value }))}
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            rows={3}
-          />
         </div>
       </div>
     </div>

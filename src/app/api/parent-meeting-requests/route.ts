@@ -43,11 +43,11 @@ export async function POST(request: NextRequest) {
         student_name,
         class_key: class_key || null,
         class_display: class_display || null,
-        parent_name: parent_name || null,
+        parent_name: parent_name || "",
         request_date,
-        note: note || null,
-        subject: subject || 'Veli talebi',
-        detail: detail || note || null,
+        note: note || "",
+        subject: subject || "Veli talebi",
+        detail: detail || note || "",
         request_type: request_type || 'gorusme',
         status: status || 'new'
       })

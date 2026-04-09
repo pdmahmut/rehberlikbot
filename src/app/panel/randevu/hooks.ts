@@ -116,8 +116,8 @@ export function useAppointments() {
       }
 
       const data = await parseJsonResponse<{ appointment: Appointment }>(res);
-      setAppointments(prev => 
-        prev.map(apt => apt.id === id ? data.appointment : apt)
+      setAppointments(prev =>
+        prev.map(apt => apt.id === id ? { ...apt, ...data.appointment } : apt)
       );
       toast.success("Randevu güncellendi");
       return data.appointment;
@@ -182,7 +182,7 @@ export function useAppointments() {
       }
 
       setAppointments(prev => 
-        prev.map(apt => apt.id === id ? data.appointment : apt)
+        prev.map(apt => apt.id === id ? { ...apt, ...data.appointment } : apt)
       );
       
       toast.success("Görüşme kaydedildi");

@@ -114,7 +114,7 @@ const menuCategories: MenuCategory[] = [
     items: [
       {
         href: "/panel/potansiyel-gorusmeler",
-        label: "Potansiyel Görüşmeler",
+        label: "Görüşme Listesi",
         icon: MessageSquare,
         color: "indigo"
       },

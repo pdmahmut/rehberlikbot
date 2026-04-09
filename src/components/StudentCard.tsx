@@ -15,7 +15,8 @@ export interface StudentCardProps {
   onDelete: () => void;
   appointmentUrl: string;
   isScheduled?: boolean;
-  requestStatus?: "pending" | "scheduled" | "completed" | "cancelled";
+  requestStatus?: "pending" | "scheduled" | "active_follow" | "regular_meeting" | "completed" | "cancelled";
+  hideDelete?: boolean;
   onClick?: () => void;
 }
 
@@ -54,6 +55,7 @@ export function StudentCard({
   appointmentUrl,
   isScheduled = false,
   requestStatus,
+  hideDelete = false,
   onClick
 }: StudentCardProps) {
   const effectiveStatus = requestStatus || (isScheduled ? "scheduled" : "pending");
@@ -125,10 +127,20 @@ export function StudentCard({
                 <Calendar className="h-3 w-3 mr-1" />
                 Randevu Verildi
               </Badge>
+            ) : effectiveStatus === "active_follow" ? (
+              <Badge className="bg-cyan-100 text-cyan-700 border-0 text-xs whitespace-nowrap">
+                <Calendar className="h-3 w-3 mr-1" />
+                Aktif Takip
+              </Badge>
+            ) : effectiveStatus === "regular_meeting" ? (
+              <Badge className="bg-violet-100 text-violet-700 border-0 text-xs whitespace-nowrap">
+                <Calendar className="h-3 w-3 mr-1" />
+                Düzenli Görüşme
+              </Badge>
             ) : effectiveStatus === "completed" ? (
               <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs whitespace-nowrap">
                 <Calendar className="h-3 w-3 mr-1" />
-                Görüşüldü
+                Görüşme Yapıldı
               </Badge>
             ) : (
               <Badge className="bg-slate-100 text-slate-700 border-0 text-xs whitespace-nowrap">
@@ -150,18 +162,20 @@ export function StudentCard({
               <Edit2 className="h-3.5 w-3.5" />
             </Button>
 
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={(event) => {
-                event.stopPropagation();
-                onDelete();
-              }}
-              className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-100 flex-shrink-0"
-              title="Sil"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+            {!hideDelete && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDelete();
+                }}
+                className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-100 flex-shrink-0"
+                title="Sil"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
         </div>
       </div>

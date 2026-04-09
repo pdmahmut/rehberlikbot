@@ -38,6 +38,16 @@ export type ClassStudent = {
   class_display: string;
   student_name: string;
   student_number: string | null;
+  status: StudentStatus;
 };
+
+export const STUDENT_STATUSES = [
+  { value: "tumu", label: "Tümü" },
+  { value: "aktif_takip", label: "Aktif Takip" },
+  { value: "duzenli_gorusme", label: "Düzenli Görüşme" },
+  { value: "tamamlandi", label: "Tamamlandı" }
+] as const;
+
+export type StudentStatus = typeof STUDENT_STATUSES[number]["value"];
 
 export type TimeFilter = "today" | "week" | "month" | "all" | "custom";
