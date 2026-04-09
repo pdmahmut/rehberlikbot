@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 const VALID_TYPES: ObservationType[] = ["behavior", "academic", "social", "emotional"];
 const VALID_PRIORITIES: ObservationPriority[] = ["low", "medium", "high"];
-const VALID_STATUSES: ApplicationStatus[] = ["pending", "scheduled", "active_follow", "regular_meeting", "completed", "converted"];
+const VALID_STATUSES: ApplicationStatus[] = ["pending", "scheduled", "active_follow", "regular_meeting", "completed"];
 
 function normalizeText(value?: string | null) {
   return value?.trim() || "";
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
 
     if (status && status !== "all" && isValidStatus(status)) {
       if (status === "scheduled") {
-        query = query.in("status", ["scheduled", "converted"]);
+        query = query.in("status", ["scheduled"]);
       } else {
         query = query.eq("status", status);
       }
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
       totalCount: observations.length,
       pendingCount: observations.filter((item) => item.status === "pending").length,
       completedCount: observations.filter((item) => item.status === "completed").length,
-      scheduledCount: observations.filter((item) => item.status === "scheduled" || item.status === "converted").length,
+      scheduledCount: observations.filter((item) => item.status === "scheduled" || item.status === ).length,
       activeFollowCount: observations.filter((item) => item.status === "active_follow").length,
       regularMeetingCount: observations.filter((item) => item.status === "regular_meeting").length,
       uniqueStudentCount: new Set(
@@ -305,7 +305,7 @@ export async function PUT(request: NextRequest) {
       }
 
       const updatePayload = {
-        status: "converted",
+        status: ,
         appointment_id: body.appointment_id || null,
         converted_at: new Date().toISOString()
       };
@@ -340,8 +340,8 @@ export async function PUT(request: NextRequest) {
       const updatePayload: Record<string, unknown> = {
         status,
         completed_at: status === "completed" ? new Date().toISOString() : null,
-        converted_at: status === "scheduled" || status === "converted" ? new Date().toISOString() : null,
-        appointment_id: status === "scheduled" || status === "converted" ? (body.appointment_id || null) : null
+        converted_at: status === "scheduled" || status ===  ? new Date().toISOString() : null,
+        appointment_id: status === "scheduled" || status ===  ? (body.appointment_id || null) : null
       };
 
       const { data, error } = await supabase
@@ -383,7 +383,7 @@ export async function PUT(request: NextRequest) {
     if (body.status === "completed") {
       updatePayload.completed_at = new Date().toISOString();
     }
-    if (body.status === "scheduled" || body.status === "converted") {
+    if (body.status === "scheduled" || body.status === ) {
       updatePayload.converted_at = new Date().toISOString();
       updatePayload.appointment_id = body.appointment_id || null;
     }
