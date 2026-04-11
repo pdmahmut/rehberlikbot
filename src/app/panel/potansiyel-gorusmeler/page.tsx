@@ -320,6 +320,8 @@ export default function PotansiyelGorusmelerPage() {
   const [individualRequests, setIndividualRequests] = useState<IndividualRequestRecord[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<DetailModalRecord | null>(null);
+  const [activeFollowSearch, setActiveFollowSearch] = useState("");
+  const [regularMeetingSearch, setRegularMeetingSearch] = useState("");
 
   const loadData = async () => {
     try {
@@ -419,14 +421,30 @@ export default function PotansiyelGorusmelerPage() {
       }
     };
 
+    // Randevu sayfasından geri dönünce (veya tab tekrar aktif olunca) yenile
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadData();
+      }
+    };
+
+    // Next.js route değişikliği sonrası geri dönünce yenile
+    const handleFocus = () => {
+      loadData();
+    };
+
     window.addEventListener(POTENTIAL_MEETINGS_CHANGED_EVENT, handlePotentialMeetingsChanged);
     window.addEventListener(POTENTIAL_MEETINGS_HIDDEN_CHANGED_EVENT, handleHiddenPotentialMeetingsChanged);
     window.addEventListener("storage", handleStorageChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       window.removeEventListener(POTENTIAL_MEETINGS_CHANGED_EVENT, handlePotentialMeetingsChanged);
       window.removeEventListener(POTENTIAL_MEETINGS_HIDDEN_CHANGED_EVENT, handleHiddenPotentialMeetingsChanged);
       window.removeEventListener("storage", handleStorageChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
     };
   }, []);
 
@@ -447,6 +465,14 @@ export default function PotansiyelGorusmelerPage() {
     scheduledAppointments.some((appointment) =>
       matchesScheduledAppointment(appointment, studentName, classDisplay, classKey)
     );
+
+  // Randevu tarihini döndür (varsa)
+  const getScheduledDate = (studentName: string, classDisplay?: string | null, classKey?: string | null): string | null => {
+    const apt = scheduledAppointments.find((appointment) =>
+      matchesScheduledAppointment(appointment, studentName, classDisplay, classKey)
+    );
+    return apt?.appointment_date || null;
+  };
 
   const appointmentDecisions = (appointment: Appointment) => appointment.outcome_decision || [];
 
@@ -549,7 +575,8 @@ export default function PotansiyelGorusmelerPage() {
 
   const filteredObservations = useMemo(() => {
     return observations.filter((observation) =>
-      observation.status === "pending" &&
+      (observation.status === "pending" || observation.status === "scheduled" || observation.status === "converted") &&
+      !isAlreadyAttended(observation.student_name, observation.class_display, observation.class_key) &&
       !isPotentialMeetingHidden("observation", observation.id) &&
       matchesQuery(
         [
@@ -564,7 +591,7 @@ export default function PotansiyelGorusmelerPage() {
         query
       )
     );
-  }, [observations, query, hiddenPotentialMeetingKeys]);
+  }, [observations, query, hiddenPotentialMeetingKeys, attendedAppointments]);
 
   const filteredRequests = useMemo(() => {
     return requests.filter((request) =>
@@ -654,6 +681,27 @@ export default function PotansiyelGorusmelerPage() {
     [trackedAppointments]
   );
 
+
+  const filteredActiveFollowUp = useMemo(() => {
+    if (!activeFollowSearch.trim()) return activeFollowUpAppointments;
+    const q = normalizeText(activeFollowSearch);
+    return activeFollowUpAppointments.filter((a) =>
+      normalizeText(a.participant_name || "").includes(q) ||
+      normalizeText(a.participant_class || "").includes(q) ||
+      normalizeText(a.purpose || "").includes(q)
+    );
+  }, [activeFollowUpAppointments, activeFollowSearch]);
+
+  const filteredRegularMeetings = useMemo(() => {
+    if (!regularMeetingSearch.trim()) return regularMeetingAppointments;
+    const q = normalizeText(regularMeetingSearch);
+    return regularMeetingAppointments.filter((a) =>
+      normalizeText(a.participant_name || "").includes(q) ||
+      normalizeText(a.participant_class || "").includes(q) ||
+      normalizeText(a.purpose || "").includes(q)
+    );
+  }, [regularMeetingAppointments, regularMeetingSearch]);
+
   const visibleAppointments = useMemo(
     () => sortedAppointments.filter((appointment) => appointment.status === "planned"),
     [sortedAppointments]
@@ -712,10 +760,10 @@ export default function PotansiyelGorusmelerPage() {
       });
     });
 
-    // Gözlem Havuzu
+    // Gözlem Havuzu — pending ve scheduled olanlar listede kalır
+    // isAlreadyAttended kontrolü filteredObservations'da yapılıyor, burada tekrar yapmaya gerek yok
     sortedObservations.forEach((observation) => {
       if (isPotentialMeetingHidden("observation", observation.id)) return;
-      if (isAlreadyAttended(observation.student_name, observation.class_display, observation.class_key)) return;
       records.push({
         id: `observation-${observation.id}`,
         studentName: observation.student_name,
@@ -782,6 +830,21 @@ export default function PotansiyelGorusmelerPage() {
 
   const totalVisible =
     filteredIncidents.length + filteredReferrals.length + filteredObservations.length + filteredRequests.length + filteredIndividualRequests.length;
+
+  // Yeniden yönlendirme: allMergedRecords içinde aktif takip veya düzenli görüşmedeki öğrencilerle aynı isimde olanlar
+  const trackedNames = useMemo(() => {
+    const names = new Set<string>();
+    [...activeFollowUpAppointments, ...regularMeetingAppointments].forEach((apt) => {
+      if (apt.participant_name) names.add(normalizeText(apt.participant_name));
+    });
+    return names;
+  }, [activeFollowUpAppointments, regularMeetingAppointments]);
+
+  const reReferralCount = useMemo(() => {
+    return allMergedRecords.filter((record) =>
+      trackedNames.has(normalizeText(record.studentName))
+    ).length;
+  }, [allMergedRecords, trackedNames]);
 
   const handleEditSource = (kind: "incident" | "referral" | "observation" | "request" | "individual-request", record: { id?: string; studentName: string; classDisplay?: string | null }) => {
     if (!record.id) {
@@ -861,44 +924,56 @@ export default function PotansiyelGorusmelerPage() {
         <div className="absolute inset-0 bg-grid-white/10" />
         <div className="absolute -top-20 -right-20 h-56 w-56 rounded-full bg-cyan-300/20 blur-3xl animate-float-slow" />
         <div className="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-teal-400/20 blur-3xl animate-float-reverse" />
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="relative flex flex-col gap-4">
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm shadow-lg">
               <MessageSquare className="h-7 w-7" />
             </div>
             <div>
               <h1 className="text-2xl font-bold">Görüşme Listesi</h1>
-              <p className="text-slate-200">
-                Öğretmen yönlendirmeleri, gözlem havuzu ve öğrenci bildirimleri tek ekranda.
-              </p>
+              <p className="text-slate-200 text-sm">Günlük müdahale gerektiren durumları takip edin.</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <div className="rounded-lg border border-white/10 bg-white/10 px-3 py-2 backdrop-blur-sm">
-              <p className="text-[10px] uppercase tracking-wider text-cyan-100">Toplam</p>
-              <p className="text-lg font-bold leading-none">{totalVisible}</p>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-white/10 px-3 py-2 backdrop-blur-sm">
-              <p className="text-[10px] uppercase tracking-wider text-cyan-100">Bildirim</p>
-              <p className="text-lg font-bold leading-none">{filteredIncidents.length}</p>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-white/10 px-3 py-2 backdrop-blur-sm">
-              <p className="text-[10px] uppercase tracking-wider text-cyan-100">Yönlendirme</p>
-              <p className="text-lg font-bold leading-none">{filteredReferrals.length}</p>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-white/10 px-3 py-2 backdrop-blur-sm">
-              <p className="text-[10px] uppercase tracking-wider text-cyan-100">Gözlem</p>
-              <p className="text-lg font-bold leading-none">{filteredObservations.length}</p>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-white/10 px-3 py-2 backdrop-blur-sm">
-              <p className="text-[10px] uppercase tracking-wider text-cyan-100">Veli Talebi</p>
-              <p className="text-lg font-bold leading-none">{filteredRequests.length}</p>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-white/10 px-3 py-2 backdrop-blur-sm">
-              <p className="text-[10px] uppercase tracking-wider text-cyan-100">Bireysel</p>
-              <p className="text-lg font-bold leading-none">{filteredIndividualRequests.length}</p>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
+            {/* Yeniden Yönlendirme */}
+            <button
+              type="button"
+              onClick={() => { setActiveTab("all"); }}
+              className="group text-left rounded-xl border border-red-400/40 bg-red-500/20 hover:bg-red-500/30 px-4 py-3 backdrop-blur-sm transition-all"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[11px] uppercase tracking-wider text-red-200 font-semibold">Yeniden Yönlendirme</p>
+                <span className="text-2xl font-black text-white">{reReferralCount}</span>
+              </div>
+              <p className="text-xs text-red-200/80">Aktif takip/düzenli görüşmedeki öğrenci için yeni başvuru</p>
+            </button>
+
+            {/* Yeni Başvurular */}
+            <button
+              type="button"
+              onClick={() => { setActiveTab("all"); }}
+              className="group text-left rounded-xl border border-amber-400/40 bg-amber-500/20 hover:bg-amber-500/30 px-4 py-3 backdrop-blur-sm transition-all"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[11px] uppercase tracking-wider text-amber-200 font-semibold">Yeni Başvurular</p>
+                <span className="text-2xl font-black text-white">{allMergedRecords.length - reReferralCount}</span>
+              </div>
+              <p className="text-xs text-amber-200/80">Henüz görüşme yapılmamış, tümü listesindeki öğrenciler</p>
+            </button>
+
+            {/* Aktif Süreç */}
+            <button
+              type="button"
+              onClick={() => setActiveTab("active-follow-up")}
+              className="group text-left rounded-xl border border-cyan-400/40 bg-cyan-500/20 hover:bg-cyan-500/30 px-4 py-3 backdrop-blur-sm transition-all"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[11px] uppercase tracking-wider text-cyan-200 font-semibold">Aktif Süreç</p>
+                <span className="text-2xl font-black text-white">{activeFollowUpAppointments.length + regularMeetingAppointments.length}</span>
+              </div>
+              <p className="text-xs text-cyan-200/80">Aktif takip + düzenli görüşmelerdeki toplam öğrenci</p>
+            </button>
           </div>
         </div>
       </div>
@@ -1064,6 +1139,10 @@ export default function PotansiyelGorusmelerPage() {
                         );
                       }
 
+                      const scheduledDate = record.type === "observation"
+                        ? null
+                        : getScheduledDate(record.studentName, record.classDisplay, record.classNumber);
+
                       return (
                         <div key={record.id} className="relative">
                           <StudentCard
@@ -1073,6 +1152,7 @@ export default function PotansiyelGorusmelerPage() {
                             note={record.note}
                             date={record.date}
                             isScheduled={record.type === "observation" ? false : isScheduled}
+                            scheduledDate={scheduledDate}
                             requestStatus={
                               record.type === "observation"
                                 ? (record.data.status === "completed"
@@ -1108,17 +1188,30 @@ export default function PotansiyelGorusmelerPage() {
 
           {/* AKTİF TAKİP SEKMESİ */}
           <TabsContent value="active-follow-up" className="mt-6">
-            <SectionBlock
-              title="Aktif Takip"
-              icon={MessageSquare}
-              count={activeFollowUpAppointments.length}
-              emptyText="Aktif takip kaydı bulunamadı"
-            >
-              <div className="space-y-3">
-                {activeFollowUpAppointments.map((appointment) => {
+            <Card className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <CardHeader className="border-b bg-slate-50 py-3">
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <MessageSquare className="h-4 w-4" />
+                  <span>Aktif Takip</span>
+                  <Badge variant="secondary">{filteredActiveFollowUp.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input value={activeFollowSearch} onChange={(e) => setActiveFollowSearch(e.target.value)} placeholder="Öğrenci adı, sınıf, konu..." className="pl-10" />
+                </div>
+                <div className="space-y-3">
+                  {filteredActiveFollowUp.length === 0 && (
+                    <p className="py-6 text-center text-slate-500 text-sm">Kayıt bulunamadı</p>
+                  )}
+                  {filteredActiveFollowUp.map((appointment) => {
                   const daysSince = appointment.appointment_date
                     ? Math.floor((Date.now() - new Date(appointment.appointment_date).getTime()) / (1000 * 60 * 60 * 24))
                     : null;
+                  const nextApt = scheduledAppointments.find((a) =>
+                    matchesScheduledAppointment(a, appointment.participant_name, appointment.participant_class, null)
+                  );
                   return (
                     <div key={appointment.id} className="rounded-2xl border border-cyan-200 bg-white shadow-sm overflow-hidden">
                       <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-cyan-50 to-sky-50 px-4 py-3 border-b border-cyan-100">
@@ -1165,37 +1258,62 @@ export default function PotansiyelGorusmelerPage() {
                         </div>
                       </div>
                       <div className="px-4 py-2.5 border-t border-cyan-100 bg-slate-50/60 flex justify-end">
-                        <Button type="button" size="sm" variant="outline" asChild className="border-cyan-200 text-cyan-700 hover:bg-cyan-50 text-xs">
-                          <Link href={buildAppointmentUrl(
-                            appointment.participant_name, appointment.participant_class || null, null,
-                            appointment.purpose || appointment.outcome_summary || "Aktif takip görüşmesi",
-                            undefined, undefined, "self_application", appointment.id
-                          )}>
-                            <Calendar className="h-3.5 w-3.5 mr-1" />Randevu Oluştur
-                          </Link>
-                        </Button>
+                        {nextApt ? (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                              <Calendar className="h-3 w-3 mr-1" />Randevu Verildi
+                            </Badge>
+                            <span className="text-[11px] text-amber-600 font-medium">
+                              {new Date(nextApt.appointment_date).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                            </span>
+                          </div>
+                        ) : (
+                          <Button type="button" size="sm" variant="outline" asChild className="border-cyan-200 text-cyan-700 hover:bg-cyan-50 text-xs">
+                            <Link href={buildAppointmentUrl(
+                              appointment.participant_name, appointment.participant_class || null, null,
+                              appointment.purpose || appointment.outcome_summary || "Aktif takip görüşmesi",
+                              undefined, undefined, "self_application", appointment.id
+                            )}>
+                              <Calendar className="h-3.5 w-3.5 mr-1" />Randevu Oluştur
+                            </Link>
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );
                 })}
-              </div>
-            </SectionBlock>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* DÜZENLİ GÖRÜŞMELER SEKMESİ */}
           <TabsContent value="regular-meetings" className="mt-6">
-            <SectionBlock
-              title="Düzenli Görüşmeler"
-              icon={MessageSquare}
-              count={regularMeetingAppointments.length}
-              emptyText="Düzenli görüşme kaydı bulunamadı"
-            >
-              <div className="space-y-3">
-                {regularMeetingAppointments.map((appointment) => {
+            <Card className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <CardHeader className="border-b bg-slate-50 py-3">
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <MessageSquare className="h-4 w-4" />
+                  <span>Düzenli Görüşmeler</span>
+                  <Badge variant="secondary">{filteredRegularMeetings.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input value={regularMeetingSearch} onChange={(e) => setRegularMeetingSearch(e.target.value)} placeholder="Öğrenci adı, sınıf, konu..." className="pl-10" />
+                </div>
+                <div className="space-y-3">
+                  {filteredRegularMeetings.length === 0 && (
+                    <p className="py-6 text-center text-slate-500 text-sm">Kayıt bulunamadı</p>
+                  )}
+                  {filteredRegularMeetings.map((appointment) => {
                   const daysSince = appointment.appointment_date
                     ? Math.floor((Date.now() - new Date(appointment.appointment_date).getTime()) / (1000 * 60 * 60 * 24))
                     : null;
                   const isOverdue = daysSince !== null && daysSince >= 14;
+                  const nextApt = scheduledAppointments.find((a) =>
+                    matchesScheduledAppointment(a, appointment.participant_name, appointment.participant_class, null)
+                  );
                   return (
                     <div key={appointment.id} className={`rounded-2xl border bg-white shadow-sm overflow-hidden ${isOverdue ? "border-red-300" : "border-violet-200"}`}>
                       {isOverdue && (
@@ -1249,21 +1367,33 @@ export default function PotansiyelGorusmelerPage() {
                         </div>
                       </div>
                       <div className={`px-4 py-2.5 border-t flex justify-end ${isOverdue ? "border-red-100 bg-red-50/40" : "border-violet-100 bg-slate-50/60"}`}>
-                        <Button type="button" size="sm" variant="outline" asChild className={`text-xs ${isOverdue ? "border-red-200 text-red-700 hover:bg-red-50" : "border-violet-200 text-violet-700 hover:bg-violet-50"}`}>
-                          <Link href={buildAppointmentUrl(
-                            appointment.participant_name, appointment.participant_class || null, null,
-                            appointment.purpose || appointment.outcome_summary || "Düzenli görüşme",
-                            undefined, undefined, "self_application", appointment.id
-                          )}>
-                            <Calendar className="h-3.5 w-3.5 mr-1" />Randevu Oluştur
-                          </Link>
-                        </Button>
+                        {nextApt ? (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                              <Calendar className="h-3 w-3 mr-1" />Randevu Verildi
+                            </Badge>
+                            <span className="text-[11px] text-amber-600 font-medium">
+                              {new Date(nextApt.appointment_date).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                            </span>
+                          </div>
+                        ) : (
+                          <Button type="button" size="sm" variant="outline" asChild className={`text-xs ${isOverdue ? "border-red-200 text-red-700 hover:bg-red-50" : "border-violet-200 text-violet-700 hover:bg-violet-50"}`}>
+                            <Link href={buildAppointmentUrl(
+                              appointment.participant_name, appointment.participant_class || null, null,
+                              appointment.purpose || appointment.outcome_summary || "Düzenli görüşme",
+                              undefined, undefined, "self_application", appointment.id
+                            )}>
+                              <Calendar className="h-3.5 w-3.5 mr-1" />Randevu Oluştur
+                            </Link>
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );
                 })}
-              </div>
-            </SectionBlock>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       )}
@@ -1302,7 +1432,7 @@ function SectionBlock({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 p-4">
-        {count === 0 ? <p className="py-8 text-center text-slate-500">{emptyText}</p> : children}
+        {children}
       </CardContent>
     </Card>
   );

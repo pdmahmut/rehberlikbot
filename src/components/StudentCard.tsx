@@ -15,6 +15,7 @@ export interface StudentCardProps {
   onDelete: () => void;
   appointmentUrl: string;
   isScheduled?: boolean;
+  scheduledDate?: string | null; // randevu tarihi
   requestStatus?: "pending" | "scheduled" | "active_follow" | "regular_meeting" | "completed" | "cancelled";
   hideDelete?: boolean;
   onClick?: () => void;
@@ -54,6 +55,7 @@ export function StudentCard({
   onDelete,
   appointmentUrl,
   isScheduled = false,
+  scheduledDate,
   requestStatus,
   hideDelete = false,
   onClick
@@ -76,21 +78,15 @@ export function StudentCard({
         onClick ? "cursor-pointer hover:shadow-md hover:bg-slate-50 hover:-translate-y-0.5" : ""
       }`}
     >
-      {/* Full Width Card - Horizontal Layout */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4">
         {/* SOL: Öğrenci Bilgileri */}
         <div className="flex-1 min-w-0">
-          {/* Öğrenci Adı - Bold, Büyük */}
           <h3 className="text-base font-bold text-slate-900 leading-tight">
             {studentName}
           </h3>
-
-          {/* Sınıf / Numara - Küçük, Gri */}
           <p className="mt-1 text-xs text-slate-500">
             {classDisplay || classNumber || "Sınıf bilinmiyor"}
           </p>
-
-          {/* Not / Açıklama - 2 satır max */}
           {note && (
             <p className="mt-2 text-sm text-slate-700 line-clamp-2 leading-5">
               {truncateText(note, 2)}
@@ -100,12 +96,10 @@ export function StudentCard({
 
         {/* SAĞ: Tarih ve Butonlar */}
         <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 md:ml-auto">
-          {/* Tarih */}
           <div className="text-xs text-slate-500 whitespace-nowrap">
             {formatDate(date)}
           </div>
 
-          {/* Butonlar */}
           <div className="flex gap-2 items-center">
             {effectiveStatus === "pending" ? (
               <Button
@@ -123,10 +117,17 @@ export function StudentCard({
                 </Link>
               </Button>
             ) : effectiveStatus === "scheduled" ? (
-              <Badge className="bg-amber-100 text-amber-700 border-0 text-xs whitespace-nowrap">
-                <Calendar className="h-3 w-3 mr-1" />
-                Randevu Verildi
-              </Badge>
+              <div className="flex flex-col items-end gap-0.5">
+                <Badge className="bg-amber-100 text-amber-700 border-0 text-xs whitespace-nowrap">
+                  <Calendar className="h-3 w-3 mr-1" />
+                  Randevu Verildi
+                </Badge>
+                {scheduledDate && (
+                  <span className="text-[11px] text-amber-600 font-medium">
+                    {formatDate(scheduledDate)}
+                  </span>
+                )}
+              </div>
             ) : effectiveStatus === "active_follow" ? (
               <Badge className="bg-cyan-100 text-cyan-700 border-0 text-xs whitespace-nowrap">
                 <Calendar className="h-3 w-3 mr-1" />

@@ -254,13 +254,9 @@ export default function BasvurularPage() {
         case 'individual': endpoint = '/api/individual-requests'; break;
         default: throw new Error('Geçersiz başvuru türü');
       }
-      const isObservation = type === 'observation';
-      const body = isObservation ? { id, action: "status", status: "completed" } : null;
-      const response = isObservation
-        ? await fetch(endpoint, { method: 'PUT', headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-        : await fetch(`${endpoint}?id=${id}`, { method: 'DELETE' });
+      const response = await fetch(`${endpoint}?id=${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error("İşlem başarısız");
-      toast.success(isObservation ? 'Gözlem kaydı arşivlendi' : 'Başvuru başarıyla silindi');
+      toast.success('Başvuru başarıyla silindi');
       await loadData();
     } catch {
       toast.error('Başvuru silinirken hata oluştu');
@@ -275,7 +271,7 @@ export default function BasvurularPage() {
       setLoadError(null);
       const [referralResult, observationResult, incidentResult, requestResult, attendedResult, scheduledResult, individualRequestResult] = await Promise.all([
         supabase.from("referrals").select("*").order("created_at", { ascending: false }),
-        fetch("/api/gozlem-havuzu?status=pending"),
+        fetch("/api/gozlem-havuzu"),
         supabase.from("student_incidents").select("*").in("status", ["new", "reviewing"]).order("incident_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("parent_meeting_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("appointments").select("*").eq("status", "attended").eq("participant_type", "student").order("appointment_date", { ascending: false }).order("created_at", { ascending: false }),

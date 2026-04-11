@@ -1,7 +1,5 @@
 "use client";
 
-"use client";
-
 import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import {
@@ -12,6 +10,7 @@ import {
   AppointmentStatus 
 } from "@/types";
 import { parseJsonResponse, parseResponseError } from "@/lib/utils";
+import { notifyPotentialMeetingsChanged } from "@/lib/potentialMeetings";
 
 const getLocalDateString = (date: Date) => {
   const year = date.getFullYear();
@@ -20,13 +19,11 @@ const getLocalDateString = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-// Randevu yönetimi hook'u
 export function useAppointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Randevuları getir
   const fetchAppointments = useCallback(async (params?: {
     date?: string;
     from?: string;
@@ -72,7 +69,6 @@ export function useAppointments() {
     }
   }, []);
 
-  // Yeni randevu oluştur
   const createAppointment = useCallback(async (formData: AppointmentFormData) => {
     try {
       setLoading(true);
@@ -90,6 +86,15 @@ export function useAppointments() {
       const data = await parseJsonResponse<{ appointment: Appointment }>(res);
       setAppointments(prev => [...prev, data.appointment]);
       toast.success("Randevu oluşturuldu");
+
+      // Görüşme listesini ve yapılacaklar sayfasını bilgilendir
+      notifyPotentialMeetingsChanged({
+        action: "create",
+        id: data.appointment.id,
+        source: "appointment",
+        studentName: data.appointment.participant_name
+      });
+
       return data.appointment;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Bir hata oluştu";
@@ -100,7 +105,6 @@ export function useAppointments() {
     }
   }, []);
 
-  // Randevu güncelle
   const updateAppointment = useCallback(async (id: string, updateData: Partial<Appointment>) => {
     try {
       setLoading(true);
@@ -130,7 +134,6 @@ export function useAppointments() {
     }
   }, []);
 
-  // Görüşme kapanışı
   const closeAppointment = useCallback(async (id: string, closureData: AppointmentClosureData) => {
     try {
       setLoading(true);
@@ -157,10 +160,8 @@ export function useAppointments() {
       
       // Takip randevusu oluştur
       if (closureData.create_follow_up && closureData.status === "attended") {
-        // Mevcut randevuyu al
         const currentAppointment = appointments.find(a => a.id === id);
         if (currentAppointment) {
-          // 1 hafta sonrası için takip randevusu öner
           const nextDate = new Date();
           nextDate.setDate(nextDate.getDate() + 7);
           
@@ -184,6 +185,14 @@ export function useAppointments() {
       setAppointments(prev => 
         prev.map(apt => apt.id === id ? { ...apt, ...data.appointment } : apt)
       );
+
+      // Görüşme listesini bilgilendir
+      notifyPotentialMeetingsChanged({
+        action: "update",
+        id,
+        source: "appointment",
+        studentName: data.appointment?.participant_name
+      });
       
       toast.success("Görüşme kaydedildi");
       return data.appointment;
@@ -196,7 +205,6 @@ export function useAppointments() {
     }
   }, [appointments, createAppointment]);
 
-  // Randevu sil
   const deleteAppointment = useCallback(async (id: string) => {
     try {
       setLoading(true);
@@ -222,19 +230,17 @@ export function useAppointments() {
     }
   }, []);
 
-  // Bugünkü randevuları getir
   const getTodayAppointments = useCallback(() => {
     const today = getLocalDateString(new Date());
     return appointments.filter(apt => apt.appointment_date === today);
   }, [appointments]);
 
-  // Bu haftanın randevularını getir
   const getWeekAppointments = useCallback(() => {
     const today = new Date();
     const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Pazartesi
+    startOfWeek.setDate(today.getDate() - today.getDay() + 1);
     const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6); // Pazar
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
 
     const start = getLocalDateString(startOfWeek);
     const end = getLocalDateString(endOfWeek);
@@ -244,7 +250,6 @@ export function useAppointments() {
     );
   }, [appointments]);
 
-  // Durum bazlı sayılar
   const getStatusCounts = useCallback(() => {
     const counts = {
       planned: 0,
@@ -278,12 +283,10 @@ export function useAppointments() {
   };
 }
 
-// Randevu görevleri hook'u
 export function useAppointmentTasks() {
   const [tasks, setTasks] = useState<AppointmentTask[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Görevleri getir
   const fetchTasks = useCallback(async (appointmentId?: string) => {
     try {
       setLoading(true);
@@ -308,7 +311,6 @@ export function useAppointmentTasks() {
     }
   }, []);
 
-  // Yeni görev oluştur
   const createTask = useCallback(async (appointmentId: string, description: string, dueDate?: string) => {
     try {
       const res = await fetch("/api/appointment-tasks", {
@@ -336,7 +338,6 @@ export function useAppointmentTasks() {
     }
   }, []);
 
-  // Görevi tamamla
   const toggleTask = useCallback(async (id: string, completed: boolean) => {
     try {
       const res = await fetch("/api/appointment-tasks", {
@@ -361,7 +362,6 @@ export function useAppointmentTasks() {
     }
   }, []);
 
-  // Görev sil
   const deleteTask = useCallback(async (id: string) => {
     try {
       const res = await fetch(`/api/appointment-tasks?id=${id}`, {
@@ -383,7 +383,6 @@ export function useAppointmentTasks() {
     }
   }, []);
 
-  // Tamamlanmamış görevler
   const getPendingTasks = useCallback(() => {
     return tasks.filter(task => !task.is_completed);
   }, [tasks]);
@@ -399,12 +398,10 @@ export function useAppointmentTasks() {
   };
 }
 
-// Tarih yardımcı fonksiyonları
 export function useCalendarHelpers() {
-  // Haftanın günlerini getir
   const getWeekDays = useCallback((date: Date) => {
     const start = new Date(date);
-    start.setDate(date.getDate() - date.getDay() + 1); // Pazartesi
+    start.setDate(date.getDate() - date.getDay() + 1);
     
     const days = [];
     for (let i = 0; i < 7; i++) {
@@ -415,7 +412,6 @@ export function useCalendarHelpers() {
     return days;
   }, []);
 
-  // Saat dilimlerini getir (08:00 - 17:00)
   const getTimeSlots = useCallback((startHour = 8, endHour = 17, interval = 30) => {
     const slots = [];
     for (let hour = startHour; hour < endHour; hour++) {
@@ -427,7 +423,6 @@ export function useCalendarHelpers() {
     return slots;
   }, []);
 
-  // Tarih formatlama
   const formatDate = useCallback((dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString("tr-TR", {
@@ -438,7 +433,6 @@ export function useCalendarHelpers() {
     });
   }, []);
 
-  // Kısa tarih formatlama
   const formatShortDate = useCallback((dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString("tr-TR", {
@@ -447,12 +441,10 @@ export function useCalendarHelpers() {
     });
   }, []);
 
-  // Gün adı
   const getDayName = useCallback((date: Date) => {
     return date.toLocaleDateString("tr-TR", { weekday: "short" });
   }, []);
 
-  // Bugün mü kontrolü
   const isToday = useCallback((date: Date) => {
     const today = new Date();
     return date.toDateString() === today.toDateString();
