@@ -321,6 +321,7 @@ export default function PotansiyelGorusmelerPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<DetailModalRecord | null>(null);
   const [activeFollowSearch, setActiveFollowSearch] = useState("");
+  const [reReferralOnly, setReReferralOnly] = useState(false);
   const [regularMeetingSearch, setRegularMeetingSearch] = useState("");
 
   const loadData = async () => {
@@ -815,7 +816,11 @@ export default function PotansiyelGorusmelerPage() {
       });
     });
 
-    return records.sort((a, b) => b.sortTimestamp - a.sortTimestamp);
+    const sorted = records.sort((a, b) => b.sortTimestamp - a.sortTimestamp);
+    if (reReferralOnly) {
+      return sorted.filter(r => trackedNames.has(normalizeText(r.studentName)));
+    }
+    return sorted;
   }, [
     sortedIncidents,
     sortedReferrals,
@@ -831,7 +836,7 @@ export default function PotansiyelGorusmelerPage() {
   const totalVisible =
     filteredIncidents.length + filteredReferrals.length + filteredObservations.length + filteredRequests.length + filteredIndividualRequests.length;
 
-  // Yeniden yönlendirme: allMergedRecords içinde aktif takip veya düzenli görüşmedeki öğrencilerle aynı isimde olanlar
+  // Yeniden yönlendirme: aktif takip/düzenli görüşmedeki öğrenci adlarını tüm ham kayıtlarla eşleştir
   const trackedNames = useMemo(() => {
     const names = new Set<string>();
     [...activeFollowUpAppointments, ...regularMeetingAppointments].forEach((apt) => {
@@ -840,11 +845,21 @@ export default function PotansiyelGorusmelerPage() {
     return names;
   }, [activeFollowUpAppointments, regularMeetingAppointments]);
 
-  const reReferralCount = useMemo(() => {
-    return allMergedRecords.filter((record) =>
-      trackedNames.has(normalizeText(record.studentName))
-    ).length;
-  }, [allMergedRecords, trackedNames]);
+  const reReferralRecords = useMemo(() => {
+    if (trackedNames.size === 0) return [];
+    // isAlreadyAttended bypass — tüm ham kayıtlara bak
+    const all = [
+      ...incidents.map(i => normalizeText(i.target_student_name || "")),
+      ...referrals.map(r => normalizeText(r.student_name || "")),
+      ...observations.filter(o => o.status === "pending" || o.status === "scheduled" || o.status === "converted").map(o => normalizeText(o.student_name || "")),
+      ...requests.map(r => normalizeText(r.student_name || "")),
+      ...individualRequests.filter(r => r.status !== "completed").map(r => normalizeText(r.student_name || ""))
+    ];
+    const matched = new Set(all.filter(name => name && trackedNames.has(name)));
+    return Array.from(matched);
+  }, [incidents, referrals, observations, requests, individualRequests, trackedNames]);
+
+  const reReferralCount = reReferralRecords.length;
 
   const handleEditSource = (kind: "incident" | "referral" | "observation" | "request" | "individual-request", record: { id?: string; studentName: string; classDisplay?: string | null }) => {
     if (!record.id) {
@@ -939,7 +954,7 @@ export default function PotansiyelGorusmelerPage() {
             {/* Yeniden Yönlendirme */}
             <button
               type="button"
-              onClick={() => { setActiveTab("all"); }}
+              onClick={() => { setActiveTab("all"); setReReferralOnly(true); }}
               className="group text-left rounded-xl border border-red-400/40 bg-red-500/20 hover:bg-red-500/30 px-4 py-3 backdrop-blur-sm transition-all"
             >
               <div className="flex items-center justify-between mb-1">
@@ -952,7 +967,7 @@ export default function PotansiyelGorusmelerPage() {
             {/* Yeni Başvurular */}
             <button
               type="button"
-              onClick={() => { setActiveTab("all"); }}
+              onClick={() => { setActiveTab("all"); setReReferralOnly(false); }}
               className="group text-left rounded-xl border border-amber-400/40 bg-amber-500/20 hover:bg-amber-500/30 px-4 py-3 backdrop-blur-sm transition-all"
             >
               <div className="flex items-center justify-between mb-1">
@@ -980,14 +995,25 @@ export default function PotansiyelGorusmelerPage() {
 
       <Card className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <CardContent className="p-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Öğrenci adı, sınıf, öğretmen, açıklama..."
-              className="pl-10"
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setReReferralOnly(false); }}
+                placeholder="Öğrenci adı, sınıf, öğretmen, açıklama..."
+                className="pl-10"
+              />
+            </div>
+            {reReferralOnly && (
+              <button
+                type="button"
+                onClick={() => setReReferralOnly(false)}
+                className="flex items-center gap-1 rounded-full bg-red-100 text-red-700 px-3 py-1.5 text-xs font-semibold hover:bg-red-200 transition-colors whitespace-nowrap"
+              >
+                Yeniden Yönlendirme ✕
+              </button>
+            )}
           </div>
         </CardContent>
       </Card>
