@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
         teacher_name,
         note: note || null,
         reason: reason || note || null,
-        status: 'active'
+        status: 'Bekliyor'
       })
       .select()
       .single();

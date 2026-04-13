@@ -55,6 +55,17 @@ import {
   PriorityLevel
 } from "@/types";
 
+const APPOINTMENT_TOPICS = [
+  "Akademik Sorunlar",
+  "Davranış Problemleri",
+  "Akran İlişkileri ve Sosyal Problemler",
+  "Duygusal Problemler",
+  "Ailevi Sorunlar",
+  "Devamsızlık ve Okula Uyum Problemleri",
+  "Riskli Durumlar",
+  "Kimlik ve Gelişimsel Süreçler",
+];
+
 // Renk haritaları
 const statusColors: Record<AppointmentStatus, { bg: string; text: string; border: string }> = {
   planned: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
@@ -137,7 +148,6 @@ function useBusySlots() {
       setLoading(true);
       const allBusySlots = new Set<string>();
       
-      // Randevuları getir
       const appointmentRes = await fetch(`/api/appointments?date=${date}`, {
         headers: { Accept: "application/json" }
       });
@@ -154,7 +164,6 @@ function useBusySlots() {
         });
       }
 
-      // Sınıf rehberliği planlarını getir
       try {
         const { supabase } = await import("@/lib/supabase");
         const { data: plans, error } = await supabase
@@ -177,7 +186,6 @@ function useBusySlots() {
         console.error("Sınıf rehberliği planları yüklenemedi:", err);
       }
 
-      // Sınıf etkinliklerini getir
       try {
         const { supabase } = await import("@/lib/supabase");
         const { data: activities, error } = await supabase
@@ -261,7 +269,6 @@ const resolveStudentPrefill = async (studentName: string) => {
       headers: { Accept: "application/json" }
     });
 
-    // Debug için response içeriğini kontrol et
     const responseText = await res.clone().text();
     console.log("Students API Response:", {
       status: res.status,
@@ -313,6 +320,7 @@ const resolveStudentPrefill = async (studentName: string) => {
     };
   }
 };
+
 export default function RandevuPage() {
   const searchParams = useSearchParams();
   const { 
@@ -332,7 +340,6 @@ export default function RandevuPage() {
   const [viewMode, setViewMode] = useState<"day" | "week">("day");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState("");
-
 
   const [classes, setClasses] = useState<{ value: string; text: string }[]>([]);
   const [students, setStudents] = useState<{ value: string; text: string }[]>([]);
@@ -358,10 +365,8 @@ export default function RandevuPage() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [attendanceChoiceAppointment, setAttendanceChoiceAppointment] = useState<Appointment | null>(null);
 
-  const [customTag, setCustomTag] = useState("");
-  const [customTags, setCustomTags] = useState<string[]>([]);
-  const [parentName, setParentName] = useState(""); // Veli adı için ayrı state
-  const [selectedStudentName, setSelectedStudentName] = useState(""); // Veli randevuları için öğrenci adı
+  const [parentName, setParentName] = useState("");
+  const [selectedStudentName, setSelectedStudentName] = useState("");
 
   const [formData, setFormData] = useState<AppointmentFormData>({
     appointment_date: new Date().toISOString().slice(0, 10),
@@ -449,7 +454,6 @@ export default function RandevuPage() {
     fetchClassesAndTeachers();
   }, []);
 
-  // Dolu saatleri getir
   useEffect(() => {
     if (formData.appointment_date) {
       fetchBusySlots(formData.appointment_date, { excludeAppointmentId: editingAppointment?.id });
@@ -511,16 +515,12 @@ export default function RandevuPage() {
       setShowNewAppointmentModal(true);
 
       setFormData((prev) => {
-        const nextTags = observationType && poolObservationTagMap[observationType]
-          ? Array.from(new Set([...prev.topic_tags, poolObservationTagMap[observationType]]))
-          : prev.topic_tags;
-
         return {
           ...prev,
           participant_type: "student",
           participant_name: resolvedStudentText || prev.participant_name,
           participant_class: resolvedClassDisplay || prev.participant_class,
-          topic_tags: nextTags,
+          topic_tags: [],
           purpose: note && poolIdsParam ? "Gözlem havuzundan aktarıldı" : prev.purpose,
           preparation_note: note
             ? `Bildirim notu:\n${note}`
@@ -603,9 +603,9 @@ export default function RandevuPage() {
   useEffect(() => {
     const today = new Date();
     const pastDate = new Date(today);
-    pastDate.setDate(today.getDate() - 30); // 30 gün öncesi
+    pastDate.setDate(today.getDate() - 30);
     const futureDate = new Date(today);
-    futureDate.setDate(today.getDate() + 30); // 30 gün sonrası
+    futureDate.setDate(today.getDate() + 30);
     
     fetchAppointments({ 
       from: pastDate.toISOString().slice(0, 10), 
@@ -636,7 +636,6 @@ export default function RandevuPage() {
       );
     }
 
-    // Ders sırasına göre sırala (1. Ders, 2. Ders ...)
     return filtered.sort((a, b) => a.start_time.localeCompare(b.start_time));
   }, [appointments, viewMode, currentDate, searchQuery, getWeekDays]);
 
@@ -656,10 +655,9 @@ export default function RandevuPage() {
     setFormData(createEmptyFormData());
     setSelectedClass("");
     setStudents([]);
-    setCustomTag("");
     setEditingAppointment(null);
-    setParentName(""); // Veli adını reset et
-    setSelectedStudentName(""); // Öğrenci adını reset et
+    setParentName("");
+    setSelectedStudentName("");
   };
 
   const closeNewAppointmentModal = () => {
@@ -688,7 +686,6 @@ export default function RandevuPage() {
       ""
     );
     setStudents([]);
-    setCustomTag("");
     setParentName("");
     setSelectedStudentName("");
     if (appointment.participant_type === "parent") {
@@ -696,7 +693,6 @@ export default function RandevuPage() {
       if (nameParts.length > 1) {
         const parentPart = nameParts[0];
         let studentPart = nameParts[1];
-        // Handle both old format " velisi)" and new format "'ın velisi)"
         if (studentPart.includes("'ın velisi)")) {
           studentPart = studentPart.replace("'ın velisi)", "");
         } else if (studentPart.includes(" velisi)")) {
@@ -751,7 +747,7 @@ export default function RandevuPage() {
       participant_name: resolvedParticipantName,
       participant_class: resolvedParticipantClass,
       participant_type: formData.participant_type,
-      priority: formData.priority || "normal",
+      priority: "normal",
       source_individual_request_id: sourceIndividualRequestId || undefined,
       source_application_id: sourceApplicationId || sourceIndividualRequestId || undefined,
       source_application_type: sourceApplicationType
@@ -960,14 +956,9 @@ export default function RandevuPage() {
         onClick={() => handleAppointmentClick(appointment)}
         className={`group relative overflow-hidden rounded-2xl border bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${
           compact ? "p-3" : "p-4"
-        } ${appointment.priority === "urgent" ? "ring-2 ring-red-400 ring-offset-1" : "border-slate-200"}`}
+        } border-slate-200`}
       >
         <div className={`absolute left-0 top-0 h-full w-1 ${colors.bg}`} />
-        {appointment.priority === "urgent" && (
-          <div className="absolute right-3 top-3 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">
-            ACİL
-          </div>
-        )}
 
         <div className={`flex items-start justify-between gap-3 ${compact ? "pl-2" : "pl-3"}`}>
           <div className="min-w-0 flex-1 space-y-3">
@@ -996,27 +987,12 @@ export default function RandevuPage() {
                     <StatusIcon className="h-3.5 w-3.5" />
                     {APPOINTMENT_STATUS.find(s => s.value === appointment.status)?.label}
                   </span>
+                  {appointment.purpose && (
+                    <span className="text-slate-500">· {appointment.purpose}</span>
+                  )}
                 </div>
               </div>
             </div>
-
-            {appointment.topic_tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {appointment.topic_tags.slice(0, compact ? 2 : 3).map((tag, idx) => (
-                  <span
-                    key={`${tag}-${idx}`}
-                    className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-600"
-                  >
-                    {tag}
-                  </span>
-                ))}
-                {appointment.topic_tags.length > (compact ? 2 : 3) && (
-                  <span className="text-[10px] text-slate-400">
-                    +{appointment.topic_tags.length - (compact ? 2 : 3)}
-                  </span>
-                )}
-              </div>
-            )}
           </div>
 
           <div className="flex shrink-0 flex-col items-end gap-2">
@@ -1185,10 +1161,10 @@ export default function RandevuPage() {
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               </Button>
-                <Button
-                  onClick={openNewAppointmentModal}
-                  className="bg-white text-teal-600 hover:bg-white/90 shadow-lg"
-                >
+              <Button
+                onClick={openNewAppointmentModal}
+                className="bg-white text-teal-600 hover:bg-white/90 shadow-lg"
+              >
                 <Plus className="h-4 w-4 mr-1" />
                 Yeni Randevu
               </Button>
@@ -1233,17 +1209,14 @@ export default function RandevuPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {filteredAppointments.map((appointment) => {
-                  return (
-                    <AppointmentCard key={appointment.id} appointment={appointment} />
-                  );
-                })}
+                {filteredAppointments.map((appointment) => (
+                  <AppointmentCard key={appointment.id} appointment={appointment} />
+                ))}
               </div>
             )}
           </CardContent>
         </Card>
       ) : (
-        /* HAFTALIK GÖRÜNÜM */
         <Card className="bg-white/90 backdrop-blur overflow-hidden">
           <CardContent className="p-0">
             <div className="grid grid-cols-8 border-b">
@@ -1292,11 +1265,9 @@ export default function RandevuPage() {
                         key={dayIdx}
                         className={`min-h-[48px] p-1 border-r ${isToday(day) ? "bg-teal-50/30" : ""} hover:bg-slate-50 transition-colors`}
                       >
-                        {slotAppointments.map((apt) => {
-                          return (
-                            <AppointmentCard key={apt.id} appointment={apt} compact />
-                          );
-                        })}
+                        {slotAppointments.map((apt) => (
+                          <AppointmentCard key={apt.id} appointment={apt} compact />
+                        ))}
                       </div>
                     );
                   })}
@@ -1325,39 +1296,25 @@ export default function RandevuPage() {
             </div>
 
             <div className="p-6 space-y-4">
-              {/* Görüşme Türü ve Öncelik */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-slate-600 mb-1 block">Görüşme Türü *</label>
-                  <select
-                    value={formData.participant_type}
-                    onChange={(e) => {
-                      const newType = e.target.value as ParticipantType;
-                      setFormData({ ...formData, participant_type: newType, participant_name: "", participant_class: "" });
-                      setSelectedClass("");
-                      setStudents([]);
-                      setParentName("");
-                      setSelectedStudentName("");
-                    }}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
-                  >
-                    {PARTICIPANT_TYPES.map(p => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-slate-600 mb-1 block">Öncelik</label>
-                  <select
-                    value={formData.priority}
-                    onChange={(e) => setFormData({ ...formData, priority: e.target.value as PriorityLevel })}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
-                  >
-                    {PRIORITY_LEVELS.map(p => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
-                    ))}
-                  </select>
-                </div>
+              {/* Görüşme Türü */}
+              <div>
+                <label className="text-xs font-medium text-slate-600 mb-1 block">Görüşme Türü *</label>
+                <select
+                  value={formData.participant_type}
+                  onChange={(e) => {
+                    const newType = e.target.value as ParticipantType;
+                    setFormData({ ...formData, participant_type: newType, participant_name: "", participant_class: "" });
+                    setSelectedClass("");
+                    setStudents([]);
+                    setParentName("");
+                    setSelectedStudentName("");
+                  }}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
+                >
+                  {PARTICIPANT_TYPES.map(p => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Öğrenci / Veli seçimi */}
@@ -1540,100 +1497,19 @@ export default function RandevuPage() {
                 </select>
               </div>
 
-              {/* Konu Etiketleri */}
+              {/* Konu */}
               <div>
-                <label className="text-xs font-medium text-slate-600 mb-1 block">Konu Etiketleri</label>
-                <div className="flex gap-2 mb-2">
-                  <input
-                    type="text"
-                    value={customTag}
-                    onChange={(e) => setCustomTag(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && customTag.trim()) {
-                        e.preventDefault();
-                        const newTag = customTag.trim();
-                        if (!formData.topic_tags.includes(newTag) && !(TOPIC_TAGS as readonly string[]).includes(newTag)) {
-                          setFormData({ ...formData, topic_tags: [...formData.topic_tags, newTag] });
-                          if (!customTags.includes(newTag)) setCustomTags([...customTags, newTag]);
-                        }
-                        setCustomTag("");
-                      }
-                    }}
-                    placeholder="Yeni etiket ekle... (Enter'a bas)"
-                    className="flex-1 px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-teal-500"
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      if (customTag.trim()) {
-                        const newTag = customTag.trim();
-                        if (!formData.topic_tags.includes(newTag) && !(TOPIC_TAGS as readonly string[]).includes(newTag)) {
-                          setFormData({ ...formData, topic_tags: [...formData.topic_tags, newTag] });
-                          if (!customTags.includes(newTag)) setCustomTags([...customTags, newTag]);
-                        }
-                        setCustomTag("");
-                      }
-                    }}
-                    className="shrink-0"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {formData.topic_tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-2 p-2 bg-teal-50 rounded-lg border border-teal-200">
-                    {formData.topic_tags.map(tag => (
-                      <span key={tag} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-teal-500 text-white">
-                        {tag}
-                        <button
-                          type="button"
-                          onClick={() => setFormData({ ...formData, topic_tags: formData.topic_tags.filter(t => t !== tag) })}
-                          className="hover:bg-teal-600 rounded-full p-0.5"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex flex-wrap gap-2 p-3 border rounded-lg bg-slate-50 max-h-32 overflow-y-auto">
-                  {[...TOPIC_TAGS, ...customTags.filter(t => !(TOPIC_TAGS as readonly string[]).includes(t))].map(tag => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => {
-                        const newTags = formData.topic_tags.includes(tag)
-                          ? formData.topic_tags.filter(t => t !== tag)
-                          : [...formData.topic_tags, tag];
-                        setFormData({ ...formData, topic_tags: newTags });
-                      }}
-                      className={`text-xs px-2 py-1 rounded-full transition-colors ${
-                        formData.topic_tags.includes(tag)
-                          ? "bg-teal-500 text-white"
-                          : customTags.includes(tag) && !(TOPIC_TAGS as readonly string[]).includes(tag)
-                            ? "bg-purple-100 border border-purple-300 hover:bg-purple-200 text-purple-700"
-                            : "bg-white border hover:bg-slate-100"
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Amaç */}
-              <div>
-                <label className="text-xs font-medium text-slate-600 mb-1 block">Görüşmenin Amacı</label>
-                <input
-                  type="text"
+                <label className="text-xs font-medium text-slate-600 mb-1 block">Konu *</label>
+                <select
                   value={formData.purpose || ""}
                   onChange={(e) => setFormData({ ...formData, purpose: e.target.value })}
-                  placeholder="Görüşmenin hedefi ne?"
                   className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
-                />
+                >
+                  <option value="">-- Konu seçin --</option>
+                  {APPOINTMENT_TOPICS.map(topic => (
+                    <option key={topic} value={topic}>{topic}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Hazırlık Notu */}
@@ -1855,6 +1731,12 @@ export default function RandevuPage() {
                   <span className="text-slate-500">Yer:</span>
                   <span className="ml-2 font-medium">{getLocationLabel(selectedAppointment.location)}</span>
                 </div>
+                {selectedAppointment.purpose && (
+                  <div>
+                    <span className="text-slate-500">Konu:</span>
+                    <span className="ml-2 font-medium">{selectedAppointment.purpose}</span>
+                  </div>
+                )}
               </div>
 
               <div className={`p-3 rounded-lg ${statusColors[selectedAppointment.status].bg} ${statusColors[selectedAppointment.status].border} border`}>
@@ -1933,7 +1815,6 @@ export default function RandevuPage() {
                 <li>• <strong>Hızlı randevu:</strong> Yeni Randevu butonuna tıklayın, tarih ve ders saatini seçin</li>
                 <li>• <strong>Görüşme sonrası:</strong> Randevu kartına tıklayarak hızlıca kapanış yapın</li>
                 <li>• <strong>Takip:</strong> Kapanış sırasında "Takip randevusu oluştur" seçeneğini işaretleyin</li>
-                <li>• <strong>Acil durumlar:</strong> Öncelik olarak "Acil" seçin, kart kırmızı çerçeve ile vurgulanır</li>
               </ul>
             </div>
           </div>
@@ -1942,4 +1823,3 @@ export default function RandevuPage() {
     </div>
   );
 }
-

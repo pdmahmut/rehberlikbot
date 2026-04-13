@@ -71,6 +71,16 @@ const normalizeDecisionText = (value: string) =>
     .replace(/ç/g, "c").replace(/ğ/g, "g").replace(/ı/g, "i")
     .replace(/ö/g, "o").replace(/ş/g, "s").replace(/ü/g, "u").trim();
 
+const formatClassDisplay = (classDisplay?: string | null): string => {
+  if (!classDisplay) return "-";
+  // "6. Sınıf / C Şubesi" -> "6/C"
+  const match = classDisplay.match(/(\d+)\. Sınıf \/ ([A-ZÇĞİÖŞÜ]) Şubesi/);
+  if (match) {
+    return `${match[1]}/${match[2]}`;
+  }
+  return classDisplay;
+};
+
 const matchesAppointment = (
   appointment: any,
   studentName?: string | null,
@@ -149,6 +159,7 @@ export default function BasvurularPage() {
 
   // Modal state — tıklanan başvuru kaydı
   const [outcomeModalRecord, setOutcomeModalRecord] = useState<ApplicationRecord | null>(null);
+  const [statusChoiceRecord, setStatusChoiceRecord] = useState<ApplicationRecord | null>(null);
 
   // Görüşüldü badge tıklandı → modal aç
   const handleOpenOutcomeModal = (record: ApplicationRecord) => {
@@ -270,13 +281,15 @@ export default function BasvurularPage() {
         case 'individual': endpoint = '/api/individual-requests'; break;
         default: throw new Error('Geçersiz başvuru türü');
       }
-      const isObservation = type === 'observation';
-      const body = isObservation ? { id, action: "status", status: "completed" } : null;
-      const response = isObservation
-        ? await fetch(endpoint, { method: 'PUT', headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-        : await fetch(`${endpoint}?id=${id}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error("İşlem başarısız");
-      toast.success(isObservation ? 'Gözlem kaydı arşivlendi' : 'Başvuru başarıyla silindi');
+      if (type === 'observation') {
+        const { error } = await supabase.from("observation_pool").delete().eq("id", id);
+        if (error) throw new Error(error.message);
+        toast.success('Gözlem kaydı silindi');
+      } else {
+        const response = await fetch(`${endpoint}?id=${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error("İşlem başarısız");
+        toast.success('Başvuru başarıyla silindi');
+      }
       await loadData();
     } catch {
       toast.error('Başvuru silinirken hata oluştu');
@@ -328,28 +341,38 @@ export default function BasvurularPage() {
     try {
       const today = entryForm.date || new Date().toISOString().slice(0, 10);
       const topicNote = entryForm.topic ? `[${entryForm.topic}]${entryForm.note ? " " + entryForm.note : ""}` : entryForm.note;
+      
+      let response;
+
       if (entryFormSource === "Gözlem Havuzu") {
-        await fetch("/api/gozlem-havuzu", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, note: topicNote, observation_type: "behavior", priority: "medium", source_type: "observation", status: "pending", observed_at: today })
-        });
+        const { error } = await supabase.from("observation_pool").insert({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, note: topicNote, observation_type: "behavior", priority: "medium", status: "pending", observed_at: today });
+        if (error) throw new Error(error.message || "Gözlem kaydı veritabanına yazılamadı.");
       } else if (entryFormSource === "Bireysel Başvuru") {
-        await supabase.from("individual_requests").insert({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, note: topicNote, request_date: today, status: "pending" });
+        // Bireysel başvuru için doğrudan supabase'e yazıyoruz (eski sistemde böyleydi)
+        const { error } = await supabase.from("individual_requests").insert({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, note: topicNote, request_date: today, status: "pending" });
+        if (error) throw new Error(error.message || "Bireysel başvuru veritabanına yazılamadı.");
       } else if (entryFormSource === "Veli Talepleri") {
-        await fetch("/api/parent-meeting-requests", { method: "POST", headers: { "Content-Type": "application/json" },
+        response = await fetch("/api/parent-meeting-requests", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, parent_name: entryForm.referrer, detail: topicNote, request_date: today, status: "pending" })
         });
       } else if (entryFormSource === "Öğrenci Bildirimleri") {
-        await fetch("/api/student-incidents", { method: "POST", headers: { "Content-Type": "application/json" },
+        response = await fetch("/api/student-incidents", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ target_student_name: entryForm.student_name, target_class_display: entryForm.class_display, target_class_key: entryForm.class_key, reporter_student_name: entryForm.referrer, description: topicNote, incident_date: today, wants_meeting: true })
         });
-      } else if (entryFormSource === "Öğretmen Yönlendirmeleri") {
-        await supabase.from("referrals").insert({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, teacher_name: entryForm.referrer, note: topicNote, reason: entryForm.topic, created_at: new Date(today).toISOString() });
       }
+
+      // API'den dönen cevabı kontrol edelim
+      if (response && !response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || "API sunucusu hata döndürdü");
+      }
+
       toast.success("Başvuru kaydedildi");
       setShowEntryForm(false);
       await loadData();
-    } catch (err) {
-      toast.error("Kayıt sırasında hata oluştu");
+    } catch (err: any) {
+      console.error("Kayıt hatası detayı:", err);
+      toast.error(`Kayıt başarısız: ${err.message}`);
     } finally {
       setEntryFormSaving(false);
     }
@@ -363,13 +386,15 @@ export default function BasvurularPage() {
     { source: "Öğretmen Yönlendirmeleri", label: "Öğretmen Yönlendirmesi", icon: "👨‍🏫", color: "bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200", referrerLabel: "Öğretmen Adı" },
   ];
 
+  const ENTRY_CHANNELS_FOR_CREATION = ENTRY_CHANNELS.filter((c) => c.source !== "Öğretmen Yönlendirmeleri");
+
   const loadData = async () => {
     try {
       setLoading(true);
       setLoadError(null);
       const [referralResult, observationResult, incidentResult, requestResult, attendedResult, scheduledResult, individualRequestResult] = await Promise.all([
         supabase.from("referrals").select("*").order("created_at", { ascending: false }),
-        fetch("/api/gozlem-havuzu?status=pending"),
+        supabase.from("observation_pool").select("*").order("created_at", { ascending: false }),
         supabase.from("student_incidents").select("*").in("status", ["new", "reviewing"]).order("incident_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("parent_meeting_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("appointments").select("*").eq("status", "attended").eq("participant_type", "student").order("appointment_date", { ascending: false }).order("created_at", { ascending: false }),
@@ -377,10 +402,7 @@ export default function BasvurularPage() {
         supabase.from("individual_requests").select("*").order("created_at", { ascending: false })
       ]);
       if (!referralResult.error) setReferrals(referralResult.data || []);
-      if (observationResult.ok) {
-        const d = await observationResult.json();
-        setObservations(d.observations || []);
-      }
+      if (!observationResult.error) setObservations(observationResult.data || []);
       if (!incidentResult.error) setIncidents(incidentResult.data || []);
       if (!requestResult.error) setRequests(requestResult.data || []);
       if (!attendedResult.error) setAttendedAppointments(attendedResult.data || []);
@@ -406,6 +428,13 @@ export default function BasvurularPage() {
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
+  // Yönlendiren filtresini sıfırla eğer Öğretmen Yönlendirmeleri seçili değilse
+  useEffect(() => {
+    if (applicationsSourceFilter !== "Öğretmen Yönlendirmeleri") {
+      setApplicationsReferrerFilter("");
+    }
+  }, [applicationsSourceFilter]);
+
   const updateApplicationStatusOverride = (id: string, nextStatus: ApplicationStatus) => {
     setStatusOverrides((prev) => {
       const next = { ...prev, [id]: nextStatus };
@@ -418,6 +447,7 @@ export default function BasvurularPage() {
     const records: ApplicationRecord[] = [];
 
     const buildRecord = (
+      record: any,
       id: string,
       student_name: string,
       class_display: string | null | undefined,
@@ -429,8 +459,24 @@ export default function BasvurularPage() {
     ): ApplicationRecord => {
       const isScheduled = scheduledAppointments.some((apt) => matchesAppointment(apt, student_name, class_display, class_key));
       const matchedApt = findMatchedAppointment(attendedAppointments, student_name, class_display, class_key);
+      const matchedScheduledApt = scheduledAppointments.find((apt) => matchesAppointment(apt, student_name, class_display, class_key));
       const isAttended = !!matchedApt;
       const outcomeLabel = isAttended ? getOutcomeLabel(matchedApt?.outcome_decision) : null;
+      const statusMap: Record<string, string> = {
+        pending: "Bekliyor",
+        scheduled: "Randevu verildi",
+        completed: "Görüşüldü",
+        cancelled: "İptal",
+        "Bekliyor": "Bekliyor",
+        "Randevu verildi": "Randevu verildi",
+        "Görüşüldü": "Görüşüldü"
+      };
+      let status: ApplicationRecord["status"] = (statusMap[record.status] || "Bekliyor") as ApplicationRecord["status"];
+      if (matchedScheduledApt && new Date(matchedScheduledApt.appointment_date) > new Date(record.created_at)) {
+        status = "Randevu verildi";
+      } else if (matchedApt && new Date(matchedApt.appointment_date) > new Date(record.created_at)) {
+        status = "Görüşüldü";
+      }
       return {
         id,
         student_name,
@@ -439,7 +485,7 @@ export default function BasvurularPage() {
         source,
         referrer,
         date,
-        status: isAttended ? "Görüşüldü" : isScheduled ? "Randevu verildi" : "Bekliyor",
+        status,
         outcome_label: outcomeLabel,
         matched_appointment_id: matchedApt?.id || null,
         note
@@ -447,32 +493,32 @@ export default function BasvurularPage() {
     };
 
     incidents.forEach((i) => records.push(buildRecord(
-      `incident-${i.id}`, i.target_student_name, i.target_class_display, i.target_class_key,
+      i, `incident-${i.id}`, i.target_student_name, i.target_class_display, i.target_class_key,
       "Öğrenci Bildirimleri",
       i.record_role === "linked_reporter" ? i.reporter_student_name || undefined : undefined,
       i.created_at || i.incident_date || new Date().toISOString(), i.description
     )));
 
+    observations.forEach((o) => records.push(buildRecord(
+      o, `observation-${o.id}`, o.student_name, o.class_display, o.class_key,
+      "Gözlem Havuzu", undefined,
+      o.created_at || o.observed_at || new Date().toISOString(), o.note
+    )));
+
     referrals.forEach((r) => records.push(buildRecord(
-      `referral-${r.id}`, r.student_name, r.class_display, r.class_key,
+      r, `referral-${r.id}`, r.student_name, r.class_display, r.class_key,
       "Öğretmen Yönlendirmeleri", r.teacher_name,
       r.created_at || new Date().toISOString(), r.note || r.reason
     )));
 
-    observations.forEach((o) => records.push(buildRecord(
-      `observation-${o.id}`, o.student_name, o.class_display, o.class_key,
-      "Gözlem Havuzu", "",
-      o.created_at || new Date().toISOString(), o.note
-    )));
-
     requests.forEach((r) => records.push(buildRecord(
-      `request-${r.id}`, r.student_name, r.class_display, r.class_key,
+      r, `request-${r.id}`, r.student_name, r.class_display, r.class_key,
       "Veli Talepleri", r.parent_name || undefined,
       r.created_at || new Date().toISOString(), r.detail || r.subject
     )));
 
     individualRequests.forEach((r) => records.push(buildRecord(
-      `individual-${r.id}`, r.student_name, r.class_display, r.class_key,
+      r, `individual-${r.id}`, r.student_name, r.class_display, r.class_key,
       "Bireysel Başvuru", undefined,
       r.created_at || new Date().toISOString(), r.note
     )));
@@ -487,23 +533,51 @@ export default function BasvurularPage() {
     }));
   }, [applicationRecords, statusOverrides]);
 
-  const isReferralActive = applicationsSourceFilter === "Öğretmen Yönlendirmeleri";
-
-  useEffect(() => {
-    if (!isReferralActive) setApplicationsReferrerFilter("");
-  }, [isReferralActive]);
+  const applicationReferrerOptions = useMemo(() => {
+    const referrers = new Set<string>();
+    applicationRecordsWithOverrides.forEach((item) => { if (item.referrer) referrers.add(item.referrer); });
+    return Array.from(referrers).sort((a, b) => a.localeCompare(b, "tr-TR"));
+  }, [applicationRecordsWithOverrides]);
 
   const filteredApplications = useMemo(() => {
-    return applicationRecordsWithOverrides.filter((item) => {
+    let filtered = applicationRecordsWithOverrides.filter((item) => {
       const matchesSearch = !applicationsSearchQuery || normalizeStudentName(item.student_name).includes(normalizeStudentName(applicationsSearchQuery));
       const matchesClass = !applicationsClassFilter || normalizeClassText(item.class_display) === applicationsClassFilter || normalizeClassText(item.class_key) === applicationsClassFilter;
       const matchesSource = applicationsSourceFilter === "all" || item.source === applicationsSourceFilter;
-      const matchesReferrer = !applicationsReferrerFilter || item.source !== "Öğretmen Yönlendirmeleri" || (item.referrer && normalizeText(item.referrer).includes(normalizeText(applicationsReferrerFilter)));
+      const matchesReferrer = !applicationsReferrerFilter || (item.referrer && normalizeText(item.referrer).includes(normalizeText(applicationsReferrerFilter)));
       const matchesStatus = applicationsStatusFilter === "all" || item.status === applicationsStatusFilter;
       const matchesOutcome = applicationsOutcomeFilter === "all" || item.outcome_label === applicationsOutcomeFilter;
       return matchesSearch && matchesClass && matchesSource && matchesReferrer && matchesStatus && matchesOutcome;
     });
-  }, [applicationRecordsWithOverrides, applicationsSearchQuery, applicationsClassFilter, applicationsSourceFilter, applicationsReferrerFilter, applicationsStatusFilter, applicationsOutcomeFilter]);
+
+    // Sıralama: Filtreye göre en son olan en üstte
+    filtered.sort((a, b) => {
+      let aDate: string;
+      let bDate: string;
+
+      if (applicationsStatusFilter === "Görüşüldü") {
+        // En son görüşülen en üstte
+        const aApt = attendedAppointments.find((apt) => matchesAppointment(apt, a.student_name, a.class_display, a.class_key));
+        const bApt = attendedAppointments.find((apt) => matchesAppointment(apt, b.student_name, b.class_display, b.class_key));
+        aDate = aApt?.appointment_date || a.date;
+        bDate = bApt?.appointment_date || b.date;
+      } else if (applicationsStatusFilter === "Randevu verildi") {
+        // En son randevu verilen en üstte
+        const aApt = scheduledAppointments.find((apt) => matchesAppointment(apt, a.student_name, a.class_display, a.class_key));
+        const bApt = scheduledAppointments.find((apt) => matchesAppointment(apt, b.student_name, b.class_display, b.class_key));
+        aDate = aApt?.appointment_date || a.date;
+        bDate = bApt?.appointment_date || b.date;
+      } else {
+        // Bekliyor veya diğer durumlar: En son başvuru tarihi
+        aDate = a.date;
+        bDate = b.date;
+      }
+
+      return new Date(bDate).getTime() - new Date(aDate).getTime();
+    });
+
+    return filtered;
+  }, [applicationRecordsWithOverrides, applicationsSearchQuery, applicationsClassFilter, applicationsSourceFilter, applicationsReferrerFilter, applicationsStatusFilter, applicationsOutcomeFilter, attendedAppointments, scheduledAppointments]);
 
   const applicationClassOptions = useMemo(() => {
     const classMap = new Map<string, string>();
@@ -514,12 +588,6 @@ export default function BasvurularPage() {
       if (!classMap.has(normalized)) classMap.set(normalized, item.class_display || item.class_key || normalized);
     });
     return Array.from(classMap.entries()).map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "tr-TR"));
-  }, [applicationRecordsWithOverrides]);
-
-  const applicationReferrerOptions = useMemo(() => {
-    const referrers = new Set<string>();
-    applicationRecordsWithOverrides.forEach((item) => { if (item.referrer) referrers.add(item.referrer); });
-    return Array.from(referrers).sort((a, b) => a.localeCompare(b, "tr-TR"));
   }, [applicationRecordsWithOverrides]);
 
   const applicationStatistics = useMemo(() => {
@@ -613,7 +681,7 @@ export default function BasvurularPage() {
         </CardHeader>
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-2">
-            {ENTRY_CHANNELS.map((ch) => (
+            {ENTRY_CHANNELS_FOR_CREATION.map((ch) => (
               <button
                 key={ch.source}
                 type="button"
@@ -652,7 +720,7 @@ export default function BasvurularPage() {
                     onChange={(e) => setEntryFormSource(e.target.value as ApplicationRecord["source"])}
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20"
                   >
-                    {ENTRY_CHANNELS.map(c => <option key={c.source} value={c.source}>{c.icon} {c.label}</option>)}
+                    {ENTRY_CHANNELS_FOR_CREATION.map(c => <option key={c.source} value={c.source}>{c.icon} {c.label}</option>)}
                   </select>
                 </div>
                 {/* Öğrenci Adı - Autocomplete */}
@@ -793,15 +861,6 @@ export default function BasvurularPage() {
                 <option value="Bireysel Başvuru">Bireysel Başvuru</option>
               </select>
             </div>
-            {isReferralActive && (
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-slate-700 flex items-center gap-2"><User className="h-4 w-4 text-amber-500" />Yönlendiren</Label>
-                <select value={applicationsReferrerFilter} onChange={(e) => setApplicationsReferrerFilter(e.target.value)} className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20">
-                  <option value="">Tümü</option>
-                  {applicationReferrerOptions.map((ref) => <option key={ref} value={ref}>{ref}</option>)}
-                </select>
-              </div>
-            )}
             <div className="space-y-2">
               <Label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Loader2 className="h-4 w-4 text-rose-500" />Durum</Label>
               <select value={applicationsStatusFilter} onChange={(e) => setApplicationsStatusFilter(e.target.value as any)} className="w-full rounded-lg border border-rose-200 px-3 py-2 text-sm focus:border-rose-400 focus:ring-2 focus:ring-rose-400/20">
@@ -819,19 +878,24 @@ export default function BasvurularPage() {
                 <option value="Aktif Takip">Aktif Takip</option>
                 <option value="Düzenli Görüşme">Düzenli Görüşme</option>
               </select>
-            </div>
-          </div>
+            </div>            {applicationsSourceFilter === "Öğretmen Yönlendirmeleri" && <div className="space-y-2">
+              <Label className="text-sm font-medium text-slate-700 flex items-center gap-2"><User className="h-4 w-4 text-amber-500" />Yönlendiren</Label>
+              <select value={applicationsReferrerFilter} onChange={(e) => setApplicationsReferrerFilter(e.target.value)} className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20">
+                <option value="">Tümü</option>
+                {applicationReferrerOptions.map((ref) => <option key={ref} value={ref}>{ref}</option>)}
+              </select>
+            </div>}          </div>
 
           {/* Tablo */}
           <div className="overflow-x-auto bg-white rounded-xl border border-slate-200 shadow-sm">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-gradient-to-r from-purple-50 to-pink-50">
                 <tr className="border-b border-slate-200 text-slate-700">
+                  <th className="px-4 py-3 font-semibold">Tarih</th>
                   <th className="px-4 py-3 font-semibold">Ad Soyad</th>
                   <th className="px-4 py-3 font-semibold">Sınıf</th>
                   <th className="px-4 py-3 font-semibold">Geliş Türü</th>
-                  {isReferralActive && <th className="px-4 py-3 font-semibold">Yönlendiren</th>}
-                  <th className="px-4 py-3 font-semibold">Tarih</th>
+                  {applicationsSourceFilter === "Öğretmen Yönlendirmeleri" && <th className="px-4 py-3 font-semibold">Yönlendiren</th>}
                   <th className="px-4 py-3 font-semibold">Durum</th>
                   <th className="px-4 py-3 font-semibold">Görüşme Sonucu</th>
                   <th className="px-4 py-3 font-semibold">İşlemler</th>
@@ -840,7 +904,7 @@ export default function BasvurularPage() {
               <tbody>
                 {filteredApplications.length === 0 ? (
                   <tr>
-                    <td colSpan={isReferralActive ? 8 : 7} className="p-8 text-center text-slate-500">
+                    <td colSpan={applicationsSourceFilter === "Öğretmen Yönlendirmeleri" ? 8 : 7} className="p-8 text-center text-slate-500">
                       <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-30 text-purple-300" />
                       <p>Kayıt bulunamadı.</p>
                     </td>
@@ -848,27 +912,26 @@ export default function BasvurularPage() {
                 ) : (
                   filteredApplications.map((item) => (
                     <tr key={item.id} className="group/row border-b border-slate-100 hover:bg-gradient-to-r hover:from-purple-50/50 hover:to-pink-50/50 transition-all duration-200">
+                      <td className="px-4 py-3 text-slate-600 text-sm">
+                        {new Date(item.date).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </td>
                       <td className="px-4 py-3 font-medium text-slate-800 group-hover/row:text-purple-700 transition-colors">{item.student_name}</td>
                       <td className="px-4 py-3">
-                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">{item.class_display || "-"}</span>
+                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">{formatClassDisplay(item.class_display)}</span>
                       </td>
                       <td className="px-4 py-3">
                         <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">{item.source}</span>
                       </td>
-                      {isReferralActive && <td className="px-4 py-3 text-slate-600">{item.referrer || "-"}</td>}
-                      <td className="px-4 py-3 text-slate-600 text-sm">
-                        {new Date(item.date).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                      </td>
+                      {applicationsSourceFilter === "Öğretmen Yönlendirmeleri" && <td className="px-4 py-3 text-slate-600">{item.referrer || "-"}</td>}
                       <td className="px-4 py-3">
                         {item.status === "Bekliyor" ? (
-                          <Button
+                          <button
                             type="button"
-                            onClick={() => updateApplicationStatusOverride(item.id, "Görüşüldü")}
-                            className="inline-flex h-auto items-center rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition-all hover:from-emerald-500 hover:to-green-600 hover:shadow-md"
+                            onClick={() => setStatusChoiceRecord(item)}
+                            className="inline-flex h-auto items-center rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition-all hover:from-amber-600 hover:to-orange-700 hover:shadow-md"
                           >
-                            <span className="group-hover/row:hidden">Bekliyor</span>
-                            <span className="hidden group-hover/row:inline">Görüşüldü yap</span>
-                          </Button>
+                            Bekliyor ▾
+                          </button>
                         ) : item.status === "Görüşüldü" && !item.outcome_label ? (
                           // Görüşüldü ama henüz sonuç seçilmemiş → tıklanabilir badge
                           <button
@@ -911,6 +974,69 @@ export default function BasvurularPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Durum Seçim Modalı */}
+      {statusChoiceRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b bg-slate-50 px-6 py-4">
+              <div>
+                <h2 className="text-base font-bold text-slate-800">{statusChoiceRecord.student_name}</h2>
+                <p className="text-xs text-slate-500 mt-0.5">{statusChoiceRecord.class_display || "-"} · {statusChoiceRecord.source}</p>
+              </div>
+              <button type="button" onClick={() => setStatusChoiceRecord(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusChoiceRecord(null);
+                  // Randevu sayfasına yönlendir
+                  const params = new URLSearchParams();
+                  params.set("studentName", statusChoiceRecord.student_name);
+                  if (statusChoiceRecord.class_display) params.set("classDisplay", statusChoiceRecord.class_display);
+                  window.location.href = `/panel/randevu?${params.toString()}`;
+                }}
+                className="w-full flex items-center gap-3 rounded-xl border-2 border-blue-200 bg-blue-50 px-4 py-3 text-left text-sm font-semibold text-blue-700 hover:bg-blue-100 transition-all"
+              >
+                <span className="text-lg">📅</span>
+                <div>
+                  <div>Randevuya Dönüştür</div>
+                  <div className="text-xs font-normal text-blue-500">Randevu sayfasına yönlendir</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusChoiceRecord(null)}
+                className="w-full flex items-center gap-3 rounded-xl border-2 border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm font-semibold text-amber-700 hover:bg-amber-100 transition-all"
+              >
+                <span className="text-lg">⏳</span>
+                <div>
+                  <div>Bekliyor</div>
+                  <div className="text-xs font-normal text-amber-500">Durumu değiştirme</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  updateApplicationStatusOverride(statusChoiceRecord.id, "Görüşüldü");
+                  setStatusChoiceRecord(null);
+                  setTimeout(() => handleOpenOutcomeModal({ ...statusChoiceRecord, status: "Görüşüldü" }), 100);
+                }}
+                className="w-full flex items-center gap-3 rounded-xl border-2 border-emerald-200 bg-emerald-50 px-4 py-3 text-left text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition-all"
+              >
+                <span className="text-lg">✅</span>
+                <div>
+                  <div>Görüşüldü</div>
+                  <div className="text-xs font-normal text-emerald-500">Tamamlandı / Aktif Takip / Düzenli Görüşme seç</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Görüşme Sonucu Modalı */}
       <AppointmentOutcomeModal

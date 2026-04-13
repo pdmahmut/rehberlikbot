@@ -45,6 +45,7 @@ export interface ReferralRecord {
   reason: string;
   note?: string | null;
   source?: string;
+  status?: string;
 }
 
 export const PARENT_REQUEST_TYPES = [

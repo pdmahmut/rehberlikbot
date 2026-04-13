@@ -113,34 +113,10 @@ const menuCategories: MenuCategory[] = [
     title: "Öğrenci Takip",
     items: [
       {
-        href: "/panel/potansiyel-gorusmeler",
-        label: "Görüşme Listesi",
+        href: "/panel/basvurular",
+        label: "Başvurular",
         icon: MessageSquare,
-        color: "indigo"
-      },
-      {
-        href: "/panel/gozlem-havuzu",
-        label: "Gözlem Havuzu",
-        icon: Eye,
-        color: "teal"
-      },
-      {
-        href: "/panel/veli-talepleri",
-        label: "Veli Talepleri",
-        icon: PhoneCall,
-        color: "rose"
-      },
-      {
-        href: "/panel/bireysel-basvurular",
-        label: "Bireysel Başvurular",
-        icon: MessageSquare,
-        color: "blue"
-      },
-      {
-        href: "/panel/ogrenci-bildirimleri",
-        label: "Öğrenci Bildirimleri",
-        icon: MessageSquare,
-        color: "rose"
+        color: "purple"
       },
       {
         href: "/panel/ogrenci-listesi",
@@ -177,12 +153,6 @@ const menuCategories: MenuCategory[] = [
   {
     title: "Analiz & Raporlar",
     items: [
-      {
-        href: "/panel/basvurular",
-        label: "Başvurular",
-        icon: MessageSquare,
-        color: "purple"
-      },
       { 
         href: "/panel/nedenler", 
         label: "Yönlendirme Nedenleri", 
