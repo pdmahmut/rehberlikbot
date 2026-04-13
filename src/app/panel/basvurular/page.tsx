@@ -120,6 +120,7 @@ export default function BasvurularPage() {
     class_key: "",
     referrer: "",
     note: "",
+    topic: "",
     date: new Date().toISOString().slice(0, 10)
   });
   const [entryFormSaving, setEntryFormSaving] = useState(false);
@@ -292,13 +293,14 @@ export default function BasvurularPage() {
     }
     setStudentSearchLoading(true);
     try {
-      const { data } = await supabase
-        .from("class_students")
-        .select("student_name, class_display, class_key")
-        .ilike("student_name", `%${query}%`)
-        .order("student_name", { ascending: true })
-        .limit(10);
-      setStudentSearchResults(data || []);
+      const res = await fetch(`/api/students?query=${encodeURIComponent(query)}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setStudentSearchResults(Array.isArray(data) ? data.slice(0, 10).map((s: any) => ({
+        student_name: s.text || s.student_name,
+        class_display: s.class_display || "",
+        class_key: s.class_key || ""
+      })) : []);
       setShowStudentDropdown(true);
     } catch {
       setStudentSearchResults([]);
@@ -315,31 +317,33 @@ export default function BasvurularPage() {
 
   const openEntryForm = (source: ApplicationRecord["source"]) => {
     setEntryFormSource(source);
-    setEntryForm({ student_name: "", class_display: "", class_key: "", referrer: "", note: "", date: new Date().toISOString().slice(0, 10) });
+    setEntryForm({ student_name: "", class_display: "", class_key: "", referrer: "", note: "", topic: "", date: new Date().toISOString().slice(0, 10) });
     setShowEntryForm(true);
   };
 
   const handleSaveEntry = async () => {
     if (!entryForm.student_name.trim()) { toast.error("Öğrenci adı gerekli"); return; }
+    if (!entryForm.topic) { toast.error("Konu seçimi zorunludur"); return; }
     setEntryFormSaving(true);
     try {
       const today = entryForm.date || new Date().toISOString().slice(0, 10);
+      const topicNote = entryForm.topic ? `[${entryForm.topic}]${entryForm.note ? " " + entryForm.note : ""}` : entryForm.note;
       if (entryFormSource === "Gözlem Havuzu") {
         await fetch("/api/gozlem-havuzu", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, note: entryForm.note, observation_type: "behavior", priority: "medium", source_type: "observation", status: "pending", observed_at: today })
+          body: JSON.stringify({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, note: topicNote, observation_type: "behavior", priority: "medium", source_type: "observation", status: "pending", observed_at: today })
         });
       } else if (entryFormSource === "Bireysel Başvuru") {
-        await supabase.from("individual_requests").insert({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, note: entryForm.note, request_date: today, status: "pending" });
+        await supabase.from("individual_requests").insert({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, note: topicNote, request_date: today, status: "pending" });
       } else if (entryFormSource === "Veli Talepleri") {
         await fetch("/api/parent-meeting-requests", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, parent_name: entryForm.referrer, detail: entryForm.note, request_date: today, status: "pending" })
+          body: JSON.stringify({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, parent_name: entryForm.referrer, detail: topicNote, request_date: today, status: "pending" })
         });
       } else if (entryFormSource === "Öğrenci Bildirimleri") {
         await fetch("/api/student-incidents", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ target_student_name: entryForm.student_name, target_class_display: entryForm.class_display, target_class_key: entryForm.class_key, reporter_student_name: entryForm.referrer, description: entryForm.note, incident_date: today, wants_meeting: true })
+          body: JSON.stringify({ target_student_name: entryForm.student_name, target_class_display: entryForm.class_display, target_class_key: entryForm.class_key, reporter_student_name: entryForm.referrer, description: topicNote, incident_date: today, wants_meeting: true })
         });
       } else if (entryFormSource === "Öğretmen Yönlendirmeleri") {
-        await supabase.from("referrals").insert({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, teacher_name: entryForm.referrer, note: entryForm.note, created_at: new Date(today).toISOString() });
+        await supabase.from("referrals").insert({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, teacher_name: entryForm.referrer, note: topicNote, reason: entryForm.topic, created_at: new Date(today).toISOString() });
       }
       toast.success("Başvuru kaydedildi");
       setShowEntryForm(false);
@@ -676,7 +680,7 @@ export default function BasvurularPage() {
                         <button
                           key={i}
                           type="button"
-                          onClick={() => selectStudent(s)}
+                          onMouseDown={(e) => { e.preventDefault(); selectStudent(s); }}
                           className="w-full text-left px-4 py-2.5 hover:bg-blue-50 transition-colors flex items-center justify-between gap-2"
                         >
                           <span className="text-sm font-medium text-slate-800">{s.student_name}</span>
@@ -709,6 +713,25 @@ export default function BasvurularPage() {
                     <Input value={entryForm.referrer} onChange={(e) => setEntryForm(f => ({ ...f, referrer: e.target.value }))} placeholder={ch.referrerLabel + "..."} />
                   </div>
                 )}
+                {/* Konu */}
+                <div>
+                  <Label className="text-xs font-medium text-slate-600 mb-1 block">Konu <span className="text-red-500">*</span></Label>
+                  <select
+                    value={entryForm.topic}
+                    onChange={(e) => setEntryForm(f => ({ ...f, topic: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 bg-white"
+                  >
+                    <option value="">-- Konu seçin --</option>
+                    <option value="Akademik Sorunlar">Akademik Sorunlar</option>
+                    <option value="Davranış Problemleri">Davranış Problemleri</option>
+                    <option value="Akran İlişkileri ve Sosyal Problemler">Akran İlişkileri ve Sosyal Problemler</option>
+                    <option value="Duygusal Problemler">Duygusal Problemler</option>
+                    <option value="Ailevi Sorunlar">Ailevi Sorunlar</option>
+                    <option value="Devamsızlık ve Okula Uyum Problemleri">Devamsızlık ve Okula Uyum Problemleri</option>
+                    <option value="Riskli Durumlar">Riskli Durumlar</option>
+                    <option value="Kimlik ve Gelişimsel Süreçler">Kimlik ve Gelişimsel Süreçler</option>
+                  </select>
+                </div>
                 {/* Not */}
                 <div>
                   <Label className="text-xs font-medium text-slate-600 mb-1 block">Not / Açıklama</Label>
