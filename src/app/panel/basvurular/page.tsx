@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
-import { MessageSquare, Search, Loader2, Filter, User, Trash2 } from "lucide-react";
+import { MessageSquare, Search, Loader2, Filter, User, Trash2, Plus, X, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { AppointmentOutcomeModal, type AppointmentOutcomeChoice } from "@/components/AppointmentOutcomeModal";
 import {
@@ -112,6 +112,21 @@ const findMatchedAppointment = (
 
 export default function BasvurularPage() {
   const [applicationsSearchQuery, setApplicationsSearchQuery] = useState("");
+  const [showEntryForm, setShowEntryForm] = useState(false);
+  const [entryFormSource, setEntryFormSource] = useState<ApplicationRecord["source"]>("Gözlem Havuzu");
+  const [entryForm, setEntryForm] = useState({
+    student_name: "",
+    class_display: "",
+    class_key: "",
+    referrer: "",
+    note: "",
+    date: new Date().toISOString().slice(0, 10)
+  });
+  const [entryFormSaving, setEntryFormSaving] = useState(false);
+  const [studentSearchQuery, setStudentSearchQuery] = useState("");
+  const [studentSearchResults, setStudentSearchResults] = useState<{ student_name: string; class_display: string; class_key: string }[]>([]);
+  const [studentSearchLoading, setStudentSearchLoading] = useState(false);
+  const [showStudentDropdown, setShowStudentDropdown] = useState(false);
   const [applicationsClassFilter, setApplicationsClassFilter] = useState("");
   const [applicationsSourceFilter, setApplicationsSourceFilter] = useState<"all" | ApplicationRecord["source"]>("all");
   const [applicationsReferrerFilter, setApplicationsReferrerFilter] = useState("");
@@ -254,9 +269,13 @@ export default function BasvurularPage() {
         case 'individual': endpoint = '/api/individual-requests'; break;
         default: throw new Error('Geçersiz başvuru türü');
       }
-      const response = await fetch(`${endpoint}?id=${id}`, { method: 'DELETE' });
+      const isObservation = type === 'observation';
+      const body = isObservation ? { id, action: "status", status: "completed" } : null;
+      const response = isObservation
+        ? await fetch(endpoint, { method: 'PUT', headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+        : await fetch(`${endpoint}?id=${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error("İşlem başarısız");
-      toast.success('Başvuru başarıyla silindi');
+      toast.success(isObservation ? 'Gözlem kaydı arşivlendi' : 'Başvuru başarıyla silindi');
       await loadData();
     } catch {
       toast.error('Başvuru silinirken hata oluştu');
@@ -265,13 +284,88 @@ export default function BasvurularPage() {
     }
   };
 
+  const searchStudents = async (query: string) => {
+    if (!query.trim() || query.length < 2) {
+      setStudentSearchResults([]);
+      setShowStudentDropdown(false);
+      return;
+    }
+    setStudentSearchLoading(true);
+    try {
+      const { data } = await supabase
+        .from("class_students")
+        .select("student_name, class_display, class_key")
+        .ilike("student_name", `%${query}%`)
+        .order("student_name", { ascending: true })
+        .limit(10);
+      setStudentSearchResults(data || []);
+      setShowStudentDropdown(true);
+    } catch {
+      setStudentSearchResults([]);
+    } finally {
+      setStudentSearchLoading(false);
+    }
+  };
+
+  const selectStudent = (student: { student_name: string; class_display: string; class_key: string }) => {
+    setStudentSearchQuery(student.student_name);
+    setEntryForm(f => ({ ...f, student_name: student.student_name, class_display: student.class_display, class_key: student.class_key }));
+    setShowStudentDropdown(false);
+  };
+
+  const openEntryForm = (source: ApplicationRecord["source"]) => {
+    setEntryFormSource(source);
+    setEntryForm({ student_name: "", class_display: "", class_key: "", referrer: "", note: "", date: new Date().toISOString().slice(0, 10) });
+    setShowEntryForm(true);
+  };
+
+  const handleSaveEntry = async () => {
+    if (!entryForm.student_name.trim()) { toast.error("Öğrenci adı gerekli"); return; }
+    setEntryFormSaving(true);
+    try {
+      const today = entryForm.date || new Date().toISOString().slice(0, 10);
+      if (entryFormSource === "Gözlem Havuzu") {
+        await fetch("/api/gozlem-havuzu", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, note: entryForm.note, observation_type: "behavior", priority: "medium", source_type: "observation", status: "pending", observed_at: today })
+        });
+      } else if (entryFormSource === "Bireysel Başvuru") {
+        await supabase.from("individual_requests").insert({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, note: entryForm.note, request_date: today, status: "pending" });
+      } else if (entryFormSource === "Veli Talepleri") {
+        await fetch("/api/parent-meeting-requests", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, parent_name: entryForm.referrer, detail: entryForm.note, request_date: today, status: "pending" })
+        });
+      } else if (entryFormSource === "Öğrenci Bildirimleri") {
+        await fetch("/api/student-incidents", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ target_student_name: entryForm.student_name, target_class_display: entryForm.class_display, target_class_key: entryForm.class_key, reporter_student_name: entryForm.referrer, description: entryForm.note, incident_date: today, wants_meeting: true })
+        });
+      } else if (entryFormSource === "Öğretmen Yönlendirmeleri") {
+        await supabase.from("referrals").insert({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, teacher_name: entryForm.referrer, note: entryForm.note, created_at: new Date(today).toISOString() });
+      }
+      toast.success("Başvuru kaydedildi");
+      setShowEntryForm(false);
+      await loadData();
+    } catch (err) {
+      toast.error("Kayıt sırasında hata oluştu");
+    } finally {
+      setEntryFormSaving(false);
+    }
+  };
+
+  const ENTRY_CHANNELS: { source: ApplicationRecord["source"]; label: string; icon: string; color: string; referrerLabel?: string }[] = [
+    { source: "Gözlem Havuzu", label: "Gözlem Havuzu", icon: "👁", color: "bg-purple-100 text-purple-700 hover:bg-purple-200 border-purple-200" },
+    { source: "Bireysel Başvuru", label: "Bireysel Başvuru", icon: "🙋", color: "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200" },
+    { source: "Veli Talepleri", label: "Veli Talebi", icon: "👨‍👩‍👧", color: "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-200", referrerLabel: "Veli Adı" },
+    { source: "Öğrenci Bildirimleri", label: "Öğrenci Bildirimi", icon: "📢", color: "bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-200", referrerLabel: "Bildirimi Yapan Öğrenci" },
+    { source: "Öğretmen Yönlendirmeleri", label: "Öğretmen Yönlendirmesi", icon: "👨‍🏫", color: "bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200", referrerLabel: "Öğretmen Adı" },
+  ];
+
   const loadData = async () => {
     try {
       setLoading(true);
       setLoadError(null);
       const [referralResult, observationResult, incidentResult, requestResult, attendedResult, scheduledResult, individualRequestResult] = await Promise.all([
         supabase.from("referrals").select("*").order("created_at", { ascending: false }),
-        fetch("/api/gozlem-havuzu"),
+        fetch("/api/gozlem-havuzu?status=pending"),
         supabase.from("student_incidents").select("*").in("status", ["new", "reviewing"]).order("incident_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("parent_meeting_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("appointments").select("*").eq("status", "attended").eq("participant_type", "student").order("appointment_date", { ascending: false }).order("created_at", { ascending: false }),
@@ -504,6 +598,140 @@ export default function BasvurularPage() {
           </div>
         </div>
       </div>
+
+      {/* GİRİŞ KANALLARI */}
+      <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-slate-100 p-4">
+          <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Yeni Başvuru Ekle
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4">
+          <div className="flex flex-wrap gap-2">
+            {ENTRY_CHANNELS.map((ch) => (
+              <button
+                key={ch.source}
+                type="button"
+                onClick={() => openEntryForm(ch.source)}
+                className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all ${ch.color}`}
+              >
+                <span>{ch.icon}</span>
+                {ch.label}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* GİRİŞ FORMU MODALI */}
+      {showEntryForm && (() => {
+        const ch = ENTRY_CHANNELS.find(c => c.source === entryFormSource)!;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b bg-slate-50 px-6 py-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{ch.icon}</span>
+                  <h2 className="text-base font-bold text-slate-800">{ch.label}</h2>
+                </div>
+                <button type="button" onClick={() => setShowEntryForm(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="px-6 py-5 space-y-4">
+                {/* Geliş Türü */}
+                <div>
+                  <Label className="text-xs font-medium text-slate-600 mb-1 block">Geliş Türü</Label>
+                  <select
+                    value={entryFormSource}
+                    onChange={(e) => setEntryFormSource(e.target.value as ApplicationRecord["source"])}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20"
+                  >
+                    {ENTRY_CHANNELS.map(c => <option key={c.source} value={c.source}>{c.icon} {c.label}</option>)}
+                  </select>
+                </div>
+                {/* Öğrenci Adı - Autocomplete */}
+                <div className="relative">
+                  <Label className="text-xs font-medium text-slate-600 mb-1 block">Öğrenci Adı *</Label>
+                  <div className="relative">
+                    <Input
+                      value={studentSearchQuery}
+                      onChange={(e) => {
+                        setStudentSearchQuery(e.target.value);
+                        setEntryForm(f => ({ ...f, student_name: e.target.value, class_display: "", class_key: "" }));
+                        searchStudents(e.target.value);
+                      }}
+                      onFocus={() => studentSearchResults.length > 0 && setShowStudentDropdown(true)}
+                      placeholder="Öğrenci adı yaz..."
+                      autoComplete="off"
+                    />
+                    {studentSearchLoading && (
+                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-slate-400" />
+                    )}
+                  </div>
+                  {showStudentDropdown && studentSearchResults.length > 0 && (
+                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                      {studentSearchResults.map((s, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => selectStudent(s)}
+                          className="w-full text-left px-4 py-2.5 hover:bg-blue-50 transition-colors flex items-center justify-between gap-2"
+                        >
+                          <span className="text-sm font-medium text-slate-800">{s.student_name}</span>
+                          <span className="text-xs text-slate-500 shrink-0">{s.class_display}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* Sınıf (otomatik) + Tarih */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs font-medium text-slate-600 mb-1 block">Sınıf</Label>
+                    <Input
+                      value={entryForm.class_display}
+                      onChange={(e) => setEntryForm(f => ({ ...f, class_display: e.target.value }))}
+                      placeholder="Otomatik gelir"
+                      className="bg-slate-50"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium text-slate-600 mb-1 block">Tarih</Label>
+                    <Input type="date" value={entryForm.date} onChange={(e) => setEntryForm(f => ({ ...f, date: e.target.value }))} />
+                  </div>
+                </div>
+                {/* Yönlendiren (varsa) */}
+                {ch.referrerLabel && (
+                  <div>
+                    <Label className="text-xs font-medium text-slate-600 mb-1 block">{ch.referrerLabel}</Label>
+                    <Input value={entryForm.referrer} onChange={(e) => setEntryForm(f => ({ ...f, referrer: e.target.value }))} placeholder={ch.referrerLabel + "..."} />
+                  </div>
+                )}
+                {/* Not */}
+                <div>
+                  <Label className="text-xs font-medium text-slate-600 mb-1 block">Not / Açıklama</Label>
+                  <textarea
+                    value={entryForm.note}
+                    onChange={(e) => setEntryForm(f => ({ ...f, note: e.target.value }))}
+                    placeholder="Açıklama..."
+                    rows={3}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 resize-none"
+                  />
+                </div>
+              </div>
+              <div className="border-t bg-slate-50 px-6 py-4 flex justify-end gap-3">
+                <Button variant="outline" onClick={() => setShowEntryForm(false)} disabled={entryFormSaving}>İptal</Button>
+                <Button onClick={handleSaveEntry} disabled={entryFormSaving} className="bg-blue-600 hover:bg-blue-700">
+                  {entryFormSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                  Kaydet
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <Card className="rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden">
         <CardHeader className="border-b bg-gradient-to-r from-purple-50 to-pink-50 p-4">

@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { notifyPotentialMeetingsChanged } from "@/lib/potentialMeetings";
-import { MessageSquare, Users, Eye, Search, RefreshCw, Calendar, Clock, Loader2, PhoneCall, Edit2, Trash2, MapPin } from "lucide-react";
+import { MessageSquare, Users, Eye, Search, RefreshCw, Calendar, Clock, Loader2, PhoneCall, Edit2, Trash2, MapPin, X } from "lucide-react";
 import { toast } from "sonner";
 import { StudentCard } from "@/components/StudentCard";
 import { DetailModal, type DetailModalRecord } from "@/components/DetailModal";
@@ -322,6 +322,8 @@ export default function PotansiyelGorusmelerPage() {
   const [selectedItem, setSelectedItem] = useState<DetailModalRecord | null>(null);
   const [activeFollowSearch, setActiveFollowSearch] = useState("");
   const [reReferralOnly, setReReferralOnly] = useState(false);
+  const [multiSourceModal, setMultiSourceModal] = useState<{ studentName: string; classDisplay?: string | null; sources: any[] } | null>(null);
+  const [reReferralHistoryModal, setReReferralHistoryModal] = useState<{ studentName: string; records: { type: string; referrer: string; note: string; date: string }[] } | null>(null);
   const [regularMeetingSearch, setRegularMeetingSearch] = useState("");
 
   const loadData = async () => {
@@ -671,14 +673,14 @@ export default function PotansiyelGorusmelerPage() {
   const activeFollowUpAppointments = useMemo(
     () => [...trackedAppointments]
       .filter((appointment) => isActiveFollowUpAppointment(appointment))
-      .sort((a, b) => toTimestamp(b.created_at) - toTimestamp(a.created_at)),
+      .sort((a, b) => toTimestamp(b.updated_at || b.created_at) - toTimestamp(a.updated_at || a.created_at)),
     [trackedAppointments]
   );
 
   const regularMeetingAppointments = useMemo(
     () => [...trackedAppointments]
       .filter((appointment) => isRegularMeetingAppointment(appointment))
-      .sort((a, b) => toTimestamp(b.created_at) - toTimestamp(a.created_at)),
+      .sort((a, b) => toTimestamp(b.updated_at || b.created_at) - toTimestamp(a.updated_at || a.created_at)),
     [trackedAppointments]
   );
 
@@ -816,11 +818,20 @@ export default function PotansiyelGorusmelerPage() {
       });
     });
 
-    const sorted = records.sort((a, b) => b.sortTimestamp - a.sortTimestamp);
-    if (reReferralOnly) {
-      return sorted.filter(r => trackedNames.has(normalizeText(r.studentName)));
-    }
-    return sorted;
+    // Aynı öğrenciyi grupla
+    const grouped = new Map<string, typeof records>();
+    records.forEach((record) => {
+      const key = normalizeText(record.studentName) + "__" + normalizeText(record.classDisplay || record.classNumber || "");
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key)!.push(record);
+    });
+
+    const merged = Array.from(grouped.values()).map((group) => {
+      const primary = group.reduce((a, b) => b.sortTimestamp > a.sortTimestamp ? b : a);
+      return { ...primary, sources: group };
+    });
+
+    return merged.sort((a, b) => b.sortTimestamp - a.sortTimestamp);
   }, [
     sortedIncidents,
     sortedReferrals,
@@ -831,10 +842,11 @@ export default function PotansiyelGorusmelerPage() {
     attendedAppointments,
     scheduledAppointments,
     hiddenPotentialMeetingKeys
-  ]);
+  ]); 
 
   const totalVisible =
     filteredIncidents.length + filteredReferrals.length + filteredObservations.length + filteredRequests.length + filteredIndividualRequests.length;
+
 
   // Yeniden yönlendirme: aktif takip/düzenli görüşmedeki öğrenci adlarını tüm ham kayıtlarla eşleştir
   const trackedNames = useMemo(() => {
@@ -845,21 +857,153 @@ export default function PotansiyelGorusmelerPage() {
     return names;
   }, [activeFollowUpAppointments, regularMeetingAppointments]);
 
+  // Aktif takip/düzenli görüşmedeki her öğrencinin listeye girme tarihi
+  const trackedEntryDates = useMemo(() => {
+    const map = new Map<string, number>();
+    [...activeFollowUpAppointments, ...regularMeetingAppointments].forEach((apt) => {
+      const name = normalizeText(apt.participant_name || "");
+      const entryTime = toTimestamp(apt.updated_at || apt.created_at);
+      if (!map.has(name) || entryTime < map.get(name)!) {
+        map.set(name, entryTime);
+      }
+    });
+    return map;
+  }, [activeFollowUpAppointments, regularMeetingAppointments]);
+
+  // Yeniden yönlendirme: listeye girdikten SONRA gelen öğretmen/veli/bildirim yönlendirmeleri
   const reReferralRecords = useMemo(() => {
-    if (trackedNames.size === 0) return [];
-    // isAlreadyAttended bypass — tüm ham kayıtlara bak
-    const all = [
-      ...incidents.map(i => normalizeText(i.target_student_name || "")),
-      ...referrals.map(r => normalizeText(r.student_name || "")),
-      ...observations.filter(o => o.status === "pending" || o.status === "scheduled" || o.status === "converted").map(o => normalizeText(o.student_name || "")),
-      ...requests.map(r => normalizeText(r.student_name || "")),
-      ...individualRequests.filter(r => r.status !== "completed").map(r => normalizeText(r.student_name || ""))
-    ];
-    const matched = new Set(all.filter(name => name && trackedNames.has(name)));
+    if (trackedEntryDates.size === 0) return [];
+    const matched = new Set<string>();
+    incidents.forEach(i => {
+      const name = normalizeText(i.target_student_name || "");
+      const entryDate = trackedEntryDates.get(name);
+      if (entryDate && toTimestamp(i.created_at || i.incident_date) > entryDate) matched.add(name);
+    });
+    referrals.forEach(r => {
+      const name = normalizeText(r.student_name || "");
+      const entryDate = trackedEntryDates.get(name);
+      if (entryDate && toTimestamp(r.created_at) > entryDate) matched.add(name);
+    });
+    requests.forEach(r => {
+      const name = normalizeText(r.student_name || "");
+      const entryDate = trackedEntryDates.get(name);
+      if (entryDate && toTimestamp(r.created_at) > entryDate) matched.add(name);
+    });
     return Array.from(matched);
-  }, [incidents, referrals, observations, requests, individualRequests, trackedNames]);
+  }, [incidents, referrals, requests, trackedEntryDates]);
 
   const reReferralCount = reReferralRecords.length;
+
+  // Son 3 günde gelen tüm yönlendirmeler (tüm kanallar)
+  const recentNotifications = useMemo(() => {
+    const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
+    const results: { studentName: string; classDisplay?: string | null; type: string; referrer: string; note: string; date: string; isReReferral: boolean }[] = [];
+
+    incidents.forEach(i => {
+      if (toTimestamp(i.created_at || i.incident_date) >= cutoff) {
+        const name = normalizeText(i.target_student_name || "");
+        results.push({
+          studentName: i.target_student_name || "",
+          classDisplay: i.target_class_display,
+          type: "Öğrenci Bildirimi",
+          referrer: i.reporter_student_name || "Bilinmiyor",
+          note: i.description || "",
+          date: i.incident_date || i.created_at || "",
+          isReReferral: trackedEntryDates.has(name)
+        });
+      }
+    });
+    referrals.forEach(r => {
+      if (toTimestamp(r.created_at) >= cutoff) {
+        const name = normalizeText(r.student_name || "");
+        results.push({
+          studentName: r.student_name || "",
+          classDisplay: r.class_display,
+          type: "Öğretmen Yönlendirmesi",
+          referrer: r.teacher_name || "Bilinmiyor",
+          note: r.note || r.reason || "",
+          date: r.created_at || "",
+          isReReferral: trackedEntryDates.has(name)
+        });
+      }
+    });
+    requests.forEach(r => {
+      if (toTimestamp(r.created_at) >= cutoff) {
+        const name = normalizeText(r.student_name || "");
+        results.push({
+          studentName: r.student_name || "",
+          classDisplay: r.class_display,
+          type: "Veli Talebi",
+          referrer: r.parent_name || "Veli",
+          note: r.detail || r.subject || "",
+          date: r.created_at || "",
+          isReReferral: trackedEntryDates.has(name)
+        });
+      }
+    });
+    individualRequests.forEach(r => {
+      if (toTimestamp(r.created_at) >= cutoff) {
+        const name = normalizeText(r.student_name || "");
+        results.push({
+          studentName: r.student_name || "",
+          classDisplay: r.class_display,
+          type: "Bireysel Başvuru",
+          referrer: "Öğrencinin kendisi",
+          note: r.note || "",
+          date: r.request_date || r.created_at || "",
+          isReReferral: trackedEntryDates.has(name)
+        });
+      }
+    });
+    observations.forEach(o => {
+      if (toTimestamp(o.created_at) >= cutoff) {
+        const name = normalizeText(o.student_name || "");
+        results.push({
+          studentName: o.student_name || "",
+          classDisplay: o.class_display,
+          type: "Gözlem Havuzu",
+          referrer: "Danışman",
+          note: o.note || "",
+          date: o.observed_at || o.created_at || "",
+          isReReferral: trackedEntryDates.has(name)
+        });
+      }
+    });
+
+    return results.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [incidents, referrals, requests, individualRequests, observations, trackedEntryDates]);
+
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+
+    const getReReferralHistory = (studentName: string) => {
+    const name = normalizeText(studentName);
+    const entryDate = trackedEntryDates.get(name) || 0;
+    const records: { type: string; referrer: string; note: string; date: string }[] = [];
+    incidents
+      .filter(i => normalizeText(i.target_student_name || "") === name && toTimestamp(i.created_at || i.incident_date) > entryDate)
+      .forEach(i => records.push({ type: "Öğrenci Bildirimi", referrer: i.reporter_student_name || "Bilinmiyor", note: i.description || "", date: i.incident_date || i.created_at || "" }));
+    referrals
+      .filter(r => normalizeText(r.student_name || "") === name && toTimestamp(r.created_at) > entryDate)
+      .forEach(r => records.push({ type: "Öğretmen Yönlendirmesi", referrer: r.teacher_name || "Bilinmiyor", note: r.note || r.reason || "", date: r.created_at || "" }));
+    requests
+      .filter(r => normalizeText(r.student_name || "") === name && toTimestamp(r.created_at) > entryDate)
+      .forEach(r => records.push({ type: "Veli Talebi", referrer: r.parent_name || "Veli", note: r.detail || r.subject || "", date: r.created_at || "" }));
+    return records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  };
+
+    const filteredAllMerged = useMemo(() => {
+    let base = allMergedRecords;
+    if (reReferralOnly) {
+      base = base.filter(r => reReferralRecords.includes(normalizeText(r.studentName)));
+    }
+    if (!searchQuery.trim()) return base;
+    const q = normalizeText(searchQuery);
+    return base.filter(r =>
+      normalizeText(r.studentName).includes(q) ||
+      normalizeText(r.classDisplay || "").includes(q) ||
+      normalizeText(r.note || "").includes(q)
+    );
+  }, [allMergedRecords, reReferralOnly, reReferralRecords, searchQuery]);
 
   const handleEditSource = (kind: "incident" | "referral" | "observation" | "request" | "individual-request", record: { id?: string; studentName: string; classDisplay?: string | null }) => {
     if (!record.id) {
@@ -950,44 +1094,24 @@ export default function PotansiyelGorusmelerPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
-            {/* Yeniden Yönlendirme */}
+          <div className="mt-3">
             <button
               type="button"
-              onClick={() => { setActiveTab("all"); setReReferralOnly(true); }}
-              className="group text-left rounded-xl border border-red-400/40 bg-red-500/20 hover:bg-red-500/30 px-4 py-3 backdrop-blur-sm transition-all"
+              onClick={() => setShowNotificationModal(true)}
+              className="relative flex items-center gap-4 w-full sm:w-auto text-left rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 px-5 py-3 backdrop-blur-sm transition-all"
             >
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-[11px] uppercase tracking-wider text-red-200 font-semibold">Yeniden Yönlendirme</p>
-                <span className="text-2xl font-black text-white">{reReferralCount}</span>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/20 text-white text-xl font-black">
+                🔔
               </div>
-              <p className="text-xs text-red-200/80">Aktif takip/düzenli görüşmedeki öğrenci için yeni başvuru</p>
-            </button>
-
-            {/* Yeni Başvurular */}
-            <button
-              type="button"
-              onClick={() => { setActiveTab("all"); setReReferralOnly(false); }}
-              className="group text-left rounded-xl border border-amber-400/40 bg-amber-500/20 hover:bg-amber-500/30 px-4 py-3 backdrop-blur-sm transition-all"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-[11px] uppercase tracking-wider text-amber-200 font-semibold">Yeni Başvurular</p>
-                <span className="text-2xl font-black text-white">{allMergedRecords.length - reReferralCount}</span>
+              <div>
+                <p className="text-sm font-bold text-white">Son 3 Günde Yönlendirilenler</p>
+                <p className="text-xs text-white/70">Tüm kanallardan gelen yeni bildirimler</p>
               </div>
-              <p className="text-xs text-amber-200/80">Henüz görüşme yapılmamış, tümü listesindeki öğrenciler</p>
-            </button>
-
-            {/* Aktif Süreç */}
-            <button
-              type="button"
-              onClick={() => setActiveTab("active-follow-up")}
-              className="group text-left rounded-xl border border-cyan-400/40 bg-cyan-500/20 hover:bg-cyan-500/30 px-4 py-3 backdrop-blur-sm transition-all"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-[11px] uppercase tracking-wider text-cyan-200 font-semibold">Aktif Süreç</p>
-                <span className="text-2xl font-black text-white">{activeFollowUpAppointments.length + regularMeetingAppointments.length}</span>
-              </div>
-              <p className="text-xs text-cyan-200/80">Aktif takip + düzenli görüşmelerdeki toplam öğrenci</p>
+              {recentNotifications.length > 0 && (
+                <span className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-500 text-white text-sm font-black shadow-lg">
+                  +{recentNotifications.length}
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -1049,125 +1173,52 @@ export default function PotansiyelGorusmelerPage() {
               <CardHeader className="border-b bg-slate-50 p-4">
                 <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                   <MessageSquare className="h-4 w-4" /> Tüm Kayıtlar (Kronolojik)
-                  <Badge variant="secondary">{allMergedRecords.length}</Badge>
+                  <Badge variant="secondary">{filteredAllMerged.length}</Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4">
-                {allMergedRecords.length === 0 ? (
+                {filteredAllMerged.length === 0 ? (
                   <p className="py-8 text-center text-slate-500">Kayıt bulunamadı</p>
                 ) : (
                   <div className="space-y-2">
-                    {allMergedRecords.map((record) => {
-                      const isScheduled = isAppointmentScheduled(
-                        record.studentName,
-                        record.classDisplay,
-                        record.classNumber
-                      );
+                    {filteredAllMerged.map((record) => {
+                      const isScheduled = isAppointmentScheduled(record.studentName, record.classDisplay, record.classNumber);
+                      const scheduledDate = record.type === "observation" ? null : getScheduledDate(record.studentName, record.classDisplay, record.classNumber);
+                      const sources: any[] = (record as any).sources || [record];
+                      const hasMultiple = sources.length > 1;
 
-                      let onEdit = () => {};
-                      let onDelete = () => {};
-                      let appointmentUrl = "";
+                      const getAppointmentUrl = (r: any) => {
+                        if (r.type === "incident") return buildAppointmentUrl(r.data.target_student_name || "", r.data.target_class_display || null, r.data.target_class_key || null, r.data.description, undefined, undefined, "student_report", r.data.id);
+                        if (r.type === "referral") return buildAppointmentUrl(r.data.student_name, r.data.class_display || null, r.data.class_key || null, r.data.note || r.data.reason, undefined, undefined, "teacher_referral", r.data.id);
+                        if (r.type === "observation") return buildAppointmentUrl(r.data.student_name, r.data.class_display || null, r.data.class_key || null, r.data.note, undefined, [r.data.id], "observation", r.data.id);
+                        if (r.type === "request") return buildAppointmentUrl(r.data.student_name, r.data.class_display || null, r.data.class_key || null, r.data.detail, undefined, undefined, "parent_request", r.data.id);
+                        if (r.type === "individual") return buildAppointmentUrl(r.data.student_name, r.data.class_display || null, r.data.class_key || null, r.data.note, r.data.id, undefined, "self_application", r.data.id);
+                        return "";
+                      };
 
-                      if (record.type === "incident") {
-                        const incident = record.data;
-                        onEdit = () =>
-                          handleEditSource("incident", {
-                            id: incident.id,
-                            studentName: incident.target_student_name || "",
-                            classDisplay: incident.target_class_display || null,
-                          });
-                        onDelete = () => handleDeleteSource("incident", incident.id);
-                        appointmentUrl = buildAppointmentUrl(
-                          incident.target_student_name || "",
-                          incident.target_class_display || null,
-                          incident.target_class_key || null,
-                          incident.description,
-                          undefined,
-                          undefined,
-                          "student_report",
-                          incident.id
-                        );
-                      } else if (record.type === "referral") {
-                        const referral = record.data;
-                        onEdit = () =>
-                          handleEditSource("referral", {
-                            id: referral.id,
-                            studentName: referral.student_name,
-                            classDisplay: referral.class_display || null,
-                          });
-                        onDelete = () => handleDeleteSource("referral", referral.id);
-                        appointmentUrl = buildAppointmentUrl(
-                          referral.student_name,
-                          referral.class_display || null,
-                          referral.class_key || null,
-                          referral.note || referral.reason,
-                          undefined,
-                          undefined,
-                          "teacher_referral",
-                          referral.id
-                        );
-                      } else if (record.type === "observation") {
-                        const observation = record.data;
-                        onEdit = () =>
-                          handleEditSource("observation", {
-                            id: observation.id,
-                            studentName: observation.student_name,
-                            classDisplay: observation.class_display || null,
-                          });
-                        onDelete = () => handleDeleteSource("observation", observation.id);
-                        appointmentUrl = buildAppointmentUrl(
-                          observation.student_name,
-                          observation.class_display || null,
-                          observation.class_key || null,
-                          observation.note,
-                          undefined,
-                          [observation.id],
-                          "observation",
-                          observation.id
-                        );
-                      } else if (record.type === "request") {
-                        const request = record.data;
-                        onEdit = () =>
-                          handleEditSource("request", {
-                            id: request.id,
-                            studentName: request.student_name,
-                            classDisplay: request.class_display || null,
-                          });
-                        onDelete = () => handleDeleteSource("request", request.id);
-                        appointmentUrl = buildAppointmentUrl(
-                          request.student_name,
-                          request.class_display || null,
-                          request.class_key || null,
-                          request.detail,
-                          undefined,
-                          undefined,
-                          "parent_request",
-                          request.id
-                        );
-                      } else if (record.type === "individual") {
-                        const req = record.data;
-                        onEdit = () =>
-                          handleEditSource("individual-request", {
-                            id: req.id,
-                            studentName: req.student_name,
-                            classDisplay: req.class_display || null,
-                          });
-                        onDelete = () => handleDeleteSource("individual-request", req.id);
-                        appointmentUrl = buildAppointmentUrl(
-                          req.student_name,
-                          req.class_display || null,
-                          req.class_key || null,
-                          req.note,
-                          req.id,
-                          undefined,
-                          "self_application",
-                          req.id
-                        );
-                      }
+                      const sourceLabel = (type: string) => {
+                        if (type === "incident") return "Öğrenci Bildirimi";
+                        if (type === "referral") return "Öğretmen Yönl.";
+                        if (type === "observation") return "Gözlem";
+                        if (type === "request") return "Veli Talebi";
+                        if (type === "individual") return "Bireysel Başv.";
+                        return "";
+                      };
 
-                      const scheduledDate = record.type === "observation"
-                        ? null
-                        : getScheduledDate(record.studentName, record.classDisplay, record.classNumber);
+                      const onEdit = () => {
+                        if (record.type === "incident") handleEditSource("incident", { id: record.data.id, studentName: record.data.target_student_name || "", classDisplay: record.data.target_class_display || null });
+                        else if (record.type === "referral") handleEditSource("referral", { id: record.data.id, studentName: record.data.student_name, classDisplay: record.data.class_display || null });
+                        else if (record.type === "observation") handleEditSource("observation", { id: record.data.id, studentName: record.data.student_name, classDisplay: record.data.class_display || null });
+                        else if (record.type === "request") handleEditSource("request", { id: record.data.id, studentName: record.data.student_name, classDisplay: record.data.class_display || null });
+                        else if (record.type === "individual") handleEditSource("individual-request", { id: record.data.id, studentName: record.data.student_name, classDisplay: record.data.class_display || null });
+                      };
+                      const onDelete = () => {
+                        if (record.type === "incident") handleDeleteSource("incident", record.data.id);
+                        else if (record.type === "referral") handleDeleteSource("referral", record.data.id);
+                        else if (record.type === "observation") handleDeleteSource("observation", record.data.id);
+                        else if (record.type === "request") handleDeleteSource("request", record.data.id);
+                        else if (record.type === "individual") handleDeleteSource("individual-request", record.data.id);
+                      };
 
                       return (
                         <div key={record.id} className="relative">
@@ -1181,28 +1232,30 @@ export default function PotansiyelGorusmelerPage() {
                             scheduledDate={scheduledDate}
                             requestStatus={
                               record.type === "observation"
-                                ? (record.data.status === "completed"
-                                    ? "completed"
-                                    : record.data.status === "converted" || record.data.status === "scheduled"
-                                    ? "scheduled"
-                                    : "pending")
+                                ? (record.data.status === "completed" ? "completed" : record.data.status === "converted" || record.data.status === "scheduled" ? "scheduled" : "pending")
                                 : undefined
                             }
-                            onClick={() => setSelectedItem(buildDetailModalItem(record.type, record.data))}
+                            onClick={() => hasMultiple
+                              ? setMultiSourceModal({ studentName: record.studentName, classDisplay: record.classDisplay, sources })
+                              : setSelectedItem(buildDetailModalItem(record.type, record.data))
+                            }
                             onEdit={onEdit}
                             onDelete={onDelete}
-                            appointmentUrl={appointmentUrl}
+                            appointmentUrl={getAppointmentUrl(record)}
                           />
-                          <Badge
-                            variant="outline"
-                            className="absolute -top-2 -right-2 text-xs bg-white"
-                          >
-                            {record.type === "incident" && "Öğrenci Bildirimi"}
-                            {record.type === "referral" && "Öğretmen Yönl."}
-                            {record.type === "observation" && "Gözlem"}
-                            {record.type === "request" && "Veli Talebi"}
-                            {record.type === "individual" && "Bireysel Başv."}
-                          </Badge>
+                          {hasMultiple ? (
+                            <Badge
+                              variant="outline"
+                              className="absolute -top-2 -right-2 text-xs bg-amber-50 text-amber-700 border-amber-300 cursor-pointer"
+                              onClick={() => setMultiSourceModal({ studentName: record.studentName, classDisplay: record.classDisplay, sources })}
+                            >
+                              {sources.length} kaynak ▾
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="absolute -top-2 -right-2 text-xs bg-white">
+                              {sourceLabel(record.type)}
+                            </Badge>
+                          )}
                         </div>
                       );
                     })}
@@ -1252,7 +1305,16 @@ export default function PotansiyelGorusmelerPage() {
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                          {reReferralRecords.includes(normalizeText(appointment.participant_name)) && !scheduledAppointments.some(a => matchesScheduledAppointment(a, appointment.participant_name, appointment.participant_class, null)) && (
+                            <button
+                              type="button"
+                              onClick={() => setReReferralHistoryModal({ studentName: appointment.participant_name, records: getReReferralHistory(appointment.participant_name) })}
+                              className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-700 animate-pulse hover:bg-red-200 transition-colors cursor-pointer"
+                            >
+                              ⚠ Yeniden Yönlendirildi
+                            </button>
+                          )}
                           {daysSince !== null && (
                             <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
                               daysSince >= 14 ? "bg-red-100 text-red-700" :
@@ -1359,7 +1421,16 @@ export default function PotansiyelGorusmelerPage() {
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                          {reReferralRecords.includes(normalizeText(appointment.participant_name)) && !scheduledAppointments.some(a => matchesScheduledAppointment(a, appointment.participant_name, appointment.participant_class, null)) && (
+                            <button
+                              type="button"
+                              onClick={() => setReReferralHistoryModal({ studentName: appointment.participant_name, records: getReReferralHistory(appointment.participant_name) })}
+                              className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-700 animate-pulse hover:bg-red-200 transition-colors cursor-pointer"
+                            >
+                              ⚠ Yeniden Yönlendirildi
+                            </button>
+                          )}
                           {daysSince !== null && (
                             <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
                               daysSince >= 14 ? "bg-red-100 text-red-700" :
@@ -1431,6 +1502,164 @@ export default function PotansiyelGorusmelerPage() {
           if (!open) setSelectedItem(null);
         }}
       />
+
+      {/* Son 3 Gün Bildirim Modalı */}
+      {showNotificationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b bg-slate-50 px-6 py-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Son 3 Günde Yönlendirilenler</h2>
+                <p className="text-sm text-slate-500">{recentNotifications.length} yeni bildirim</p>
+              </div>
+              <button type="button" onClick={() => setShowNotificationModal(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-3 max-h-[65vh] overflow-y-auto">
+              {recentNotifications.length === 0 ? (
+                <p className="text-center text-slate-500 py-6">Son 3 günde yönlendirme yok</p>
+              ) : recentNotifications.map((rec, i) => (
+                <div key={i} className={`rounded-xl border p-4 ${rec.isReReferral ? "border-red-200 bg-red-50/50" : "border-slate-200 bg-white"}`}>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-slate-800 text-sm">{rec.studentName}</span>
+                      {rec.classDisplay && <span className="text-xs text-slate-500">{rec.classDisplay}</span>}
+                    </div>
+                    <span className="text-xs text-slate-400 shrink-0">
+                      {new Date(rec.date).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="outline" className={
+                      rec.type === "Öğretmen Yönlendirmesi" ? "border-blue-200 text-blue-700 text-xs" :
+                      rec.type === "Veli Talebi" ? "border-emerald-200 text-emerald-700 text-xs" :
+                      rec.type === "Öğrenci Bildirimi" ? "border-amber-200 text-amber-700 text-xs" :
+                      rec.type === "Gözlem Havuzu" ? "border-purple-200 text-purple-700 text-xs" :
+                      "border-slate-200 text-slate-700 text-xs"
+                    }>{rec.type}</Badge>
+                    {rec.isReReferral ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Yeniden Yönlendirildi</span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">İlk Yönlendirme</span>
+                    )}
+                  </div>
+                  {rec.referrer && rec.referrer !== "Danışman" && (
+                    <p className="text-xs text-slate-500 mt-1.5">👤 {rec.referrer}</p>
+                  )}
+                  {rec.note && <p className="text-sm text-slate-600 mt-1 line-clamp-2">{rec.note}</p>}
+                </div>
+              ))}
+            </div>
+            <div className="border-t bg-slate-50 px-6 py-3 flex justify-end">
+              <button type="button" onClick={() => setShowNotificationModal(false)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Yeniden Yönlendirme Geçmişi Modalı */}
+      {reReferralHistoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b bg-red-50 px-6 py-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Yeniden Yönlendirme Geçmişi</h2>
+                <p className="text-sm text-red-600 font-medium">{reReferralHistoryModal.studentName}</p>
+              </div>
+              <button type="button" onClick={() => setReReferralHistoryModal(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+              {reReferralHistoryModal.records.length === 0 ? (
+                <p className="text-center text-slate-500 py-4">Kayıt bulunamadı</p>
+              ) : reReferralHistoryModal.records.map((rec, i) => (
+                <div key={i} className="rounded-xl border border-slate-200 p-4">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <Badge variant="outline" className={
+                      rec.type === "Öğretmen Yönlendirmesi" ? "border-blue-200 text-blue-700" :
+                      rec.type === "Veli Talebi" ? "border-emerald-200 text-emerald-700" :
+                      "border-amber-200 text-amber-700"
+                    }>{rec.type}</Badge>
+                    <span className="text-xs text-slate-400">
+                      {rec.date ? new Date(rec.date).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "-"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-1">👤 {rec.referrer}</p>
+                  {rec.note && <p className="text-sm text-slate-700 line-clamp-2">{rec.note}</p>}
+                </div>
+              ))}
+            </div>
+            <div className="border-t bg-slate-50 px-6 py-3 flex justify-end">
+              <button type="button" onClick={() => setReReferralHistoryModal(null)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Çoklu Kaynak Modalı */}
+      {multiSourceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b bg-slate-50 px-6 py-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">{multiSourceModal.studentName}</h2>
+                {multiSourceModal.classDisplay && (
+                  <p className="text-sm text-slate-500">{multiSourceModal.classDisplay}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setMultiSourceModal(null)}
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+              <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">
+                {multiSourceModal.sources.length} farklı kaynaktan başvuru
+              </p>
+              {multiSourceModal.sources.map((src: any) => {
+                const label = src.type === "incident" ? "Öğrenci Bildirimi" : src.type === "referral" ? "Öğretmen Yönlendirmesi" : src.type === "observation" ? "Gözlem Havuzu" : src.type === "request" ? "Veli Talebi" : "Bireysel Başvuru";
+                const referrer = src.type === "referral" ? src.data.teacher_name : src.type === "request" ? src.data.parent_name : src.type === "incident" ? src.data.reporter_student_name : null;
+                const note = src.type === "incident" ? src.data.description : src.type === "referral" ? src.data.note || src.data.reason : src.type === "observation" ? src.data.note : src.type === "request" ? src.data.detail || src.data.subject : src.data.note;
+                const date = src.type === "incident" ? src.data.incident_date || src.data.created_at : src.data.created_at;
+                return (
+                  <div
+                    key={src.id}
+                    className="rounded-xl border border-slate-200 p-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                    onClick={() => { setSelectedItem(buildDetailModalItem(src.type, src.data)); setMultiSourceModal(null); }}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <Badge variant="outline" className="text-xs">{label}</Badge>
+                      <span className="text-xs text-slate-400">
+                        {date ? new Date(date).toLocaleDateString("tr-TR") : "-"}
+                      </span>
+                    </div>
+                    {referrer && <p className="text-xs text-slate-500 mb-1">👤 {referrer}</p>}
+                    {note && <p className="text-sm text-slate-700 line-clamp-2">{note}</p>}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="border-t bg-slate-50 px-6 py-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setMultiSourceModal(null)}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
