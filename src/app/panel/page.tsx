@@ -411,7 +411,7 @@ function TodayAppointmentsWidget() {
   }
 
   return (
-    <Link href="/panel/randevu">
+    <Link href="/panel/takvim">
       <Card className="bg-gradient-to-br from-indigo-500 via-blue-500 to-cyan-500 border-0 shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden group cursor-pointer text-white relative">
         <div className="absolute -top-20 -right-20 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
         <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
@@ -729,7 +729,7 @@ function UpcomingAppointmentsWidget() {
               </p>
             </div>
           </div>
-          <Link href="/panel/randevu">
+          <Link href="/panel/takvim">
             <Button variant="ghost" size="sm" className="text-teal-400 hover:text-teal-300 hover:bg-white/10 gap-1 group/btn">
               <span>Tümünü Gör</span>
               <ChevronRight className="h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
@@ -776,7 +776,7 @@ function UpcomingAppointmentsWidget() {
               </div>
               <p className="text-lg font-medium text-white mb-2">Yaklaşan randevu yok</p>
               <p className="text-sm text-slate-500 mb-5">Yeni bir randevu planlamaya ne dersin?</p>
-              <Link href="/panel/randevu">
+              <Link href="/panel/takvim">
                 <Button className="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white shadow-lg shadow-teal-500/25 hover:shadow-teal-500/40 transition-all duration-300 hover:scale-105">
                   <Calendar className="h-4 w-4 mr-2" />
                   Yeni Randevu Oluştur
@@ -794,7 +794,7 @@ function UpcomingAppointmentsWidget() {
               const isActive = activeCard === apt.id;
               
               return (
-                <Link href="/panel/randevu" key={apt.id}>
+                <Link href="/panel/takvim" key={apt.id}>
                   <div 
                     className={`group/card relative p-4 rounded-2xl border transition-all duration-500 cursor-pointer overflow-hidden
                       ${isToday 
@@ -907,7 +907,7 @@ function UpcomingAppointmentsWidget() {
         {/* Quick Actions */}
         {appointments.length > 0 && (
           <div className="flex gap-2 pt-2">
-            <Link href="/panel/randevu" className="flex-1">
+            <Link href="/panel/takvim" className="flex-1">
               <Button variant="ghost" className="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 hover:border-white/20 transition-all duration-300">
                 <Calendar className="h-4 w-4 mr-2" />
                 Yeni Randevu
@@ -934,7 +934,7 @@ export default function PanelOzetPage() {
 
   // Sayfa yüklendiğinde randevular sayfasına yönlendir
   useEffect(() => {
-    router.replace('/panel/randevu');
+    router.replace('/panel/takvim');
   }, [router]);
 
   // Modal state'leri - kaldırıldı

@@ -110,7 +110,7 @@ export default function TakvimPage() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [followUps, setFollowUps] = useState<any[]>([]);
 
-  // Filtre State'leri (Eksik olan kısım burasıydı)
+  // Filtre State'leri
   const [showAppointments, setShowAppointments] = useState(true);
   const [showActivities, setShowActivities] = useState(true);
   const [showTasks, setShowTasks] = useState(true);
@@ -154,8 +154,72 @@ export default function TakvimPage() {
     participant_class: "",
     location: "PDR Odası",
     purpose: "",
-    preparation_note: ""
+    preparation_note: "",
+    source_application_id: "",
+    source_application_type: "",
+    source_individual_request_id: ""
   });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const sName = params.get("studentName");
+      const cDisplay = params.get("classDisplay");
+      const sId = params.get("sourceId");
+      const sType = params.get("sourceType");
+
+      if (sName && sId && sType) {
+        let appType = "";
+        let indId = "";
+        let appId = "";
+
+        if (sType === "Bireysel Başvuru") {
+          indId = sId.includes('-') ? sId.split('-')[1] : sId;
+        } else if (sType === "Öğretmen Yönlendirmeleri") {
+          appType = "teacher_referral";
+          appId = sId.includes('-') ? sId.split('-')[1] : sId;
+        } else if (sType === "Öğrenci Bildirimleri") {
+          appType = "student_incident";
+          appId = sId.includes('-') ? sId.split('-')[1] : sId;
+        } else if (sType === "Veli Talepleri") {
+          appType = "parent_meeting";
+          appId = sId.includes('-') ? sId.split('-')[1] : sId;
+        } else if (sType === "Gözlem Havuzu") {
+          appType = "observation";
+          appId = sId.includes('-') ? sId.split('-')[1] : sId;
+        }
+
+        // Find matching class from the loaded classes list
+        let matchedClassKey = "";
+        if (classes.length > 0 && cDisplay) {
+          const foundClass = classes.find(c => c.text === cDisplay);
+          if (foundClass) {
+            matchedClassKey = foundClass.value;
+          }
+        }
+
+        setFormData(prev => ({
+          ...prev,
+          participant_name: sName,
+          participant_class: cDisplay || "",
+          source_application_id: appId,
+          source_application_type: appType,
+          source_individual_request_id: indId,
+          appointment_date: getLocalDateString(new Date())
+        }));
+        
+        // Set selectedClass - either the matched key or the display text directly
+        if (matchedClassKey) {
+          setSelectedClass(matchedClassKey);
+        } else if (cDisplay) {
+          setSelectedClass(cDisplay);
+        }
+        
+        setShowAppointmentModal(true);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, [classes]);
 
   // --- Data Fetching ---
   useEffect(() => {
@@ -241,15 +305,19 @@ export default function TakvimPage() {
     const fetchBusySlots = async (date: string) => {
       try {
         const allBusySlots = new Set<string>();
+        
+        // Tüm randevuları al (status veya participant'ıne bakılmaksızın)
         const appointmentRes = await fetch(`/api/appointments?date=${date}`);
         if (appointmentRes.ok) {
           const data = await appointmentRes.json();
+          // Tüm non-cancelled randevuları dolu say
           data.appointments?.forEach((apt: any) => {
-            if (apt.status === 'planned') {
+            if (apt.status !== 'cancelled' && apt.status !== 'pending') {
               allBusySlots.add(normalizeLessonSlot(apt.start_time));
             }
           });
         }
+        
         const { data: plans } = await supabase.from('guidance_plans').select('lesson_period').eq('plan_date', date).eq('status', 'planned');
         plans?.forEach(p => allBusySlots.add(normalizeLessonSlot(p.lesson_period)));
 
@@ -276,7 +344,10 @@ export default function TakvimPage() {
       participant_class: "",
       location: "PDR Odası",
       purpose: "",
-      preparation_note: ""
+      preparation_note: "",
+      source_application_id: "",
+      source_application_type: "",
+      source_individual_request_id: ""
     });
     setSelectedClass("");
     setParentName("");
@@ -300,10 +371,13 @@ export default function TakvimPage() {
 
     if (!finalName) { toast.error('Katılımcı adı gerekli'); return; }
     if (!formData.start_time) { toast.error('Saat seçimi gerekli'); return; }
+    if (!formData.appointment_date) { toast.error('Tarih seçimi gerekli'); return; }
+    if (!formData.purpose) { toast.error('Konu seçimi gerekli'); return; }
+    if (!formData.participant_class) { toast.error('Sınıf seçimi gerekli'); return; }
     
     setAppointmentSaving(true);
     try {
-      const { error } = await supabase.from('appointments').insert({
+      const appointmentData = {
         participant_name: finalName,
         participant_type: formData.participant_type,
         participant_class: formData.participant_class,
@@ -311,17 +385,34 @@ export default function TakvimPage() {
         start_time: formData.start_time,
         location: formData.location,
         purpose: formData.purpose,
-        preparation_note: formData.preparation_note,
-        status: 'planned',
-        priority: 'normal'
-      });
+        preparation_note: formData.preparation_note || null,
+        status: 'scheduled',
+        priority: 'normal',
+        source_application_id: formData.source_application_id || null,
+        source_application_type: formData.source_application_type || null,
+        source_individual_request_id: formData.source_individual_request_id || null
+      };
       
-      if (error) throw error;
+      console.log('Inserting appointment:', appointmentData);
+      
+      const { data, error } = await supabase.from('appointments').insert([appointmentData]).select();
+      
+      if (error) {
+        console.error('Supabase error:', error);
+        throw new Error(error.message || 'Bilinmeyen veritabanı hatası');
+      }
+      
+      if (!data || data.length === 0) {
+        throw new Error('Randevu veritabanına yazıldı ancak veri döndü');
+      }
+      
       toast.success('Randevu başarıyla eklendi');
       closeAppointmentModal();
       loadData();
     } catch (error: any) {
-      toast.error('Randevu eklenirken hata oluştu');
+      console.error('Appointment creation error:', error);
+      const errorMsg = error?.message || error?.error_description || JSON.stringify(error) || 'Bilinmeyen hata';
+      toast.error(`Randevu eklenirken hata oluştu: ${errorMsg}`);
     } finally {
       setAppointmentSaving(false);
     }
@@ -801,7 +892,7 @@ export default function TakvimPage() {
         </div>
       )}
 
-      {/* Randevu Ekleme Modalı (Randevular sayfasından birebir alındı) */}
+      {/* Randevu Ekleme Modalı */}
       {showAppointmentModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -887,11 +978,14 @@ export default function TakvimPage() {
                           }
                         }}
                         className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
-                        disabled={!selectedClass}
+                        disabled={!selectedClass && !formData.participant_name}
                       >
                         <option value="">
-                          {!selectedClass ? "-- Önce sınıf seçin --" : "-- Öğrenci Seçin --"}
+                          {(!selectedClass && !formData.participant_name) ? "-- Önce sınıf seçin --" : "-- Öğrenci Seçin --"}
                         </option>
+                        {formData.participant_name && !students.find(s => s.text === formData.participant_name) && (
+                          <option value={formData.participant_name}>{formData.participant_name}</option>
+                        )}
                         {students.map(s => (
                           <option key={s.value} value={s.text}>{s.text}</option>
                         ))}

@@ -166,6 +166,16 @@ export default function BasvurularPage() {
     setOutcomeModalRecord(record);
   };
 
+  // Başvuruyu Randevuya Dönüştür - Takvim sayfasına yönlendir
+  const handleOpenAppointmentForm = (record: ApplicationRecord) => {
+    const params = new URLSearchParams();
+    params.set("studentName", record.student_name);
+    if (record.class_display) params.set("classDisplay", record.class_display);
+    params.set("sourceId", record.id);
+    params.set("sourceType", record.source);
+    window.location.href = `/panel/takvim?${params.toString()}`;
+  };
+
   // Modal seçimi → outcome_decision kaydet
   const handleOutcomeSelect = async (choice: Exclude<AppointmentOutcomeChoice, "cancel">) => {
     if (!outcomeModalRecord) return;
@@ -472,9 +482,10 @@ export default function BasvurularPage() {
         "Görüşüldü": "Görüşüldü"
       };
       let status: ApplicationRecord["status"] = (statusMap[record.status] || "Bekliyor") as ApplicationRecord["status"];
-      if (matchedScheduledApt && new Date(matchedScheduledApt.appointment_date) > new Date(record.created_at)) {
+      const recordDate = (record.created_at || date).slice(0, 10);
+      if (matchedScheduledApt && matchedScheduledApt.appointment_date >= recordDate) {
         status = "Randevu verildi";
-      } else if (matchedApt && new Date(matchedApt.appointment_date) > new Date(record.created_at)) {
+      } else if (matchedApt && matchedApt.appointment_date >= recordDate) {
         status = "Görüşüldü";
       }
       return {
@@ -949,7 +960,7 @@ export default function BasvurularPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        {item.outcome_label ? (
+                        {item.outcome_label && (item.status === "Görüşüldü" || item.outcome_label === "Aktif Takip" || item.outcome_label === "Düzenli Görüşme") ? (
                           <Badge className={
                             item.outcome_label === "Tamamlandı" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
                             item.outcome_label === "Aktif Takip" ? "bg-cyan-100 text-cyan-700 border-cyan-200" :
@@ -991,20 +1002,13 @@ export default function BasvurularPage() {
             <div className="p-4 space-y-2">
               <button
                 type="button"
-                onClick={() => {
-                  setStatusChoiceRecord(null);
-                  // Randevu sayfasına yönlendir
-                  const params = new URLSearchParams();
-                  params.set("studentName", statusChoiceRecord.student_name);
-                  if (statusChoiceRecord.class_display) params.set("classDisplay", statusChoiceRecord.class_display);
-                  window.location.href = `/panel/randevu?${params.toString()}`;
-                }}
+                onClick={() => handleOpenAppointmentForm(statusChoiceRecord)}
                 className="w-full flex items-center gap-3 rounded-xl border-2 border-blue-200 bg-blue-50 px-4 py-3 text-left text-sm font-semibold text-blue-700 hover:bg-blue-100 transition-all"
               >
                 <span className="text-lg">📅</span>
                 <div>
                   <div>Randevuya Dönüştür</div>
-                  <div className="text-xs font-normal text-blue-500">Randevu sayfasına yönlendir</div>
+                  <div className="text-xs font-normal text-blue-500">Randevu formu aç</div>
                 </div>
               </button>
               <button
