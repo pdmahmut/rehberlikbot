@@ -78,23 +78,11 @@ const menuCategories: MenuCategory[] = [
   {
     title: "Genel",
     items: [
-      {
-        href: "/panel/randevu",
-        label: "Randevular",
-        icon: CalendarCheck,
-        color: "blue"
-      },
       { 
         href: "/panel/takvim", 
         label: "Takvim", 
         icon: Calendar,
         color: "teal"
-      },
-      { 
-        href: "/panel/yapilacaklar", 
-        label: "Yapılacaklar", 
-        icon: ListTodo,
-        color: "orange"
       },
     ]
   },
