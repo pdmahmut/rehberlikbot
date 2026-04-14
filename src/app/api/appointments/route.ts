@@ -8,6 +8,33 @@ const isMissingColumnError = (error: { message?: string } | null | undefined, co
   return message.toLowerCase().includes("column") && message.toLowerCase().includes(columnName.toLowerCase());
 };
 
+const normalizeLocationValue = (value?: string | null) => {
+  switch (value) {
+    case "guidance_office":
+    case "classroom":
+    case "admin":
+    case "phone":
+    case "online":
+    case "other":
+      return value;
+    case "PDR Odası":
+    case "Rehberlik Servisi":
+      return "guidance_office";
+    case "Sınıf":
+      return "classroom";
+    case "İdare":
+      return "admin";
+    case "Telefon":
+      return "phone";
+    case "Online":
+      return "online";
+    case "Diğer":
+      return "other";
+    default:
+      return "guidance_office";
+  }
+};
+
 const syncApplicationStatus = async (
   sourceApplicationType?: string | null,
   sourceApplicationId?: string | null,
@@ -186,7 +213,7 @@ export async function POST(request: NextRequest) {
         .eq("status", "planned"),
       supabase
         .from("class_activities")
-        .select("id, title, class_display, activity_time")
+        .select("id, class_display, activity_time")
         .eq("activity_date", appointment_date)
     ]);
 
@@ -234,7 +261,7 @@ export async function POST(request: NextRequest) {
     if (busyActivities.length > 0) {
       const activity = busyActivities[0];
       return NextResponse.json(
-        { error: `Bu tarih ve ders saatinde zaten bir sınıf etkinliği var: ${activity.title} (${activity.class_display})` },
+        { error: `Bu tarih ve ders saatinde zaten bir sınıf etkinliği var: ${activity.class_display}` },
         { status: 400 }
       );
     }
@@ -247,7 +274,7 @@ export async function POST(request: NextRequest) {
       participant_class,
       participant_phone,
       topic_tags,
-      location,
+      location: normalizeLocationValue(location),
       purpose,
       preparation_note,
       priority,
@@ -364,7 +391,7 @@ export async function PUT(request: NextRequest) {
           .eq("status", "planned"),
         supabase
           .from("class_activities")
-          .select("id, title, class_display, activity_time")
+          .select("id, class_display, activity_time")
           .eq("activity_date", nextAppointmentDate)
       ]);
 
@@ -412,21 +439,33 @@ export async function PUT(request: NextRequest) {
       if (busyActivities.length > 0) {
         const activity = busyActivities[0];
         return NextResponse.json(
-          { error: `Bu tarih ve ders saatinde zaten bir sınıf etkinliği var: ${activity.title} (${activity.class_display})` },
+          { error: `Bu tarih ve ders saatinde zaten bir sınıf etkinliği var: ${activity.class_display}` },
           { status: 400 }
         );
       }
     }
 
+    const normalizedUpdateData = {
+      ...updateData,
+      ...(Object.prototype.hasOwnProperty.call(updateData, "location")
+        ? { location: normalizeLocationValue(updateData.location as string | null | undefined) }
+        : {})
+    };
+
     let { data, error } = await supabase
       .from("appointments")
-      .update(updateData)
+      .update(normalizedUpdateData)
       .eq("id", id)
       .select("*")
       .single();
 
     if (error) {
-      const { source_individual_request_id: _ignored, ...fallbackUpdate } = updateData as Record<string, unknown>;
+      const {
+        source_individual_request_id: _ignoredRequestId,
+        source_application_id: _ignoredApplicationId,
+        source_application_type: _ignoredApplicationType,
+        ...fallbackUpdate
+      } = normalizedUpdateData as Record<string, unknown>;
       const fallbackResult = await supabase
         .from("appointments")
         .update(fallbackUpdate)

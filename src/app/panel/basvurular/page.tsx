@@ -30,10 +30,16 @@ type ApplicationRecord = {
   outcome_label?: string | null;
   note?: string | null;
   matched_appointment_id?: string | null;
+  last_activity_at?: string | null;
 };
 
 type ApplicationStatus = ApplicationRecord["status"];
-type ApplicationStatusOverrides = Record<string, ApplicationStatus>;
+type ApplicationStatusOverrideEntry = {
+  status: ApplicationStatus;
+  acted_at: string;
+};
+
+type ApplicationStatusOverrides = Record<string, ApplicationStatusOverrideEntry>;
 
 const APPLICATION_STATUS_OVERRIDES_KEY = "application-status-overrides";
 
@@ -45,7 +51,19 @@ const loadApplicationStatusOverrides = (): ApplicationStatusOverrides => {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
     return Object.entries(parsed as Record<string, unknown>).reduce<ApplicationStatusOverrides>((acc, [id, value]) => {
-      if (value === "Görüşüldü" || value === "Randevu verildi" || value === "Bekliyor") acc[id] = value;
+      if (value === "Görüşüldü" || value === "Randevu verildi" || value === "Bekliyor") {
+        acc[id] = { status: value, acted_at: "" };
+        return acc;
+      }
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        const entry = value as Record<string, unknown>;
+        if (entry.status === "Görüşüldü" || entry.status === "Randevu verildi" || entry.status === "Bekliyor") {
+          acc[id] = {
+            status: entry.status as ApplicationStatus,
+            acted_at: typeof entry.acted_at === "string" ? entry.acted_at : ""
+          };
+        }
+      }
       return acc;
     }, {});
   } catch { return {}; }
@@ -120,6 +138,27 @@ const findMatchedAppointment = (
   ) || null;
 };
 
+const getLatestTimestamp = (...values: Array<string | null | undefined>) => {
+  const validValues = values
+    .filter((value): value is string => Boolean(value))
+    .map((value) => ({ raw: value, time: new Date(value).getTime() }))
+    .filter((item) => Number.isFinite(item.time))
+    .sort((a, b) => b.time - a.time);
+
+  return validValues[0]?.raw || null;
+};
+
+const extractTopicFromNote = (note?: string | null) => {
+  if (!note) return { topic: "", note: "" };
+  const trimmed = note.trim();
+  const match = trimmed.match(/^\[(.+?)\]\s*([\s\S]*)$/);
+  if (!match) return { topic: "", note: trimmed };
+  return {
+    topic: match[1]?.trim() || "",
+    note: match[2]?.trim() || ""
+  };
+};
+
 export default function BasvurularPage() {
   const [applicationsSearchQuery, setApplicationsSearchQuery] = useState("");
   const [showEntryForm, setShowEntryForm] = useState(false);
@@ -168,11 +207,15 @@ export default function BasvurularPage() {
 
   // Başvuruyu Randevuya Dönüştür - Takvim sayfasına yönlendir
   const handleOpenAppointmentForm = (record: ApplicationRecord) => {
+    const parsedNote = extractTopicFromNote(record.note);
     const params = new URLSearchParams();
     params.set("studentName", record.student_name);
     if (record.class_display) params.set("classDisplay", record.class_display);
+    if (record.class_key) params.set("classKey", record.class_key);
     params.set("sourceId", record.id);
     params.set("sourceType", record.source);
+    if (parsedNote.topic) params.set("purpose", parsedNote.topic);
+    if (parsedNote.note) params.set("preparationNote", parsedNote.note);
     window.location.href = `/panel/takvim?${params.toString()}`;
   };
 
@@ -447,7 +490,13 @@ export default function BasvurularPage() {
 
   const updateApplicationStatusOverride = (id: string, nextStatus: ApplicationStatus) => {
     setStatusOverrides((prev) => {
-      const next = { ...prev, [id]: nextStatus };
+      const next = {
+        ...prev,
+        [id]: {
+          status: nextStatus,
+          acted_at: new Date().toISOString()
+        }
+      };
       saveApplicationStatusOverrides(next);
       return next;
     });
@@ -467,7 +516,6 @@ export default function BasvurularPage() {
       date: string,
       note: string | null | undefined
     ): ApplicationRecord => {
-      const isScheduled = scheduledAppointments.some((apt) => matchesAppointment(apt, student_name, class_display, class_key));
       const matchedApt = findMatchedAppointment(attendedAppointments, student_name, class_display, class_key);
       const matchedScheduledApt = scheduledAppointments.find((apt) => matchesAppointment(apt, student_name, class_display, class_key));
       const isAttended = !!matchedApt;
@@ -488,6 +536,15 @@ export default function BasvurularPage() {
       } else if (matchedApt && matchedApt.appointment_date >= recordDate) {
         status = "Görüşüldü";
       }
+      const lastActivityAt = getLatestTimestamp(
+        record.updated_at,
+        record.created_at,
+        date,
+        matchedScheduledApt?.updated_at,
+        matchedScheduledApt?.created_at,
+        matchedApt?.updated_at,
+        matchedApt?.created_at
+      );
       return {
         id,
         student_name,
@@ -499,7 +556,8 @@ export default function BasvurularPage() {
         status,
         outcome_label: outcomeLabel,
         matched_appointment_id: matchedApt?.id || null,
-        note
+        note,
+        last_activity_at: lastActivityAt
       };
     };
 
@@ -534,13 +592,16 @@ export default function BasvurularPage() {
       r.created_at || new Date().toISOString(), r.note
     )));
 
-    return records.filter((r) => r.student_name).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return records
+      .filter((r) => r.student_name)
+      .sort((a, b) => new Date(b.last_activity_at || b.date).getTime() - new Date(a.last_activity_at || a.date).getTime());
   }, [incidents, referrals, observations, requests, individualRequests, attendedAppointments, scheduledAppointments]);
 
   const applicationRecordsWithOverrides = useMemo(() => {
     return applicationRecords.map((record) => ({
       ...record,
-      status: statusOverrides[record.id] || record.status
+      status: statusOverrides[record.id]?.status || record.status,
+      last_activity_at: statusOverrides[record.id]?.acted_at?.trim() ? statusOverrides[record.id].acted_at : record.last_activity_at
     }));
   }, [applicationRecords, statusOverrides]);
 
@@ -561,34 +622,12 @@ export default function BasvurularPage() {
       return matchesSearch && matchesClass && matchesSource && matchesReferrer && matchesStatus && matchesOutcome;
     });
 
-    // Sıralama: Filtreye göre en son olan en üstte
     filtered.sort((a, b) => {
-      let aDate: string;
-      let bDate: string;
-
-      if (applicationsStatusFilter === "Görüşüldü") {
-        // En son görüşülen en üstte
-        const aApt = attendedAppointments.find((apt) => matchesAppointment(apt, a.student_name, a.class_display, a.class_key));
-        const bApt = attendedAppointments.find((apt) => matchesAppointment(apt, b.student_name, b.class_display, b.class_key));
-        aDate = aApt?.appointment_date || a.date;
-        bDate = bApt?.appointment_date || b.date;
-      } else if (applicationsStatusFilter === "Randevu verildi") {
-        // En son randevu verilen en üstte
-        const aApt = scheduledAppointments.find((apt) => matchesAppointment(apt, a.student_name, a.class_display, a.class_key));
-        const bApt = scheduledAppointments.find((apt) => matchesAppointment(apt, b.student_name, b.class_display, b.class_key));
-        aDate = aApt?.appointment_date || a.date;
-        bDate = bApt?.appointment_date || b.date;
-      } else {
-        // Bekliyor veya diğer durumlar: En son başvuru tarihi
-        aDate = a.date;
-        bDate = b.date;
-      }
-
-      return new Date(bDate).getTime() - new Date(aDate).getTime();
+      return new Date(b.last_activity_at || b.date).getTime() - new Date(a.last_activity_at || a.date).getTime();
     });
 
     return filtered;
-  }, [applicationRecordsWithOverrides, applicationsSearchQuery, applicationsClassFilter, applicationsSourceFilter, applicationsReferrerFilter, applicationsStatusFilter, applicationsOutcomeFilter, attendedAppointments, scheduledAppointments]);
+  }, [applicationRecordsWithOverrides, applicationsSearchQuery, applicationsClassFilter, applicationsSourceFilter, applicationsReferrerFilter, applicationsStatusFilter, applicationsOutcomeFilter]);
 
   const applicationClassOptions = useMemo(() => {
     const classMap = new Map<string, string>();
@@ -924,7 +963,7 @@ export default function BasvurularPage() {
                   filteredApplications.map((item) => (
                     <tr key={item.id} className="group/row border-b border-slate-100 hover:bg-gradient-to-r hover:from-purple-50/50 hover:to-pink-50/50 transition-all duration-200">
                       <td className="px-4 py-3 text-slate-600 text-sm">
-                        {new Date(item.date).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        {new Date(item.last_activity_at || item.date).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </td>
                       <td className="px-4 py-3 font-medium text-slate-800 group-hover/row:text-purple-700 transition-colors">{item.student_name}</td>
                       <td className="px-4 py-3">

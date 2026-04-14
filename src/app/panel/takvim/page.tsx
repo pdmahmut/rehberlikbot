@@ -44,6 +44,26 @@ const formatLessonSlotLabel = (slot: string) => {
   return match ? `${match[0]}. Ders` : slot;
 };
 
+const normalizeClassValue = (value?: string | null) =>
+  (value || "")
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/[\/\-_.()]/g, "")
+    .trim();
+
+const parseApplicationNote = (rawValue?: string | null) => {
+  if (!rawValue) return { purpose: "", preparationNote: "" };
+  const trimmed = rawValue.trim();
+  const match = trimmed.match(/^\[(.+?)\]\s*([\s\S]*)$/);
+  if (!match) return { purpose: trimmed, preparationNote: "" };
+  return {
+    purpose: match[1]?.trim() || "",
+    preparationNote: match[2]?.trim() || ""
+  };
+};
+
 const MONTHS_TR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 const DAYS_TR = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 const DAYS_FULL_TR = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
@@ -99,6 +119,57 @@ interface CalendarEvent {
   data: any;
 }
 
+type PendingApplicationRecord = {
+  id: string;
+  student_name: string;
+  class_display?: string | null;
+  class_key?: string | null;
+  source: "Veli Talepleri" | "Öğretmen Yönlendirmeleri" | "Öğrenci Bildirimleri" | "Gözlem Havuzu" | "Bireysel Başvuru";
+  referrer?: string;
+  date: string;
+  note?: string | null;
+};
+
+const normalizeStudentName = (value?: string | null) =>
+  String(value || "")
+    .replace(/^\s*\d+\s+/, "")
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const matchesApplicationToAppointment = (
+  appointment: Partial<Appointment>,
+  studentName?: string | null,
+  classDisplay?: string | null,
+  classKey?: string | null
+) => {
+  const appointmentName = normalizeStudentName(appointment.participant_name);
+  const applicationName = normalizeStudentName(studentName);
+  if (!appointmentName || !applicationName) return false;
+  const nameMatch =
+    appointmentName === applicationName ||
+    appointmentName.includes(applicationName) ||
+    applicationName.includes(appointmentName);
+  if (!nameMatch) return false;
+
+  const appointmentClass = normalizeClassValue(appointment.participant_class);
+  const applicationClass = normalizeClassValue(classDisplay || classKey);
+  if (!appointmentClass || !applicationClass) return true;
+
+  return (
+    appointmentClass === applicationClass ||
+    appointmentClass.includes(applicationClass) ||
+    applicationClass.includes(appointmentClass)
+  );
+};
+
+const isPendingApplicationStatus = (status?: string | null) => {
+  if (!status) return true;
+  return ["pending", "new", "reviewing", "Bekliyor"].includes(String(status));
+};
+
 export default function TakvimPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewType, setViewType] = useState<ViewType>('day');
@@ -107,6 +178,7 @@ export default function TakvimPage() {
   // Veri State'leri
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [guidancePlans, setGuidancePlans] = useState<any[]>([]);
+  const [guidanceTopicMap, setGuidanceTopicMap] = useState<Record<string, string>>({});
   const [tasks, setTasks] = useState<any[]>([]);
   const [followUps, setFollowUps] = useState<any[]>([]);
 
@@ -121,6 +193,10 @@ export default function TakvimPage() {
   const [showAttendanceChoiceModal, setShowAttendanceChoiceModal] = useState(false);
   const [attendanceChoiceAppointment, setAttendanceChoiceAppointment] = useState<Appointment | null>(null);
   const [attendanceSaving, setAttendanceSaving] = useState(false);
+  const [showPendingApplicationsModal, setShowPendingApplicationsModal] = useState(false);
+  const [pendingApplicationsLoading, setPendingApplicationsLoading] = useState(false);
+  const [pendingApplications, setPendingApplications] = useState<PendingApplicationRecord[]>([]);
+  const [pendingSelectionSlot, setPendingSelectionSlot] = useState<{ date: string; start_time: string } | null>(null);
 
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [taskSaving, setTaskSaving] = useState(false);
@@ -137,6 +213,7 @@ export default function TakvimPage() {
   // --- Randevu Modal State'leri (Orijinal Sistem) ---
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [appointmentSaving, setAppointmentSaving] = useState(false);
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [classes, setClasses] = useState<{ value: string; text: string }[]>([]);
   const [students, setStudents] = useState<{ value: string; text: string }[]>([]);
   const [teachers, setTeachers] = useState<{ value: string; label: string }[]>([]);
@@ -152,7 +229,7 @@ export default function TakvimPage() {
     participant_type: "student" as ParticipantType,
     participant_name: "",
     participant_class: "",
-    location: "PDR Odası",
+    location: "guidance_office",
     purpose: "",
     preparation_note: "",
     source_application_id: "",
@@ -165,8 +242,11 @@ export default function TakvimPage() {
       const params = new URLSearchParams(window.location.search);
       const sName = params.get("studentName");
       const cDisplay = params.get("classDisplay");
+      const classKey = params.get("classKey");
       const sId = params.get("sourceId");
       const sType = params.get("sourceType");
+      const purposeParam = params.get("purpose");
+      const preparationNoteParam = params.get("preparationNote");
 
       if (sName && sId && sType) {
         let appType = "";
@@ -191,17 +271,28 @@ export default function TakvimPage() {
 
         // Find matching class from the loaded classes list
         let matchedClassKey = "";
-        if (classes.length > 0 && cDisplay) {
-          const foundClass = classes.find(c => c.text === cDisplay);
+        if (classes.length > 0) {
+          const normalizedClassDisplay = normalizeClassValue(cDisplay);
+          const foundClass = classes.find(c =>
+            c.value === classKey ||
+            c.text === cDisplay ||
+            normalizeClassValue(c.text) === normalizedClassDisplay
+          );
           if (foundClass) {
             matchedClassKey = foundClass.value;
           }
         }
 
+        const parsedNote = parseApplicationNote(preparationNoteParam);
+        const initialPurpose = purposeParam || parsedNote.purpose;
+        const initialPreparationNote = parsedNote.preparationNote;
+
         setFormData(prev => ({
           ...prev,
           participant_name: sName,
           participant_class: cDisplay || "",
+          purpose: initialPurpose,
+          preparation_note: initialPreparationNote,
           source_application_id: appId,
           source_application_type: appType,
           source_individual_request_id: indId,
@@ -211,10 +302,11 @@ export default function TakvimPage() {
         // Set selectedClass - either the matched key or the display text directly
         if (matchedClassKey) {
           setSelectedClass(matchedClassKey);
-        } else if (cDisplay) {
-          setSelectedClass(cDisplay);
+        } else if (classKey) {
+          setSelectedClass(classKey);
         }
-        
+
+        setSelectedStudentName(sName);
         setShowAppointmentModal(true);
         window.history.replaceState({}, document.title, window.location.pathname);
       }
@@ -240,17 +332,23 @@ export default function TakvimPage() {
       const startStr = getLocalDateString(startDate);
       const endStr = getLocalDateString(endDate);
 
-      const [appResult, planResult, taskResult, followResult] = await Promise.all([
+      const [appResult, planResult, taskResult, followResult, topicResult] = await Promise.all([
         supabase.from('appointments').select('*').gte('appointment_date', startStr).lte('appointment_date', endStr),
         supabase.from('guidance_plans').select('*').gte('plan_date', startStr).lte('plan_date', endStr),
         supabase.from('tasks').select('*').gte('due_date', startStr).lte('due_date', endStr),
-        supabase.from('follow_ups').select('*').gte('follow_up_date', startStr).lte('follow_up_date', endStr)
+        supabase.from('follow_ups').select('*').gte('follow_up_date', startStr).lte('follow_up_date', endStr),
+        supabase.from('guidance_topics').select('id, title')
       ]);
 
       setAppointments(appResult.data || []);
       setGuidancePlans(planResult.data || []);
       setTasks(taskResult.data || []);
       setFollowUps(followResult.data || []);
+      setGuidanceTopicMap(
+        Object.fromEntries(
+          (topicResult.data || []).map((topic: { id: string; title: string }) => [topic.id, topic.title])
+        )
+      );
     } catch (error) {
       console.error('Veri yükleme hatası:', error);
     } finally {
@@ -335,14 +433,14 @@ export default function TakvimPage() {
     }
   }, [formData.appointment_date]);
 
-  const openAppointmentModal = () => {
+  const resetAppointmentForm = (baseDate = getLocalDateString(currentDate)) => {
     setFormData({
-      appointment_date: getLocalDateString(currentDate),
+      appointment_date: baseDate,
       start_time: "1",
       participant_type: "student",
       participant_name: "",
       participant_class: "",
-      location: "PDR Odası",
+      location: "guidance_office",
       purpose: "",
       preparation_note: "",
       source_application_id: "",
@@ -352,14 +450,241 @@ export default function TakvimPage() {
     setSelectedClass("");
     setParentName("");
     setSelectedStudentName("");
+  };
+
+  const openAppointmentModal = () => {
+    setEditingAppointment(null);
+    resetAppointmentForm(getLocalDateString(currentDate));
+    setShowAppointmentModal(true);
+  };
+
+  const openAppointmentEditModal = (appointment: Appointment) => {
+    const normalizedClass = normalizeClassValue(appointment.participant_class);
+    const matchedClass = classes.find((item) => normalizeClassValue(item.text) === normalizedClass);
+
+    setEditingAppointment(appointment);
+    setFormData({
+      appointment_date: appointment.appointment_date || getLocalDateString(currentDate),
+      start_time: normalizeLessonSlot(appointment.start_time) || "1",
+      participant_type: appointment.participant_type,
+      participant_name: appointment.participant_name || "",
+      participant_class: appointment.participant_class || "",
+      location: appointment.location || "guidance_office",
+      purpose: appointment.purpose || appointment.topic_tags?.[0] || "",
+      preparation_note: appointment.preparation_note || "",
+      source_application_id: appointment.source_application_id || "",
+      source_application_type: appointment.source_application_type || "",
+      source_individual_request_id: appointment.source_individual_request_id || ""
+    });
+    setSelectedClass(matchedClass?.value || "");
+    setSelectedStudentName(appointment.participant_type === "parent" ? "" : appointment.participant_name || "");
+    setParentName("");
     setShowAppointmentModal(true);
   };
 
   const closeAppointmentModal = () => {
+    setEditingAppointment(null);
     setShowAppointmentModal(false);
   };
 
-  const handleAddAppointment = async () => {
+  const getApplicationSourceMeta = (record: PendingApplicationRecord) => {
+    if (record.source === "Bireysel Başvuru") {
+      return {
+        source_application_id: "",
+        source_application_type: "",
+        source_individual_request_id: record.id.replace("individual-", "")
+      };
+    }
+
+    const sourceId = record.id.includes("-") ? record.id.split("-").slice(1).join("-") : record.id;
+
+    if (record.source === "Öğretmen Yönlendirmeleri") {
+      return {
+        source_application_id: sourceId,
+        source_application_type: "teacher_referral",
+        source_individual_request_id: ""
+      };
+    }
+    if (record.source === "Öğrenci Bildirimleri") {
+      return {
+        source_application_id: sourceId,
+        source_application_type: "student_incident",
+        source_individual_request_id: ""
+      };
+    }
+    if (record.source === "Veli Talepleri") {
+      return {
+        source_application_id: sourceId,
+        source_application_type: "parent_meeting",
+        source_individual_request_id: ""
+      };
+    }
+
+    return {
+      source_application_id: sourceId,
+      source_application_type: "observation",
+      source_individual_request_id: ""
+    };
+  };
+
+  const openAppointmentModalForApplication = (
+    record: PendingApplicationRecord,
+    overrides?: { date?: string; start_time?: string }
+  ) => {
+    const parsedNote = parseApplicationNote(record.note);
+    const matchedClass = classes.find((item) =>
+      item.value === record.class_key ||
+      item.text === record.class_display ||
+      normalizeClassValue(item.text) === normalizeClassValue(record.class_display || record.class_key)
+    );
+    const sourceMeta = getApplicationSourceMeta(record);
+
+    setEditingAppointment(null);
+    setFormData({
+      appointment_date: overrides?.date || getLocalDateString(currentDate),
+      start_time: overrides?.start_time || "1",
+      participant_type: "student",
+      participant_name: record.student_name,
+      participant_class: record.class_display || "",
+      location: "guidance_office",
+      purpose: parsedNote.purpose,
+      preparation_note: parsedNote.preparationNote,
+      source_application_id: sourceMeta.source_application_id,
+      source_application_type: sourceMeta.source_application_type,
+      source_individual_request_id: sourceMeta.source_individual_request_id
+    });
+    setSelectedClass(matchedClass?.value || record.class_key || "");
+    setSelectedStudentName(record.student_name);
+    setParentName("");
+    setShowAppointmentModal(true);
+  };
+
+  const openPendingApplicationsModal = async (date: string, start_time: string) => {
+    setPendingSelectionSlot({ date, start_time });
+    setPendingApplicationsLoading(true);
+    setShowPendingApplicationsModal(true);
+
+    try {
+      const [
+        referralResult,
+        observationResult,
+        incidentResult,
+        requestResult,
+        individualRequestResult,
+        appointmentResult
+      ] = await Promise.all([
+        supabase.from("referrals").select("*").order("created_at", { ascending: false }),
+        supabase.from("observation_pool").select("*").order("created_at", { ascending: false }),
+        supabase.from("student_incidents").select("*").in("status", ["new", "reviewing"]).order("incident_date", { ascending: false }).order("created_at", { ascending: false }),
+        supabase.from("parent_meeting_requests").select("*").order("created_at", { ascending: false }),
+        supabase.from("individual_requests").select("*").order("created_at", { ascending: false }),
+        supabase.from("appointments").select("*").eq("participant_type", "student").neq("status", "cancelled").order("updated_at", { ascending: false })
+      ]);
+
+      const activeAppointments = appointmentResult.data || [];
+      const records: PendingApplicationRecord[] = [];
+
+      const pushIfPending = (record: PendingApplicationRecord) => {
+        const hasAppointment = activeAppointments.some((appointment) =>
+          matchesApplicationToAppointment(
+            appointment,
+            record.student_name,
+            record.class_display,
+            record.class_key
+          )
+        );
+
+        if (!hasAppointment) {
+          records.push(record);
+        }
+      };
+
+      (incidentResult.data || []).forEach((item: any) => {
+        if (!isPendingApplicationStatus(item.status)) return;
+        pushIfPending({
+          id: `incident-${item.id}`,
+          student_name: item.target_student_name,
+          class_display: item.target_class_display,
+          class_key: item.target_class_key,
+          source: "Öğrenci Bildirimleri",
+          referrer: item.record_role === "linked_reporter" ? item.reporter_student_name || undefined : undefined,
+          date: item.created_at || item.incident_date || new Date().toISOString(),
+          note: item.description
+        });
+      });
+
+      (observationResult.data || []).forEach((item: any) => {
+        if (!isPendingApplicationStatus(item.status)) return;
+        pushIfPending({
+          id: `observation-${item.id}`,
+          student_name: item.student_name,
+          class_display: item.class_display,
+          class_key: item.class_key,
+          source: "Gözlem Havuzu",
+          date: item.created_at || item.observed_at || new Date().toISOString(),
+          note: item.note
+        });
+      });
+
+      (referralResult.data || []).forEach((item: any) => {
+        if (!isPendingApplicationStatus(item.status)) return;
+        pushIfPending({
+          id: `referral-${item.id}`,
+          student_name: item.student_name,
+          class_display: item.class_display,
+          class_key: item.class_key,
+          source: "Öğretmen Yönlendirmeleri",
+          referrer: item.teacher_name,
+          date: item.created_at || new Date().toISOString(),
+          note: item.note || item.reason
+        });
+      });
+
+      (requestResult.data || []).forEach((item: any) => {
+        if (!isPendingApplicationStatus(item.status)) return;
+        pushIfPending({
+          id: `request-${item.id}`,
+          student_name: item.student_name,
+          class_display: item.class_display,
+          class_key: item.class_key,
+          source: "Veli Talepleri",
+          referrer: item.parent_name || undefined,
+          date: item.created_at || new Date().toISOString(),
+          note: item.detail || item.subject
+        });
+      });
+
+      (individualRequestResult.data || []).forEach((item: any) => {
+        if (!isPendingApplicationStatus(item.status)) return;
+        pushIfPending({
+          id: `individual-${item.id}`,
+          student_name: item.student_name,
+          class_display: item.class_display,
+          class_key: item.class_key,
+          source: "Bireysel Başvuru",
+          date: item.created_at || new Date().toISOString(),
+          note: item.note
+        });
+      });
+
+      records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setPendingApplications(records);
+    } catch (error) {
+      console.error("Pending applications load error:", error);
+      toast.error("Bekleyen başvurular yüklenemedi");
+      setPendingApplications([]);
+    } finally {
+      setPendingApplicationsLoading(false);
+    }
+  };
+
+  const closePendingApplicationsModal = () => {
+    setShowPendingApplicationsModal(false);
+    setPendingApplications([]);
+    setPendingSelectionSlot(null);
+  };
+
+  const handleSaveAppointment = async () => {
     let finalName = formData.participant_name;
     if (formData.participant_type === "parent") {
       if (parentName.trim() && selectedStudentName) {
@@ -378,41 +703,49 @@ export default function TakvimPage() {
     setAppointmentSaving(true);
     try {
       const appointmentData = {
-        participant_name: finalName,
-        participant_type: formData.participant_type,
-        participant_class: formData.participant_class,
+        id: editingAppointment?.id,
         appointment_date: formData.appointment_date,
         start_time: formData.start_time,
+        participant_type: formData.participant_type,
+        participant_name: finalName,
+        participant_class: formData.participant_class,
         location: formData.location,
         purpose: formData.purpose,
         preparation_note: formData.preparation_note || null,
-        status: 'scheduled',
+        topic_tags: formData.purpose ? [formData.purpose] : [],
         priority: 'normal',
         source_application_id: formData.source_application_id || null,
         source_application_type: formData.source_application_type || null,
         source_individual_request_id: formData.source_individual_request_id || null
       };
       
-      console.log('Inserting appointment:', appointmentData);
+      console.log(editingAppointment ? 'Updating appointment:' : 'Inserting appointment:', appointmentData);
       
-      const { data, error } = await supabase.from('appointments').insert([appointmentData]).select();
+      const response = await fetch('/api/appointments', {
+        method: editingAppointment ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appointmentData)
+      });
       
-      if (error) {
-        console.error('Supabase error:', error);
-        throw new Error(error.message || 'Bilinmeyen veritabanı hatası');
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        console.error('Appointment API error:', result);
+        throw new Error(result.error || result.details || 'Bilinmeyen veritabanı hatası');
       }
-      
-      if (!data || data.length === 0) {
+
+      const savedAppointment = result?.appointment;
+      if (!savedAppointment?.id) {
         throw new Error('Randevu veritabanına yazıldı ancak veri döndü');
       }
       
-      toast.success('Randevu başarıyla eklendi');
+      toast.success(editingAppointment ? 'Randevu güncellendi' : 'Randevu başarıyla eklendi');
       closeAppointmentModal();
-      loadData();
+      await loadData();
     } catch (error: any) {
-      console.error('Appointment creation error:', error);
+      console.error('Appointment save error:', error);
       const errorMsg = error?.message || error?.error_description || JSON.stringify(error) || 'Bilinmeyen hata';
-      toast.error(`Randevu eklenirken hata oluştu: ${errorMsg}`);
+      toast.error(`Randevu kaydedilirken hata oluştu: ${errorMsg}`);
     } finally {
       setAppointmentSaving(false);
     }
@@ -559,7 +892,19 @@ export default function TakvimPage() {
     }
     if (showActivities) {
       guidancePlans.forEach(plan => {
-        allEvents.push({ id: plan.id, date: plan.plan_date, time: String(plan.lesson_period), title: `${plan.class_display}` + (plan.teacher_name ? ` (${plan.teacher_name})` : ''), type: 'guidance_plan', color: 'emerald', status: plan.status, data: plan });
+        allEvents.push({
+          id: plan.id,
+          date: plan.plan_date,
+          time: String(plan.lesson_period),
+          title: `${plan.class_display}` + (plan.teacher_name ? ` (${plan.teacher_name})` : ''),
+          type: 'guidance_plan',
+          color: 'emerald',
+          status: plan.status,
+          data: {
+            ...plan,
+            topic_title: guidanceTopicMap[plan.topic_id] || ''
+          }
+        });
       });
     }
     if (showTasks) {
@@ -571,7 +916,7 @@ export default function TakvimPage() {
       });
     }
     return allEvents;
-  }, [appointments, guidancePlans, tasks, followUps, showAppointments, showActivities, showTasks]);
+  }, [appointments, guidancePlans, tasks, followUps, showAppointments, showActivities, showTasks, guidanceTopicMap]);
 
   const getEventsForDate = (date: Date) => {
     const dateStr = getLocalDateString(date);
@@ -595,7 +940,7 @@ export default function TakvimPage() {
     const start = new Date(currentDate);
     const diff = start.getDay() === 0 ? -6 : 1 - start.getDay();
     start.setDate(start.getDate() + diff);
-    return Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
+    return Array.from({ length: 5 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
   }, [currentDate]);
 
   const navigatePrev = () => {
@@ -630,7 +975,7 @@ export default function TakvimPage() {
 
   const getHeaderText = () => {
     if (viewType === 'month') return `${MONTHS_TR[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
-    if (viewType === 'week') return `${weekDays[0].getDate()} - ${weekDays[6].getDate()} ${MONTHS_TR[weekDays[0].getMonth()]} ${weekDays[0].getFullYear()}`;
+    if (viewType === 'week') return `${weekDays[0].getDate()} - ${weekDays[4].getDate()} ${MONTHS_TR[weekDays[0].getMonth()]} ${weekDays[0].getFullYear()}`;
     return `${currentDate.getDate()} ${MONTHS_TR[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
   };
 
@@ -899,7 +1244,7 @@ export default function TakvimPage() {
             <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                 <Plus className="h-5 w-5 text-teal-600" />
-                Yeni Randevu
+                {editingAppointment ? "Randevuyu Düzenle" : "Yeni Randevu"}
               </h2>
               <button
                 onClick={closeAppointmentModal}
@@ -978,10 +1323,10 @@ export default function TakvimPage() {
                           }
                         }}
                         className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500"
-                        disabled={!selectedClass && !formData.participant_name}
+                        disabled={!selectedClass}
                       >
                         <option value="">
-                          {(!selectedClass && !formData.participant_name) ? "-- Önce sınıf seçin --" : "-- Öğrenci Seçin --"}
+                          {!selectedClass ? "-- Önce sınıf seçin --" : "-- Öğrenci Seçin --"}
                         </option>
                         {formData.participant_name && !students.find(s => s.text === formData.participant_name) && (
                           <option value={formData.participant_name}>{formData.participant_name}</option>
@@ -1129,13 +1474,93 @@ export default function TakvimPage() {
                 İptal
               </Button>
               <Button
-                onClick={handleAddAppointment}
+                onClick={handleSaveAppointment}
                 disabled={appointmentSaving}
                 className="bg-teal-600 hover:bg-teal-700 text-white"
               >
                 {appointmentSaving ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                Randevu Oluştur
+                {editingAppointment ? "Randevuyu Güncelle" : "Randevu Oluştur"}
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPendingApplicationsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b bg-slate-50 px-6 py-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Bekleyen Başvurular</h2>
+                <p className="mt-0.5 text-sm text-slate-500">
+                  {pendingSelectionSlot ? `${pendingSelectionSlot.date} · ${formatLessonSlotLabel(pendingSelectionSlot.start_time)}` : "Uygun saat seçimi"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closePendingApplicationsModal}
+                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto p-6">
+              {pendingApplicationsLoading ? (
+                <div className="flex items-center justify-center py-12 text-slate-500">
+                  <RefreshCw className="mr-3 h-5 w-5 animate-spin text-teal-500" />
+                  Bekleyen başvurular yükleniyor...
+                </div>
+              ) : pendingApplications.length === 0 ? (
+                <div className="py-12 text-center text-slate-500">
+                  <Users className="mx-auto mb-3 h-10 w-10 opacity-20" />
+                  <p className="text-sm font-medium">Randevu bekleyen öğrenci bulunamadı</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pendingApplications.map((record) => (
+                    <button
+                      key={record.id}
+                      type="button"
+                      onClick={() => {
+                        if (!pendingSelectionSlot) return;
+                        closePendingApplicationsModal();
+                        openAppointmentModalForApplication(record, pendingSelectionSlot);
+                      }}
+                      className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-teal-300 hover:bg-teal-50/40 hover:shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-800">{record.student_name}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {record.class_display || "-"} · {record.source}
+                          </p>
+                          {record.referrer && (
+                            <p className="mt-1 text-xs text-slate-500">Yönlendiren: {record.referrer}</p>
+                          )}
+                          {record.note && (
+                            <p className="mt-2 line-clamp-2 text-xs text-slate-600">{record.note}</p>
+                          )}
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                            Bekliyor
+                          </span>
+                          <p className="mt-2 text-[11px] text-slate-400">
+                            {new Date(record.date).toLocaleString("tr-TR", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit"
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1230,9 +1655,13 @@ export default function TakvimPage() {
           {viewType === 'week' && (
             <Card className="shadow-lg border-slate-200 overflow-hidden">
               <CardContent className="p-0">
-                <div className="grid grid-cols-7 divide-x divide-slate-200">
+                <div className="grid grid-cols-5 divide-x divide-slate-200">
                   {weekDays.map((date, i) => {
                     const dayEvents = getEventsForDate(date).filter(e => e.status !== 'cancelled');
+                    const isPastDate = getLocalDateString(date) < getLocalDateString(new Date());
+                    const otherWeekTasks = dayEvents.filter(
+                      e => e.type === 'follow_up' || (e.type === 'task' && !e.data.related_guidance_plan_id)
+                    );
                     return (
                       <div key={i} className={`flex flex-col min-h-[650px] ${isToday(date) ? 'bg-teal-50/30' : 'bg-white'}`}>
                         <div className={`p-3 text-center border-b ${isToday(date) ? 'bg-teal-500 text-white' : 'bg-slate-50 text-slate-700'}`}>
@@ -1248,17 +1677,104 @@ export default function TakvimPage() {
                             );
 
                             return (
-                              <div key={lessonNum} className="p-1.5 min-h-[80px] group hover:bg-slate-50/80 transition-colors">
-                                <div className="text-[9px] font-bold text-slate-400 mb-1">{lessonNum}. DERS</div>
-                                <div className="space-y-1">
-                                  {periodEvents.map(e => (
-                                    <div 
-                                      key={e.id} 
-                                      className={`px-1.5 py-1 rounded-md border text-[10px] font-medium leading-tight shadow-sm ${colorMap[e.color]?.bg || 'bg-slate-50'} ${colorMap[e.color]?.border || 'border-slate-200'} ${colorMap[e.color]?.text || 'text-slate-700'}`}
-                                    >
-                                      <div className="truncate" title={e.title}>{e.title}</div>
-                                    </div>
-                                  ))}
+                              <div
+                                key={lessonNum}
+                                className={`p-2 min-h-[104px] transition-colors ${periodEvents.length === 0 ? 'bg-rose-50/40 hover:bg-rose-50/70' : 'hover:bg-slate-50/80'}`}
+                              >
+                                <div className="mb-2 flex items-center justify-between">
+                                  <div className="text-[10px] font-bold tracking-[0.14em] text-slate-400">{lessonNum}. DERS</div>
+                                </div>
+                                <div className="space-y-2">
+                                  {periodEvents.length === 0 ? (
+                                    isPastDate ? (
+                                      <div className="min-h-[68px] rounded-xl border border-slate-200 bg-slate-50/70" />
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => openPendingApplicationsModal(getLocalDateString(date), String(lessonNum))}
+                                        className="flex min-h-[68px] w-full items-center justify-center rounded-xl border border-dashed border-rose-300 bg-white px-3 text-center transition hover:border-teal-300 hover:bg-teal-50 focus:outline-none focus:ring-2 focus:ring-teal-500/40"
+                                      >
+                                        <div>
+                                          <p className="text-sm font-extrabold tracking-[0.12em] text-rose-600">BOŞ SAAT</p>
+                                          <p className="mt-2 text-[11px] font-semibold text-teal-600">Bekleyen başvuruları göster</p>
+                                        </div>
+                                      </button>
+                                    )
+                                  ) : periodEvents.map(e => {
+                                    const isAppointment = e.type === 'appointment';
+                                    const isCompleted = e.status === 'attended' || e.status === 'completed';
+                                    const cardClasses = isAppointment
+                                      ? isCompleted
+                                        ? "border-slate-200 bg-slate-50"
+                                        : "border-sky-200 bg-sky-50"
+                                      : "border-amber-200 bg-amber-50";
+                                    const titleText = e.title.replace(/\s*\((Öğrenci|Veli|Öğretmen)\)\s*$/i, "");
+                                    const guidanceClass = e.data?.class_display || titleText;
+                                    const guidanceTopic =
+                                      e.data?.topic_title ||
+                                      e.data?.subject ||
+                                      e.data?.detail ||
+                                      e.data?.note ||
+                                      "";
+                                    const guidanceTeacher = e.data?.teacher_name || "";
+
+                                    return (
+                                      <div
+                                        key={e.id}
+                                        className={`rounded-xl border p-3 shadow-sm ${cardClasses}`}
+                                      >
+                                        <div className={`space-y-2 ${isAppointment ? '' : 'flex min-h-[68px] flex-col items-center justify-center text-center'}`}>
+                                          {isAppointment && (
+                                            <div className="flex items-center justify-between gap-2">
+                                              <p className="text-[10px] font-semibold text-sky-700">
+                                                Öğrenci randevusu
+                                              </p>
+                                              <span className="rounded-md bg-white px-1.5 py-0.5 text-[9px] font-semibold text-sky-700">
+                                                {lessonNum}. ders
+                                              </span>
+                                            </div>
+                                          )}
+                                          {isAppointment ? (
+                                            <>
+                                              <p className={`line-clamp-3 text-[13px] font-semibold leading-5 ${isCompleted ? 'text-slate-500 line-through' : 'text-slate-800'}`} title={titleText}>
+                                                {titleText}
+                                              </p>
+                                              <div className="flex items-center justify-between text-[10px]">
+                                                <span className={`${isCompleted ? 'text-slate-500' : 'text-slate-600'}`}>
+                                                  {isCompleted ? 'Görüşme tamamlandı' : 'Planlı görüşme'}
+                                                </span>
+                                                <span className="font-medium text-slate-500">
+                                                  {formatLessonSlotLabel(String(lessonNum))}
+                                                </span>
+                                              </div>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <p
+                                                className={`line-clamp-2 text-center text-[20px] font-extrabold leading-6 ${isCompleted ? 'text-slate-500 line-through' : 'text-amber-900'}`}
+                                                title={guidanceTopic ? `${guidanceClass} · ${guidanceTopic}` : guidanceClass}
+                                              >
+                                                {guidanceClass}
+                                              </p>
+                                              {guidanceTopic && (
+                                                <p
+                                                  className={`line-clamp-2 text-center text-[14px] font-semibold leading-5 ${isCompleted ? 'text-slate-400' : 'text-amber-700'}`}
+                                                  title={guidanceTopic}
+                                                >
+                                                  {guidanceTopic}
+                                                </p>
+                                              )}
+                                              {guidanceTeacher && (
+                                                <p className="text-center text-[11px] text-slate-500">
+                                                  Öğretmen: {guidanceTeacher}
+                                                </p>
+                                              )}
+                                            </>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             );
@@ -1269,7 +1785,7 @@ export default function TakvimPage() {
                             <ListTodo className="h-3.5 w-3.5" /> Diğer Görevler
                           </div>
                           <div className="space-y-1">
-                            {dayEvents.filter(e => e.type === 'task' || e.type === 'follow_up').map(t => (
+                            {otherWeekTasks.map(t => (
                               <div 
                                 key={t.id} 
                                 className={`p-1.5 rounded-lg border text-[9px] font-semibold flex items-center gap-1.5 transition-all ${t.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100 opacity-60' : 'bg-white border-slate-200 text-slate-700 shadow-sm'}`}
@@ -1315,10 +1831,15 @@ export default function TakvimPage() {
                           </div>
                           <div className="flex-1 min-w-0 space-y-2">
                             {lessonEvents.length === 0 ? (
-                              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2.5">
+                              <button
+                                type="button"
+                                onClick={() => openPendingApplicationsModal(getLocalDateString(currentDate), periodStr)}
+                                className="w-full rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition hover:border-teal-300 hover:bg-teal-50"
+                              >
                                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Boş</p>
                                 <p className="mt-0.5 text-sm text-slate-500">Bu saat açık</p>
-                              </div>
+                                <p className="mt-2 text-xs font-medium text-teal-600">Bekleyen başvuruları göster</p>
+                              </button>
                             ) : lessonEvents.map(e => {
                               const isCompleted = e.status === 'attended' || e.status === 'completed';
                               const isApt = e.type === 'appointment';
@@ -1342,7 +1863,15 @@ export default function TakvimPage() {
                               }
 
                               return (
-                                <div key={e.id} className={`relative rounded-xl border px-3 py-2.5 transition-colors ${containerClass}`}>
+                                <div
+                                  key={e.id}
+                                  onClick={() => {
+                                    if (e.type === 'appointment') {
+                                      openAppointmentEditModal(e.data as Appointment);
+                                    }
+                                  }}
+                                  className={`relative rounded-xl border px-3 py-2.5 transition-colors ${containerClass} ${e.type === 'appointment' ? 'cursor-pointer hover:shadow-sm' : ''}`}
+                                >
                                   <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-center gap-2 flex-wrap">
@@ -1359,7 +1888,8 @@ export default function TakvimPage() {
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0 mt-0.5">
                                       <button
-                                        onClick={() => {
+                                        onClick={(event) => {
+                                          event.stopPropagation();
                                           if (e.type === 'appointment') openAttendanceChoiceModal(e.data);
                                           else if (e.type === 'guidance_plan') toggleGuidancePlanStatus(e.id, e.status);
                                         }}
@@ -1369,7 +1899,11 @@ export default function TakvimPage() {
                                         {isCompleted && <CheckCircle2 className="h-5 w-5" />}
                                       </button>
                                       <button
-                                        onClick={() => e.type === 'appointment' ? handleDeleteAppointment(e.id) : handleDeleteGuidancePlan(e.id)}
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          if (e.type === 'appointment') handleDeleteAppointment(e.id);
+                                          else handleDeleteGuidancePlan(e.id);
+                                        }}
                                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-transparent text-slate-300 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
                                         title="Sil"
                                       >

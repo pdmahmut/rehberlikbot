@@ -667,19 +667,6 @@ export default function PanelLayout({
           </div>
         </div>
 
-        {/* Arama Butonu */}
-        {!sidebarCollapsed && (
-          <div className="px-4 py-3">
-            <button
-              onClick={() => setShowSearch(true)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-all border border-slate-700/50"
-            >
-              <Search className="h-4 w-4" />
-              <span className="text-sm">Ara...</span>
-              <kbd className="ml-auto text-[10px] bg-slate-700 px-1.5 py-0.5 rounded">Ctrl+K</kbd>
-            </button>
-          </div>
-        )}
 
         {/* Menü Kategorileri */}
         <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
