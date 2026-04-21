@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
         .from("guidance_plans")
         .select("id, class_display, lesson_period")
         .eq("plan_date", appointment_date)
-        .eq("status", "planned"),
+        .in("status", ["planned", "completed"]),
       supabase
         .from("class_activities")
         .select("id, class_display, activity_time")
@@ -388,7 +388,7 @@ export async function PUT(request: NextRequest) {
           .from("guidance_plans")
           .select("id, class_display, lesson_period")
           .eq("plan_date", nextAppointmentDate)
-          .eq("status", "planned"),
+          .in("status", ["planned", "completed"]),
         supabase
           .from("class_activities")
           .select("id, class_display, activity_time")

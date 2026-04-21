@@ -280,7 +280,7 @@ export default function DonemRaporuPage() {
       
       // Başlık
       doc.setFontSize(18);
-      doc.text('DUMLUPINAR ILKOKULU', pageWidth / 2, y, { align: 'center' });
+      doc.text('DUMLUPINAR ORTAOKULU', pageWidth / 2, y, { align: 'center' });
       y += 8;
       doc.setFontSize(14);
       doc.text('Rehberlik ve Psikolojik Danismanlik Hizmetleri', pageWidth / 2, y, { align: 'center' });

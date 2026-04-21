@@ -1,10 +1,11 @@
-"use client";
+﻿"use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Send, Users, GraduationCap, FileText, Sparkles, ChevronDown, ChevronUp, Target, Rocket, BookOpen, UserCheck } from "lucide-react";
+import { Send, Users, GraduationCap, FileText, Sparkles, Target, Rocket, BookOpen, UserCheck, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,61 +29,141 @@ const formSchema = z.object({
   not: z.string().optional(),
 });
 
-export default function RPDYonlendirme() {
+interface RPDYonlendirmeProps {
+  teacherName?: string;   // Oturumdan gelen öğretmen adı
+  classKey?: string;      // Sınıf rehberi: atanmış sınıf key
+  classDisplay?: string;  // Sınıf rehberi: atanmış sınıf görüntü adı
+}
+
+export default function RPDYonlendirme({ teacherName, classKey, classDisplay }: RPDYonlendirmeProps) {
+  const isHomeroom = !!classKey; // Sınıf rehber öğretmeni mi?
   const [sinifSubeList, setSinifSubeList] = useState<SinifSube[]>([]);
   const [ogrenciList, setOgrenciList] = useState<Ogrenci[]>([]);
   const [loading, setLoading] = useState(true);
   const [ogrenciLoading, setOgrenciLoading] = useState(false);
   const [sendingLoading, setSendingLoading] = useState(false);
   const [teacherOptions, setTeacherOptions] = useState<{ value: string; label: string; sinifSubeKey: string; sinifSubeDisplay: string }[]>([]);
-  const [showReasonSearch, setShowReasonSearch] = useState(false);
-  const [reasonSearch, setReasonSearch] = useState("");
+
+  // Öğretmen modu — öğrenci arama
+  const [studentQuery, setStudentQuery] = useState("");
+  const [studentResults, setStudentResults] = useState<{ value: string; text: string; class_key: string; class_display: string }[]>([]);
+  const [studentSearchLoading, setStudentSearchLoading] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<{ name: string; classDisplay: string; classKey: string; value: string } | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Dropdown pozisyonunu hesapla (fixed positioning — scroll'dan bağımsız)
+  const updateDropdownPos = useCallback(() => {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropdownPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+      });
+    }
+  }, []);
+
+  // Debounced arama — AbortController ile race condition önleme
+  useEffect(() => {
+    if (!teacherName) return;
+    if (studentQuery.length < 2) {
+      setStudentResults([]);
+      setStudentSearchLoading(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      // Önceki isteği iptal et
+      if (abortRef.current) abortRef.current.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setStudentSearchLoading(true);
+      try {
+        const res = await fetch(`/api/students?q=${encodeURIComponent(studentQuery)}`, {
+          signal: controller.signal,
+        });
+        const data = await res.json();
+        setStudentResults(Array.isArray(data) ? data.slice(0, 8) : []);
+      } catch (err: any) {
+        if (err.name !== 'AbortError') setStudentResults([]);
+      } finally {
+        if (!controller.signal.aborted) setStudentSearchLoading(false);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [studentQuery, teacherName]);
+
+  const handleSelectStudent = (s: typeof studentResults[0]) => {
+    setSelectedStudent({ name: s.text, classDisplay: s.class_display, classKey: s.class_key, value: s.value });
+    setStudentQuery("");
+    setIsFocused(false);
+    setStudentResults([]);
+    form.setValue("sinifSube", s.class_key);
+    form.setValue("ogrenci", s.value);
+  };
+
+  const clearSelectedStudent = () => {
+    setSelectedStudent(null);
+    form.setValue("sinifSube", "");
+    form.setValue("ogrenci", "");
+  };
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      ogretmenAdi: "",
-      sinifSube: "",
+      ogretmenAdi: teacherName || "",
+      sinifSube: classKey || "",
       ogrenci: "",
       yonlendirmeNedenleri: [],
       not: "",
     },
   });
 
-  // Filtrelenmiş kategoriler
-  const filteredCategories = useMemo(() => {
-    if (!reasonSearch) return YONLENDIRME_KATEGORILERI;
-    return YONLENDIRME_KATEGORILERI.filter(kategori =>
-      kategori.baslik.toLowerCase().includes(reasonSearch.toLowerCase())
-    );
-  }, [reasonSearch]);
+  // teacherName veya classKey sonradan gelirse forma set et
+  useEffect(() => {
+    if (teacherName) form.setValue("ogretmenAdi", teacherName);
+    if (classKey) form.setValue("sinifSube", classKey);
+  }, [teacherName, classKey, form]);
+
 
   // Veri yükle
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('/api/data', {
-          headers: { Accept: "application/json" }
-        });
+        const response = await fetch('/api/data', { headers: { Accept: "application/json" } });
         const data = await parseJsonResponse<any>(response);
         setSinifSubeList(data.sinifSubeList);
 
-        // load teachers
-        const tRes = await fetch('/api/teachers', {
-          headers: { Accept: "application/json" }
-        });
-        const tJson = await parseJsonResponse<any>(tRes);
-        if (tJson && Array.isArray(tJson.teachers)) setTeacherOptions(tJson.teachers);
+        if (!teacherName) {
+          // Yönetici modu: öğretmen listesini yükle
+          const tRes = await fetch('/api/teachers', { headers: { Accept: "application/json" } });
+          const tJson = await parseJsonResponse<any>(tRes);
+          if (tJson && Array.isArray(tJson.teachers)) setTeacherOptions(tJson.teachers);
+        }
+
         setLoading(false);
       } catch (error) {
-        console.error('Veri yüklenirken hata:', error);
         toast.error("Veri yüklenirken hata oluştu");
         setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, [teacherName]);
+
+  // Sınıf rehberi: sınıf atandığında öğrenci listesini yükle
+  useEffect(() => {
+    if (!classKey) return;
+    form.setValue("sinifSube", classKey);
+    setOgrenciLoading(true);
+    fetch(`/api/students?sinifSube=${encodeURIComponent(classKey)}`, { headers: { Accept: "application/json" } })
+      .then(r => r.json())
+      .then(data => { setOgrenciList(Array.isArray(data) ? data : []); })
+      .catch(() => setOgrenciList([]))
+      .finally(() => setOgrenciLoading(false));
+  }, [isHomeroom, classKey]);
 
   // Sınıf değiştiğinde öğrenci listesini güncelle
   const handleSinifChange = async (sinifSube: string) => {
@@ -113,8 +194,14 @@ export default function RPDYonlendirme() {
   };
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    const sinifSubeText = sinifSubeList.find(s => s.value === values.sinifSube)?.text || "";
-    const ogrenciAdi = ogrenciList.find(o => o.value === values.ogrenci)?.text || "";
+    const sinifSubeText = selectedStudent?.classDisplay
+      || sinifSubeList.find(s => s.value === values.sinifSube)?.text
+      || classDisplay
+      || classKey
+      || "";
+    const ogrenciAdi = selectedStudent
+      ? selectedStudent.name.replace(/^\d+\s*/, "")
+      : ogrenciList.find(o => o.value === values.ogrenci)?.text || "";
     const yeniKayit = normalizeGuidanceStudent({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       ogretmenAdi: values.ogretmenAdi,
@@ -157,15 +244,13 @@ export default function RPDYonlendirme() {
       const result = await parseJsonResponse<any>(response);
 
       if (response.ok && result.success) {
-        if (result.telegram && result.sheets) {
-          toast.success("✅ Öğrenci Telegram ve Google Sheets'e başarıyla gönderildi!");
-        } else if (result.telegram || result.sheets) {
+        if (result.sheets) {
           toast.success("⚠️ Öğrenci kısmen gönderildi. " + result.message);
         } else {
           toast.error("❌ Gönderim başarısız: " + result.message);
         }
 
-        if (result.telegram || result.sheets) {
+        if (result.sheets) {
           notifyGuidanceReferralsChanged({
             action: "create",
             studentName: students[0]?.ogrenciAdi || "",
@@ -173,6 +258,8 @@ export default function RPDYonlendirme() {
           form.setValue("yonlendirmeNedenleri", []);
           form.setValue("not", "");
           form.setValue("ogrenci", "");
+          setSelectedStudent(null);
+          // sinifSube'yi koru — seçili sınıfta kalmaya devam etsin
         }
       } else {
         toast.error("❌ Gönderim sırasında hata oluştu: " + (result.message || result.error));
@@ -241,7 +328,7 @@ export default function RPDYonlendirme() {
 
         <div className="grid grid-cols-1 place-items-center gap-3 sm:gap-4 md:gap-8 px-1">
           {/* Form Kartı - Mobile Enhanced */}
-          <Card className="w-full max-w-3xl shadow-xl shadow-blue-500/10 backdrop-blur-sm bg-white/80 border-0 hover:shadow-2xl hover:shadow-blue-500/20 transition-all duration-500 group animate-slide-in-left">
+          <Card className="w-full max-w-3xl shadow-xl shadow-blue-500/10 backdrop-blur-sm bg-white/80 border-0 hover:shadow-2xl hover:shadow-blue-500/20 transition-all duration-500 group animate-slide-in-left overflow-visible">
             <CardHeader className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-t-lg p-3 sm:p-4 md:p-6 relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
               {/* Animated dots */}
@@ -265,8 +352,17 @@ export default function RPDYonlendirme() {
             <CardContent className="p-3 sm:p-4 md:p-6">
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3 sm:space-y-4 md:space-y-6">
-                  {/* Öğretmen Seçimi */}
+                  {/* Öğretmen — oturumdan geliyorsa göster, yoksa seçim yap */}
                   <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
+                  {teacherName ? (
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-50 border-2 border-blue-100">
+                      <UserCheck className="w-4 h-4 text-blue-500 shrink-0" />
+                      <div>
+                        <p className="text-xs text-blue-500 font-medium">Öğretmen</p>
+                        <p className="text-sm font-semibold text-blue-800">{teacherName}</p>
+                      </div>
+                    </div>
+                  ) : (
                   <FormField
                     control={form.control}
                     name="ogretmenAdi"
@@ -279,9 +375,7 @@ export default function RPDYonlendirme() {
                         <FormControl>
                           <Select
                             onValueChange={(val) => {
-                              console.log('👨‍🏫 Öğretmen değişti:', val);
                               field.onChange(val);
-                              // Öğretmen değiştiğinde sınıf ve öğrenci seçimini sıfırla
                               form.setValue('sinifSube', '');
                               form.setValue('ogrenci', '');
                               setOgrenciList([]);
@@ -302,9 +396,152 @@ export default function RPDYonlendirme() {
                       </FormItem>
                     )}
                   />
+                  )}
                   </div>
 
-                  {/* Sınıf/Şube Seçimi */}
+                  {/* ── Öğrenci seçimi: 3 mod ── */}
+                  {isHomeroom ? (
+                    /* MOD 1: Sınıf Rehber Öğretmeni — kendi sınıfı varsayılan, değiştirilebilir */
+                    <div className="animate-fade-in space-y-3" style={{ animationDelay: '0.15s' }}>
+                      {/* Sınıf — dropdown, varsayılan atanmış sınıf */}
+                      <FormField
+                        control={form.control}
+                        name="sinifSube"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-2 text-gray-700 font-medium text-sm">
+                              <BookOpen className="w-4 h-4 text-teal-500" />
+                              Sınıf *
+                            </FormLabel>
+                            <Select
+                              onValueChange={(value) => {
+                                field.onChange(value);
+                                form.setValue("ogrenci", "");
+                                handleSinifChange(value);
+                              }}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger className="border-2 border-gray-200 hover:border-teal-300 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/20 transition-all bg-white/70 min-h-[48px] px-4 text-sm rounded-xl">
+                                  <SelectValue placeholder="🏫 Sınıf seçin" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent position="item-aligned" className="max-h-64 overflow-y-auto">
+                                {sinifSubeList.map((sinif) => (
+                                  <SelectItem key={sinif.value} value={sinif.value}>
+                                    {sinif.text}
+                                    {sinif.value === classKey && (
+                                      <span className="ml-2 text-[10px] text-teal-500 font-semibold">(sınıfınız)</span>
+                                    )}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Öğrenci dropdown */}
+                      <FormField
+                        control={form.control}
+                        name="ogrenci"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-2 text-gray-700 font-medium text-sm">
+                              <Users className="w-4 h-4 text-purple-500" />
+                              Öğrenci *
+                            </FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger className={`border-2 border-gray-200 hover:border-purple-300 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/20 transition-all bg-white/70 min-h-[48px] px-4 text-sm rounded-xl ${ogrenciLoading ? 'animate-pulse' : ''}`}>
+                                  <SelectValue placeholder={ogrenciLoading ? "🔄 Yükleniyor..." : "👤 Öğrenci seçin"} />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent position="item-aligned" className="max-h-64 overflow-y-auto">
+                                {ogrenciLoading ? (
+                                  <SelectItem value="loading" disabled>🔄 Yükleniyor...</SelectItem>
+                                ) : ogrenciList.length === 0 ? (
+                                  <SelectItem value="empty" disabled>📭 Öğrenci bulunamadı</SelectItem>
+                                ) : ogrenciList.map((o) => (
+                                  <SelectItem key={o.value} value={o.value}>{o.text}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  ) : teacherName ? (
+                    /* MOD 2: Normal Öğretmen — tüm okul öğrencileri arama */
+                    <div className="animate-fade-in space-y-2" style={{ animationDelay: '0.15s' }}>
+                      <label className="flex items-center gap-2 text-gray-700 font-medium text-sm">
+                        <Users className="w-4 h-4 text-purple-500" />
+                        Öğrenci *
+                      </label>
+
+                      {selectedStudent ? (
+                        <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-purple-50 border-2 border-purple-200">
+                          <div>
+                            <p className="font-semibold text-purple-800 text-sm">{selectedStudent.name}</p>
+                            <p className="text-xs text-purple-500">{selectedStudent.classDisplay}</p>
+                          </div>
+                          <button type="button" onClick={clearSelectedStudent}
+                            className="p-1.5 rounded-lg hover:bg-purple-100 text-purple-400 hover:text-purple-600 transition-colors">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            {studentSearchLoading && (
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                            )}
+                            <input
+                              ref={inputRef}
+                              type="text"
+                              autoComplete="off"
+                              value={studentQuery}
+                              onChange={(e) => { setStudentQuery(e.target.value); setIsFocused(true); updateDropdownPos(); }}
+                              onFocus={() => { setIsFocused(true); updateDropdownPos(); }}
+                              onBlur={() => { setTimeout(() => setIsFocused(false), 150); }}
+                              onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+                              placeholder="Ad, soyad veya okul numarası yazın..."
+                              className="w-full pl-9 pr-4 py-3 border-2 border-gray-200 hover:border-purple-300 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/20 rounded-xl text-sm outline-none transition-all bg-white/70"
+                            />
+                          </div>
+                          {isFocused && typeof window !== 'undefined' && studentQuery.length >= 2 &&
+                            createPortal(
+                              <div style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width, zIndex: 99999 }}
+                                className="bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
+                                {studentSearchLoading && studentResults.length === 0 ? (
+                                  <div className="px-4 py-3 flex items-center gap-2 text-sm text-slate-400">
+                                    <div className="w-3 h-3 border-2 border-purple-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                                    Aranıyor...
+                                  </div>
+                                ) : studentResults.length > 0 ? studentResults.map((s, i) => (
+                                  <button key={i} type="button"
+                                    onMouseDown={(e) => { e.preventDefault(); handleSelectStudent(s); }}
+                                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-purple-50 transition-colors text-left border-b border-slate-100 last:border-0">
+                                    <span className="text-sm font-medium text-slate-800">{s.text}</span>
+                                    <span className="text-xs text-slate-400 shrink-0 ml-2">{s.class_display}</span>
+                                  </button>
+                                )) : (
+                                  <div className="px-4 py-3 text-sm text-slate-400">Öğrenci bulunamadı</div>
+                                )}
+                              </div>,
+                              document.body
+                            )
+                          }
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* MOD 3: Yönetici — sınıf + öğrenci dropdown */
+                  <>
+                  {/* Sınıf/Şube Seçimi — Yönetici modu */}
                   <div className="animate-fade-in" style={{ animationDelay: '0.15s' }}>
                   <FormField
                     control={form.control}
@@ -338,7 +575,7 @@ export default function RPDYonlendirme() {
                   />
                   </div>
 
-                  {/* Öğrenci Seçimi */}
+                  {/* Öğrenci Seçimi — Yönetici modu */}
                   <div className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
                   <FormField
                     control={form.control}
@@ -377,6 +614,8 @@ export default function RPDYonlendirme() {
                     )}
                   />
                   </div>
+                  </>
+                  )}
 
                   {/* Yönlendirme Nedenleri */}
                   <div className="animate-fade-in" style={{ animationDelay: '0.25s' }}>
@@ -390,35 +629,13 @@ export default function RPDYonlendirme() {
                             <Target className="w-4 h-4 text-emerald-500" />
                             Nedenler *
                           </div>
-                          <div className="flex items-center gap-1.5 sm:gap-2">
-                            {field.value?.length > 0 && (
-                              <Badge className="bg-emerald-100 text-emerald-700 text-[10px] sm:text-xs">{field.value.length} seçili</Badge>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => setShowReasonSearch(!showReasonSearch)}
-                              className="p-1.5 hover:bg-gray-100 rounded-full transition-colors active:scale-95"
-                            >
-                              {showReasonSearch ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-                            </button>
-                          </div>
+                          {field.value?.length > 0 && (
+                            <Badge className="bg-emerald-100 text-emerald-700 text-[10px] sm:text-xs">{field.value.length} seçili</Badge>
+                          )}
                         </FormLabel>
-                        
-                        {/* Search Box */}
-                        {showReasonSearch && (
-                          <div className="mb-2 animate-fade-in">
-                            <input
-                              type="text"
-                              value={reasonSearch}
-                              onChange={(e) => setReasonSearch(e.target.value)}
-                              placeholder="🔍 Neden ara..."
-                              className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                            />
-                          </div>
-                        )}
-                        
+
                         <div className="border-2 border-gray-200 rounded-xl p-2 sm:p-3 bg-gradient-to-br from-white/50 to-gray-50/50 backdrop-blur-sm">
-                          {filteredCategories.map((kategori) => {
+                          {YONLENDIRME_KATEGORILERI.map((kategori) => {
                             const isSelected = field.value?.includes(kategori.baslik);
                             
                             // Renk eşlemesi

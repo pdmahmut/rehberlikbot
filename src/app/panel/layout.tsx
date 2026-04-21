@@ -1,13 +1,14 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
+
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect, useMemo } from "react";
-import { 
-  BarChart3, 
-  AlertTriangle, 
-  CalendarDays, 
-  Users, 
+import { useState, useEffect, useMemo, useCallback } from "react";
+import {
+  BarChart3,
+  AlertTriangle,
+  CalendarDays,
+  Users,
   UserCheck,
   LayoutDashboard,
   Send,
@@ -17,12 +18,8 @@ import {
   Menu,
   X,
   ChevronRight,
-  Lock,
-  Eye,
-  EyeOff,
-  ShieldAlert,
-  KeyRound,
   LogOut,
+  UserCog,
   Gavel,
   History,
   Sparkles,
@@ -48,15 +45,14 @@ import {
   Phone,
   PhoneCall,
   PieChart,
-  Bot,
-  MessageSquare
+  MessageSquare,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 
-const MASTER_PASSWORD = "sagopa";
-const MAX_ATTEMPTS = 3;
-const SESSION_KEY = "panel_authenticated";
-const LOCKOUT_KEY = "panel_lockout";
 
 // Menü item tipi
 interface MenuItem {
@@ -171,40 +167,10 @@ const menuCategories: MenuCategory[] = [
     title: "İşlemler",
     items: [
       {
-        href: "/panel/sinif-etkinlikleri",
-        label: "Sınıf Etkinlikleri",
-        icon: Users,
-        color: "cyan"
-      },
-      {
-        href: "/panel/belge",
-        label: "Belge Oluştur",
-        icon: FileText,
-        color: "purple"
-      },
-      {
-        href: "/panel/disiplin",
-        label: "Disiplin Kurulu",
-        icon: Gavel,
-        color: "rose"
-      },
-      {
-        href: "/panel/ayarlar",
-        label: "Ayarlar",
-        icon: Settings,
-        color: "slate"
-      },
-      { 
-        href: "/panel/telegram", 
-        label: "Telegram Bildirimleri", 
-        icon: Send,
-        color: "sky"
-      },
-      {
-        href: "/panel/mebbis",
-        label: "MEBBİS Entegrasyonu",
-        icon: Bot,
-        color: "sky"
+        href: "/panel/kullanici-yonetimi",
+        label: "Kullanıcı Yönetimi",
+        icon: UserCog,
+        color: "violet"
       },
     ]
   }
@@ -238,19 +204,47 @@ export default function PanelLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [role, setRole] = useState<string | null>(null);
+  const [isHomeroom, setIsHomeroom] = useState(false);
+  const [teacherName, setTeacherName] = useState<string | null>(null);
+  const [classDisplay, setClassDisplay] = useState<string | null>(null);
+  const [roleLoading, setRoleLoading] = useState(true);
+  const [pendingDeleteCount, setPendingDeleteCount] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<string[]>(["Genel", "Sınıf Rehberliği", "Öğrenci Takip", "Randevular", "Süreç Yönetimi", "Analiz & Raporlar", "İşlemler"]);
-  
-  // Şifre koruması state'leri
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [password, setPassword] = useState("");
-  const [attempts, setAttempts] = useState(0);
-  const [showPassword, setShowPassword] = useState(false);
-  const [isShaking, setIsShaking] = useState(false);
+
+  // Şifre değişim modal state'leri (öğretmen için)
+  const [showPassModal, setShowPassModal] = useState(false);
+  const [oldPass, setOldPass] = useState("");
+  const [newPass, setNewPass] = useState("");
+  const [newPass2, setNewPass2] = useState("");
+  const [showOld, setShowOld] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [passLoading, setPassLoading] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then(r => r.json())
+      .then(d => {
+        setRole(d.role);
+        setIsHomeroom(d.isHomeroom || false);
+        setTeacherName(d.teacherName || null);
+        setClassDisplay(d.classDisplay || null);
+        setRoleLoading(false);
+        if (d.role === 'admin') {
+          Promise.all([
+            fetch("/api/deletion-requests?status=bekliyor").then(r => r.json()),
+            fetch("/api/work-requests?status=bekliyor").then(r => r.json()),
+          ]).then(([del, work]) => {
+            setPendingDeleteCount((del.requests?.length ?? 0) + (work.requests?.length ?? 0));
+          }).catch(() => {});
+        }
+      })
+      .catch(() => setRoleLoading(false));
+  }, []);
 
   // Filtrelenmiş menü öğeleri
   const filteredMenuItems = useMemo(() => {
@@ -261,66 +255,11 @@ export default function PanelLayout({
     );
   }, [searchQuery]);
 
-  // Session kontrolü
-  useEffect(() => {
-    const checkAuth = () => {
-      const lockoutTime = localStorage.getItem(LOCKOUT_KEY);
-      if (lockoutTime) {
-        const lockoutDate = new Date(lockoutTime);
-        const now = new Date();
-        if (now.getTime() - lockoutDate.getTime() < 5 * 60 * 1000) {
-          router.push("/");
-          return;
-        } else {
-          localStorage.removeItem(LOCKOUT_KEY);
-        }
-      }
-
-      const authenticated = sessionStorage.getItem(SESSION_KEY);
-      if (authenticated === "true") {
-        setIsAuthenticated(true);
-      }
-      setIsLoading(false);
-    };
-    
-    checkAuth();
-  }, [router]);
-
-  // Şifre kontrolü
-  const handlePasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (password === MASTER_PASSWORD) {
-      sessionStorage.setItem(SESSION_KEY, "true");
-      setIsAuthenticated(true);
-      toast.success("Giriş başarılı! Panele yönlendiriliyorsunuz...");
-      setPassword("");
-      setAttempts(0);
-    } else {
-      const newAttempts = attempts + 1;
-      setAttempts(newAttempts);
-      setPassword("");
-      setIsShaking(true);
-      setTimeout(() => setIsShaking(false), 500);
-      
-      if (newAttempts >= MAX_ATTEMPTS) {
-        localStorage.setItem(LOCKOUT_KEY, new Date().toISOString());
-        toast.error("3 yanlış deneme! Ana sayfaya yönlendiriliyorsunuz...");
-        setTimeout(() => {
-          router.push("/");
-        }, 1500);
-      } else {
-        toast.error(`Yanlış şifre! Kalan deneme hakkı: ${MAX_ATTEMPTS - newAttempts}`);
-      }
-    }
-  };
-
   // Çıkış yapma
-  const handleLogout = () => {
-    sessionStorage.removeItem(SESSION_KEY);
-    setIsAuthenticated(false);
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
     toast.success("Çıkış yapıldı!");
-    router.push("/");
+    router.push("/login");
   };
 
   // Sayfa değiştiğinde sidebar'ı kapat
@@ -371,131 +310,233 @@ export default function PanelLayout({
   const currentPage = allMenuItems.find(item => isActive(item.href, item.exact))?.label || "Panel";
   const currentPageItem = allMenuItems.find(item => isActive(item.href, item.exact));
 
-  // Loading durumu
-  if (isLoading) {
+  // Rol yüklenirken bekle
+  if (roleLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-zinc-900">
-        <div className="text-center space-y-4">
-          <div className="relative">
-            <div className="w-16 h-16 border-4 border-blue-500/30 rounded-full animate-spin border-t-blue-500"></div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Brain className="h-6 w-6 text-blue-400 animate-pulse" />
-            </div>
-          </div>
-          <p className="text-slate-400 text-sm">Yükleniyor...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="w-8 h-8 border-4 border-blue-500/30 rounded-full animate-spin border-t-blue-500" />
       </div>
     );
   }
 
-  // Şifre ekranı
-  if (!isAuthenticated) {
+  const handleChangePassword = async () => {
+    if (!oldPass.trim() || !newPass.trim() || !newPass2.trim()) {
+      toast.error("Tüm alanları doldurun");
+      return;
+    }
+    if (newPass !== newPass2) {
+      toast.error("Yeni şifreler eşleşmiyor");
+      return;
+    }
+    setPassLoading(true);
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ oldPassword: oldPass, newPassword: newPass }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || "Hata"); return; }
+      toast.success("Şifre değiştirildi");
+      setShowPassModal(false);
+      setOldPass(""); setNewPass(""); setNewPass2("");
+    } catch {
+      toast.error("Bağlantı hatası");
+    } finally {
+      setPassLoading(false);
+    }
+  };
+
+  // Öğretmen → sol panel layout
+  if (role === 'teacher') {
+    const accentFrom = isHomeroom ? 'from-teal-500' : 'from-violet-500';
+    const accentTo   = isHomeroom ? 'to-emerald-600' : 'to-purple-600';
+    const activeGrad = isHomeroom
+      ? 'bg-gradient-to-r from-teal-600 to-emerald-600 shadow-teal-500/25'
+      : 'bg-gradient-to-r from-violet-600 to-purple-600 shadow-violet-500/25';
+
+    const teacherMenu = isHomeroom
+      ? [
+          { href: '/panel/ogrenci-yonlendirmesi', label: 'Yönlendirme Yap', icon: Send },
+          { href: '/panel/sinifim', label: 'Sınıfım', icon: Users },
+          { href: '/panel/yonlendirme-gecmisi', label: 'Geçmiş', icon: History },
+        ]
+      : [
+          { href: '/panel/ogrenci-yonlendirmesi', label: 'Yönlendirme Yap', icon: Send },
+          { href: '/panel/yonlendirme-gecmisi', label: 'Geçmiş', icon: History },
+        ];
+
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-zinc-900 p-4 relative overflow-hidden">
-        {/* Animated Background */}
-        <div className="absolute inset-0">
-          <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/20 rounded-full blur-3xl animate-float-slow" />
-          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-violet-500/20 rounded-full blur-3xl animate-float-reverse" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl animate-pulse-glow" />
-        </div>
-        
-        <div className={`relative w-full max-w-md transition-transform ${isShaking ? "animate-shake" : ""}`}>
-          <div className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden">
-            {/* Üst Kısım */}
-            <div className="relative bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 px-6 py-10 text-center overflow-hidden">
-              <div className="absolute inset-0 bg-grid-white/10" />
-              <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl animate-float" />
-              <div className="relative">
-                <div className="inline-flex items-center justify-center w-20 h-20 bg-white/20 backdrop-blur rounded-2xl mb-4 shadow-lg">
-                  <ShieldAlert className="h-10 w-10 text-white" />
-                </div>
-                <h1 className="text-2xl font-bold text-white">Panel Girişi</h1>
-                <p className="text-blue-200 text-sm mt-2">Rehberlik Yönetim Sistemi</p>
+      <div className="min-h-screen flex bg-slate-100">
+        {/* Sol Sidebar */}
+        <aside className="w-64 min-h-screen bg-gradient-to-b from-slate-900 to-slate-950 flex flex-col shadow-2xl">
+          {/* Logo */}
+          <div className="p-5 border-b border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 bg-gradient-to-br ${accentFrom} ${accentTo} rounded-xl shadow-lg`}>
+                <GraduationCap className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white leading-tight">Dumlupınar</p>
+                <p className="text-[11px] text-slate-400">Rehberlik Sistemi</p>
               </div>
             </div>
-            
-            {/* Form Kısmı */}
-            <form onSubmit={handlePasswordSubmit} className="p-6 space-y-6 bg-white/5">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
-                  <KeyRound className="h-4 w-4 text-slate-400" />
-                  Şifre
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="********"
-                    className="w-full px-4 py-3.5 pr-12 bg-white/10 border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-white placeholder-slate-500"
-                    autoFocus
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Deneme Hakkı Göstergesi */}
-              {attempts > 0 && (
-                <div className="flex items-center justify-center gap-2">
-                  {[...Array(MAX_ATTEMPTS)].map((_, i) => (
-                    <div
-                      key={i}
-                      className={`w-3 h-3 rounded-full transition-all ${
-                        i < attempts 
-                          ? "bg-red-500 shadow-lg shadow-red-500/50" 
-                          : "bg-white/20"
-                      }`}
-                    />
-                  ))}
-                  <span className="text-xs text-slate-400 ml-2">
-                    {MAX_ATTEMPTS - attempts} deneme hakkı
-                  </span>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={!password}
-                className="w-full py-3.5 px-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-600 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25"
-              >
-                <Lock className="h-4 w-4" />
-                Giriş Yap
-              </button>
-
-              <div className="text-center">
-                <Link 
-                  href="/" 
-                  className="text-sm text-slate-400 hover:text-blue-400 transition-colors"
-                >
-                  ← Ana Sayfaya Dön
-                </Link>
-              </div>
-            </form>
           </div>
 
-          {/* Alt Bilgi */}
-          <p className="text-center text-xs text-slate-500 mt-4">
-            RPD Öğrenci Takip Sistemi • Güvenli Giriş
-          </p>
-        </div>
+          {/* Sınıf bilgisi — sadece rehber öğretmende */}
+          {isHomeroom && classDisplay && (
+            <div className="mx-3 mt-3 px-3 py-2.5 rounded-xl bg-teal-500/10 border border-teal-500/20">
+              <p className="text-[10px] text-teal-400 font-medium uppercase tracking-wider mb-0.5">Sınıf Rehberi</p>
+              <p className="text-sm font-bold text-teal-300">{classDisplay}</p>
+            </div>
+          )}
 
-        <style jsx global>{`
-          @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-            20%, 40%, 60%, 80% { transform: translateX(5px); }
-          }
-          .animate-shake {
-            animation: shake 0.5s ease-in-out;
-          }
-        `}</style>
+          {/* Menü */}
+          <nav className="flex-1 p-3 space-y-1 mt-2">
+            {teacherMenu.map((item) => {
+              const Icon = item.icon;
+              const active = pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    active
+                      ? `${activeGrad} text-white shadow-lg`
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <div className={`p-1.5 rounded-lg ${active ? 'bg-white/20' : 'bg-slate-800'}`}>
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  {item.label}
+                  {active && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Alt — Kullanıcı & Çıkış */}
+          <div className="p-3 border-t border-slate-800">
+            <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-slate-800/50 mb-2">
+              <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${accentFrom} ${accentTo} flex items-center justify-center text-white text-sm font-bold`}>
+                {teacherName ? teacherName.charAt(0).toUpperCase() : 'Ö'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-white truncate">{teacherName || 'Öğretmen'}</p>
+                <p className="text-[10px] text-slate-500">{isHomeroom ? 'Sınıf Rehber Öğretmeni' : 'Öğretmen'}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowPassModal(true)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:bg-slate-700 hover:text-white transition-all group mb-1"
+            >
+              <div className="p-1.5 rounded-lg bg-slate-800 group-hover:bg-slate-600 transition-colors">
+                <KeyRound className="h-4 w-4" />
+              </div>
+              Şifre Değiştir
+            </button>
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all group"
+            >
+              <div className="p-1.5 rounded-lg bg-slate-800 group-hover:bg-red-500/20 transition-colors">
+                <LogOut className="h-4 w-4" />
+              </div>
+              Çıkış Yap
+            </button>
+          </div>
+        </aside>
+
+        {/* Şifre Değiştir Modalı */}
+        {showPassModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowPassModal(false)} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`p-2 bg-gradient-to-br ${accentFrom} ${accentTo} rounded-xl`}>
+                    <KeyRound className="h-4 w-4 text-white" />
+                  </div>
+                  <h2 className="text-base font-bold text-slate-800">Şifre Değiştir</h2>
+                </div>
+                <button onClick={() => setShowPassModal(false)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {/* Mevcut şifre */}
+                <div>
+                  <label className="text-xs font-medium text-slate-600 mb-1 block">Mevcut Şifre</label>
+                  <div className="relative">
+                    <input
+                      type={showOld ? "text" : "password"}
+                      value={oldPass}
+                      onChange={e => setOldPass(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pr-9 pl-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                    />
+                    <button type="button" onClick={() => setShowOld(v => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                      {showOld ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Yeni şifre */}
+                <div>
+                  <label className="text-xs font-medium text-slate-600 mb-1 block">Yeni Şifre</label>
+                  <div className="relative">
+                    <input
+                      type={showNew ? "text" : "password"}
+                      value={newPass}
+                      onChange={e => setNewPass(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pr-9 pl-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                    />
+                    <button type="button" onClick={() => setShowNew(v => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                      {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Yeni şifre tekrar */}
+                <div>
+                  <label className="text-xs font-medium text-slate-600 mb-1 block">Yeni Şifre (Tekrar)</label>
+                  <input
+                    type={showNew ? "text" : "password"}
+                    value={newPass2}
+                    onChange={e => setNewPass2(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleChangePassword()}
+                    placeholder="••••••••"
+                    className={`w-full px-3 py-2.5 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:border-transparent ${
+                      newPass2 && newPass !== newPass2
+                        ? "border-red-300 focus:ring-red-500 bg-red-50"
+                        : "border-slate-200 focus:ring-violet-500"
+                    }`}
+                  />
+                  {newPass2 && newPass !== newPass2 && (
+                    <p className="text-[11px] text-red-500 mt-1">Şifreler eşleşmiyor</p>
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={handleChangePassword}
+                disabled={passLoading}
+                className={`w-full h-10 rounded-xl text-sm font-semibold text-white transition-all bg-gradient-to-r ${accentFrom} ${accentTo} hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2`}
+              >
+                {passLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                {passLoading ? "Kaydediliyor..." : "Şifreyi Kaydet"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Ana İçerik */}
+        <main className="flex-1 p-6 overflow-auto">
+          {children}
+        </main>
       </div>
     );
   }
@@ -719,7 +760,12 @@ export default function PanelLayout({
                         {!sidebarCollapsed && (
                           <>
                             <span className="flex-1 truncate">{item.label}</span>
-                            {active && (
+                            {item.href === '/panel/kullanici-yonetimi' && pendingDeleteCount > 0 && (
+                              <span className="ml-auto flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                                {pendingDeleteCount}
+                              </span>
+                            )}
+                            {active && pendingDeleteCount === 0 && (
                               <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                             )}
                           </>

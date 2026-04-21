@@ -116,7 +116,7 @@ export interface YonlendirmeKategori {
 export const YONLENDIRME_KATEGORILERI: YonlendirmeKategori[] = [
   {
     id: "akademik",
-    baslik: "Akademik Sorunlar",
+    baslik: "Akademik",
     icon: "📚",
     renk: "blue"
   },

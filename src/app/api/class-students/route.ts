@@ -33,11 +33,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
+    const sinifDisi = searchParams.get('sinifDisi') === 'true';
+
+    let query = supabase
       .from('class_students')
       .select('*')
-      .eq('class_key', classKey)
-      .order('student_name', { ascending: true });
+      .eq('class_key', classKey);
+
+    if (sinifDisi) {
+      query = query.eq('student_number', '__SINIF_DISI__');
+    } else {
+      query = query.neq('student_number', '__SINIF_DISI__').order('student_name', { ascending: true });
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Supabase class_students GET error:', error.message);
@@ -45,6 +54,10 @@ export async function GET(request: NextRequest) {
         { error: 'Öğrenciler alınırken hata oluştu' },
         { status: 500 }
       );
+    }
+
+    if (sinifDisi) {
+      return NextResponse.json({ excluded: data ?? [] });
     }
 
     const normalizedStudents = (data ?? []).map((student) => ({
@@ -159,6 +172,29 @@ export async function DELETE(request: NextRequest) {
       { error: 'Beklenmeyen hata oluştu' },
       { status: 500 }
     );
+  }
+}
+
+// Sınıf değiştirme
+export async function PATCH(request: NextRequest) {
+  if (!supabase) {
+    return NextResponse.json({ error: 'Supabase configuration missing' }, { status: 500 });
+  }
+  try {
+    const { id, class_key, class_display } = await request.json();
+    if (!id || !class_key) {
+      return NextResponse.json({ error: 'id ve class_key zorunludur' }, { status: 400 });
+    }
+    const { data, error } = await supabase
+      .from('class_students')
+      .update({ class_key, class_display: class_display || class_key })
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return NextResponse.json({ student: data });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 

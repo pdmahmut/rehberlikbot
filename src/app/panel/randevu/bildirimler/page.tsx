@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -37,7 +37,7 @@ import { toast } from "sonner";
 import { Document, Paragraph, TextRun, Packer, AlignmentType, BorderStyle, Table, TableRow, TableCell, WidthType, HeadingLevel, Header, Footer, PageNumber, NumberFormat } from "docx";
 import { saveAs } from "file-saver";
 
-// Tarih formatları
+// Tarih formatlarÄ±
 const formatDate = (dateStr: string) => {
   const date = new Date(dateStr);
   return date.toLocaleDateString("tr-TR", {
@@ -66,7 +66,7 @@ const getLocationLabel = (location: string) => {
   return found?.label || location;
 };
 
-// Bildirim şablonları
+// Bildirim ÅŸablonlarÄ±
 interface NotificationTemplate {
   id: string;
   name: string;
@@ -76,7 +76,7 @@ interface NotificationTemplate {
   template: (apt: Appointment, schoolName: string, counselorName: string, teacherName?: string) => string;
 }
 
-// Öğretmen kaydı tipi
+// Ã–ÄŸretmen kaydÄ± tipi
 interface TeacherRecord {
   value: string;
   label: string;
@@ -85,30 +85,30 @@ interface TeacherRecord {
 }
 
 const NOTIFICATION_TEMPLATES: NotificationTemplate[] = [
-  // Öğrenci şablonları
+  // Ã–ÄŸrenci ÅŸablonlarÄ±
   {
     id: "student_formal",
     name: "Resmi Bildirim",
     type: "student",
     icon: GraduationCap,
     color: "blue",
-    template: (apt, schoolName, counselorName) => `Sayın ${apt.participant_name},
+    template: (apt, schoolName, counselorName) => `SayÄ±n ${apt.participant_name},
 
-${schoolName} Rehberlik Servisi olarak sizinle bir görüşme planladık.
+${schoolName} Rehberlik Servisi olarak sizinle bir gÃ¶rÃ¼ÅŸme planladÄ±k.
 
-📅 Tarih: ${formatDate(apt.appointment_date)}
-🕐 Saat: ${formatTime(apt.start_time)}
-📍 Yer: ${getLocationLabel(apt.location)}
-⏱️ Süre: ${apt.duration} dakika
+ğŸ“… Tarih: ${formatDate(apt.appointment_date)}
+ğŸ• Saat: ${formatTime(apt.start_time)}
+ğŸ“ Yer: ${getLocationLabel(apt.location)}
+â±ï¸ SÃ¼re: ${apt.duration} dakika
 
-${apt.purpose ? `📋 Görüşme Konusu: ${apt.purpose}\n` : ""}
-Belirtilen gün ve saatte Rehberlik Servisine gelmenizi rica ederiz.
+${apt.purpose ? `ğŸ“‹ GÃ¶rÃ¼ÅŸme Konusu: ${apt.purpose}\n` : ""}
+Belirtilen gÃ¼n ve saatte Rehberlik Servisine gelmenizi rica ederiz.
 
-Sorularınız için bizimle iletişime geçebilirsiniz.
+SorularÄ±nÄ±z iÃ§in bizimle iletiÅŸime geÃ§ebilirsiniz.
 
-Saygılarımızla,
+SaygÄ±larÄ±mÄ±zla,
 ${counselorName}
-Rehber Öğretmen ve Psikolojik Danışman`
+Rehber Ã–ÄŸretmen ve Psikolojik DanÄ±ÅŸman`
   },
   {
     id: "student_friendly",
@@ -116,179 +116,179 @@ Rehber Öğretmen ve Psikolojik Danışman`
     type: "student",
     icon: GraduationCap,
     color: "cyan",
-    template: (apt, schoolName, counselorName) => `Merhaba ${apt.participant_name} 👋
+    template: (apt, schoolName, counselorName) => `Merhaba ${apt.participant_name} ğŸ‘‹
 
-Seninle bir görüşme yapmak istiyorum.
+Seninle bir gÃ¶rÃ¼ÅŸme yapmak istiyorum.
 
-📅 ${formatShortDate(apt.appointment_date)} ${formatTime(apt.start_time)}'da
-📍 ${getLocationLabel(apt.location)}'nda buluşalım.
+ğŸ“… ${formatShortDate(apt.appointment_date)} ${formatTime(apt.start_time)}'da
+ğŸ“ ${getLocationLabel(apt.location)}'nda buluÅŸalÄ±m.
 
 ${apt.purpose ? `Konumuz: ${apt.purpose}\n` : ""}
-Seni bekliyorum! 😊
+Seni bekliyorum! ğŸ˜Š
 
 ${counselorName}
-Rehber Öğretmen ve Psikolojik Danışman`
+Rehber Ã–ÄŸretmen ve Psikolojik DanÄ±ÅŸman`
   },
   {
     id: "student_reminder",
-    name: "Hatırlatma",
+    name: "HatÄ±rlatma",
     type: "student",
     icon: GraduationCap,
     color: "amber",
-    template: (apt, schoolName, counselorName) => `🔔 Randevu Hatırlatması
+    template: (apt, schoolName, counselorName) => `ğŸ”” Randevu HatÄ±rlatmasÄ±
 
-${apt.participant_name}, yarın saat ${formatTime(apt.start_time)}'da görüşmemiz var.
+${apt.participant_name}, yarÄ±n saat ${formatTime(apt.start_time)}'da gÃ¶rÃ¼ÅŸmemiz var.
 
-📍 Yer: ${getLocationLabel(apt.location)}
+ğŸ“ Yer: ${getLocationLabel(apt.location)}
 
-Görüşmek üzere!
+GÃ¶rÃ¼ÅŸmek Ã¼zere!
 ${counselorName}
-Rehber Öğretmen`
+Rehber Ã–ÄŸretmen`
   },
 
-  // Veli şablonları
+  // Veli ÅŸablonlarÄ±
   {
     id: "parent_formal",
     name: "Resmi Davet",
     type: "parent",
     icon: Users,
     color: "emerald",
-    template: (apt, schoolName, counselorName) => `Sayın Veli,
+    template: (apt, schoolName, counselorName) => `SayÄ±n Veli,
 
-${schoolName} Rehberlik Servisi olarak, öğrenciniz ${apt.participant_name} hakkında sizinle bir görüşme yapmak istiyoruz.
+${schoolName} Rehberlik Servisi olarak, Ã¶ÄŸrenciniz ${apt.participant_name} hakkÄ±nda sizinle bir gÃ¶rÃ¼ÅŸme yapmak istiyoruz.
 
-📅 Tarih: ${formatDate(apt.appointment_date)}
-🕐 Saat: ${formatTime(apt.start_time)}
-📍 Yer: ${getLocationLabel(apt.location)}
-⏱️ Tahmini Süre: ${apt.duration} dakika
+ğŸ“… Tarih: ${formatDate(apt.appointment_date)}
+ğŸ• Saat: ${formatTime(apt.start_time)}
+ğŸ“ Yer: ${getLocationLabel(apt.location)}
+â±ï¸ Tahmini SÃ¼re: ${apt.duration} dakika
 
-${apt.purpose ? `📋 Görüşme Konusu: ${apt.purpose}\n` : ""}
-Bu görüşme, öğrencinizin eğitim sürecini desteklemek amacıyla planlanmıştır.
+${apt.purpose ? `ğŸ“‹ GÃ¶rÃ¼ÅŸme Konusu: ${apt.purpose}\n` : ""}
+Bu gÃ¶rÃ¼ÅŸme, Ã¶ÄŸrencinizin eÄŸitim sÃ¼recini desteklemek amacÄ±yla planlanmÄ±ÅŸtÄ±r.
 
-Randevuya katılımınız önemlidir. Belirtilen tarih ve saatte uygun değilseniz, lütfen önceden bilgi veriniz.
+Randevuya katÄ±lÄ±mÄ±nÄ±z Ã¶nemlidir. Belirtilen tarih ve saatte uygun deÄŸilseniz, lÃ¼tfen Ã¶nceden bilgi veriniz.
 
-Saygılarımızla,
+SaygÄ±larÄ±mÄ±zla,
 ${counselorName}
-Rehber Öğretmen ve Psikolojik Danışman`
+Rehber Ã–ÄŸretmen ve Psikolojik DanÄ±ÅŸman`
   },
   {
     id: "parent_whatsapp",
-    name: "WhatsApp Mesajı",
+    name: "WhatsApp MesajÄ±",
     type: "parent",
     icon: Users,
     color: "green",
-    template: (apt, schoolName, counselorName) => `Merhaba 👋
+    template: (apt, schoolName, counselorName) => `Merhaba ğŸ‘‹
 
 ${schoolName} Rehberlik Servisi'nden ${counselorName}.
 
-${apt.participant_name}'ın velisi olarak sizinle görüşmek istiyoruz.
+${apt.participant_name}'Ä±n velisi olarak sizinle gÃ¶rÃ¼ÅŸmek istiyoruz.
 
-📅 ${formatShortDate(apt.appointment_date)}
-🕐 ${formatTime(apt.start_time)}
-📍 ${getLocationLabel(apt.location)}
+ğŸ“… ${formatShortDate(apt.appointment_date)}
+ğŸ• ${formatTime(apt.start_time)}
+ğŸ“ ${getLocationLabel(apt.location)}
 
 ${apt.purpose ? `Konu: ${apt.purpose}\n` : ""}
-Uygunluğunuzu teyit eder misiniz? ✅`
+UygunluÄŸunuzu teyit eder misiniz? âœ…`
   },
   {
     id: "parent_reminder",
-    name: "Randevu Hatırlatma",
+    name: "Randevu HatÄ±rlatma",
     type: "parent",
     icon: Users,
     color: "orange",
-    template: (apt, schoolName, counselorName) => `🔔 Randevu Hatırlatması
+    template: (apt, schoolName, counselorName) => `ğŸ”” Randevu HatÄ±rlatmasÄ±
 
-Sayın Veli,
+SayÄ±n Veli,
 
-Yarın saat ${formatTime(apt.start_time)}'da ${apt.participant_name} için planlanmış görüşmemizi hatırlatmak isteriz.
+YarÄ±n saat ${formatTime(apt.start_time)}'da ${apt.participant_name} iÃ§in planlanmÄ±ÅŸ gÃ¶rÃ¼ÅŸmemizi hatÄ±rlatmak isteriz.
 
-📍 ${getLocationLabel(apt.location)}
+ğŸ“ ${getLocationLabel(apt.location)}
 
-Görüşmek üzere,
+GÃ¶rÃ¼ÅŸmek Ã¼zere,
 ${counselorName}
-Rehber Öğretmen`
+Rehber Ã–ÄŸretmen`
   },
 
-  // Öğretmen şablonları
+  // Ã–ÄŸretmen ÅŸablonlarÄ±
   {
     id: "teacher_formal",
     name: "Resmi Bilgilendirme",
     type: "teacher",
     icon: User,
     color: "violet",
-    template: (apt, schoolName, counselorName, teacherName) => `Sayın ${teacherName || "Öğretmenim"} Öğretmenim,
+    template: (apt, schoolName, counselorName, teacherName) => `SayÄ±n ${teacherName || "Ã–ÄŸretmenim"} Ã–ÄŸretmenim,
 
-Rehberlik Servisi olarak ${apt.participant_name.toUpperCase()} için aşağıdaki detayları verilen bir görüşme planladık.
+Rehberlik Servisi olarak ${apt.participant_name.toUpperCase()} iÃ§in aÅŸaÄŸÄ±daki detaylarÄ± verilen bir gÃ¶rÃ¼ÅŸme planladÄ±k.
 
-📅 Tarih: ${formatDate(apt.appointment_date)}
-🕐 Saat: ${formatTime(apt.start_time)}
-📍 Yer: ${getLocationLabel(apt.location)}
-⏱️ Süre: ${apt.duration} dakika
+ğŸ“… Tarih: ${formatDate(apt.appointment_date)}
+ğŸ• Saat: ${formatTime(apt.start_time)}
+ğŸ“ Yer: ${getLocationLabel(apt.location)}
+â±ï¸ SÃ¼re: ${apt.duration} dakika
 
-${apt.purpose ? `📋 Görüşme Konusu: ${apt.purpose}\n` : ""}
-Öğrencinin belirtilen tarih ve zamanda katılımını sağlamanızı rica ederiz.
+${apt.purpose ? `ğŸ“‹ GÃ¶rÃ¼ÅŸme Konusu: ${apt.purpose}\n` : ""}
+Ã–ÄŸrencinin belirtilen tarih ve zamanda katÄ±lÄ±mÄ±nÄ± saÄŸlamanÄ±zÄ± rica ederiz.
 
-Saygılarımızla,
+SaygÄ±larÄ±mÄ±zla,
 ${counselorName}
-Rehber Öğretmen ve Psikolojik Danışman`
+Rehber Ã–ÄŸretmen ve Psikolojik DanÄ±ÅŸman`
   },
   {
     id: "teacher_collaboration",
-    name: "İş Birliği Daveti",
+    name: "Ä°ÅŸ BirliÄŸi Daveti",
     type: "teacher",
     icon: User,
     color: "indigo",
-    template: (apt, schoolName, counselorName, teacherName) => `Merhaba ${teacherName || "Öğretmenim"} Öğretmenim,
+    template: (apt, schoolName, counselorName, teacherName) => `Merhaba ${teacherName || "Ã–ÄŸretmenim"} Ã–ÄŸretmenim,
 
-${apt.participant_class} sınıfından ${apt.participant_name}'nın ${apt.purpose || "görüşme konusu"} ile ilgili sizinle kısa bir görüşme yapmak istiyorum.
+${apt.participant_class} sÄ±nÄ±fÄ±ndan ${apt.participant_name}'nÄ±n ${apt.purpose || "gÃ¶rÃ¼ÅŸme konusu"} ile ilgili sizinle kÄ±sa bir gÃ¶rÃ¼ÅŸme yapmak istiyorum.
 
-📅 ${formatDate(apt.appointment_date)} – ${formatTime(apt.start_time)}
-📍 ${getLocationLabel(apt.location)}
+ğŸ“… ${formatDate(apt.appointment_date)} â€“ ${formatTime(apt.start_time)}
+ğŸ“ ${getLocationLabel(apt.location)}
 
-Eğer bu saat sizin için uygunsa görüşebiliriz. Uygun değilse, müsait olduğunuz bir gün ve saat önerirseniz takviminize göre planlayalım.
+EÄŸer bu saat sizin iÃ§in uygunsa gÃ¶rÃ¼ÅŸebiliriz. Uygun deÄŸilse, mÃ¼sait olduÄŸunuz bir gÃ¼n ve saat Ã¶nerirseniz takviminize gÃ¶re planlayalÄ±m.
 
-Teşekkür ederim.
+TeÅŸekkÃ¼r ederim.
 
 Mahmut Karadeniz
-Rehber Öğretmen ve Psikolojik Danışman`
+Rehber Ã–ÄŸretmen ve Psikolojik DanÄ±ÅŸman`
   },
   {
     id: "teacher_quick",
-    name: "Kısa Mesaj",
+    name: "KÄ±sa Mesaj",
     type: "teacher",
     icon: User,
     color: "slate",
-    template: (apt, schoolName, counselorName, teacherName) => `Merhaba ${teacherName || "Öğretmenim"} Öğretmenim,
+    template: (apt, schoolName, counselorName, teacherName) => `Merhaba ${teacherName || "Ã–ÄŸretmenim"} Ã–ÄŸretmenim,
 
-${apt.participant_class} sınıfından ${apt.participant_name}'nın ${apt.purpose || "görüşme konusu"} ile ilgili sizinle kısa bir görüşme yapmak istiyorum.
+${apt.participant_class} sÄ±nÄ±fÄ±ndan ${apt.participant_name}'nÄ±n ${apt.purpose || "gÃ¶rÃ¼ÅŸme konusu"} ile ilgili sizinle kÄ±sa bir gÃ¶rÃ¼ÅŸme yapmak istiyorum.
 
-📅 ${formatDate(apt.appointment_date)} – ${formatTime(apt.start_time)}
-📍 ${getLocationLabel(apt.location)}
+ğŸ“… ${formatDate(apt.appointment_date)} â€“ ${formatTime(apt.start_time)}
+ğŸ“ ${getLocationLabel(apt.location)}
 
-Bu zaman sizin için uygunsa görüşebiliriz. Uygun değilse, müsait olduğunuz alternatif bir gün ve saat önerebilir misiniz? Takviminize göre planlayayım.
+Bu zaman sizin iÃ§in uygunsa gÃ¶rÃ¼ÅŸebiliriz. Uygun deÄŸilse, mÃ¼sait olduÄŸunuz alternatif bir gÃ¼n ve saat Ã¶nerebilir misiniz? Takviminize gÃ¶re planlayayÄ±m.
 
-Teşekkür ederim,
+TeÅŸekkÃ¼r ederim,
 Mahmut Karadeniz
-Rehber Öğretmen ve Psikolojik Danışman`
+Rehber Ã–ÄŸretmen ve Psikolojik DanÄ±ÅŸman`
   },
   {
     id: "teacher_parent_meeting",
-    name: "Veli Görüşme Çağrısı",
+    name: "Veli GÃ¶rÃ¼ÅŸme Ã‡aÄŸrÄ±sÄ±",
     type: "teacher",
     icon: Users,
     color: "amber",
-    template: (apt, schoolName, counselorName, teacherName) => `Merhaba ${teacherName || "Öğretmenim"} Öğretmenim,
+    template: (apt, schoolName, counselorName, teacherName) => `Merhaba ${teacherName || "Ã–ÄŸretmenim"} Ã–ÄŸretmenim,
 
-Öğrenciniz ${apt.participant_name} ile ilgili ${apt.purpose || "görüşme konusu"} konusunda veliyle görüşme yapılması gerekiyor. Veliye aşağıda belirtilen görüşme detaylarını iletirseniz sevinirim.
+Ã–ÄŸrenciniz ${apt.participant_name} ile ilgili ${apt.purpose || "gÃ¶rÃ¼ÅŸme konusu"} konusunda veliyle gÃ¶rÃ¼ÅŸme yapÄ±lmasÄ± gerekiyor. Veliye aÅŸaÄŸÄ±da belirtilen gÃ¶rÃ¼ÅŸme detaylarÄ±nÄ± iletirseniz sevinirim.
 
-📅 ${formatDate(apt.appointment_date)} – ${formatTime(apt.start_time)}
-📍 ${getLocationLabel(apt.location)}
+ğŸ“… ${formatDate(apt.appointment_date)} â€“ ${formatTime(apt.start_time)}
+ğŸ“ ${getLocationLabel(apt.location)}
 
-Bu zaman veli için uygun olmazsa, velinin müsaitliğine göre alternatif bir gün/saat de ayarlayabiliriz. Haber verirseniz planlayayım.
+Bu zaman veli iÃ§in uygun olmazsa, velinin mÃ¼saitliÄŸine gÃ¶re alternatif bir gÃ¼n/saat de ayarlayabiliriz. Haber verirseniz planlayayÄ±m.
 
-Teşekkür ederim.
+TeÅŸekkÃ¼r ederim.
 Mahmut Karadeniz
-Rehber Öğretmen ve Psikolojik Danışman`
+Rehber Ã–ÄŸretmen ve Psikolojik DanÄ±ÅŸman`
   }
 ];
 
@@ -307,33 +307,33 @@ export default function RandevuBildirimlerPage() {
   const [schoolName, setSchoolName] = useState("DUMLUPINAR ORTAOKULU");
   const [counselorName, setCounselorName] = useState("Mahmut Karadeniz");
 
-  // Sınıf/şube key veya display text'inden öğretmen adını bul
+  // SÄ±nÄ±f/ÅŸube key veya display text'inden Ã¶ÄŸretmen adÄ±nÄ± bul
   const getTeacherByClass = (classKeyOrDisplay: string | undefined): string | undefined => {
     if (!classKeyOrDisplay || teachers.length === 0) {
       return undefined;
     }
     
-    // Normalize fonksiyonu - Türkçe karakterleri ve özel karakterleri temizle
+    // Normalize fonksiyonu - TÃ¼rkÃ§e karakterleri ve Ã¶zel karakterleri temizle
     const normalize = (str: string) => str
       .toLowerCase()
-      .replace(/[ıİ]/g, 'i')
-      .replace(/[şŞ]/g, 's')
-      .replace(/[çÇ]/g, 'c')
-      .replace(/[ğĞ]/g, 'g')
-      .replace(/[üÜ]/g, 'u')
-      .replace(/[öÖ]/g, 'o')
+      .replace(/[Ä±Ä°]/g, 'i')
+      .replace(/[ÅŸÅ]/g, 's')
+      .replace(/[Ã§Ã‡]/g, 'c')
+      .replace(/[ÄŸÄ]/g, 'g')
+      .replace(/[Ã¼Ãœ]/g, 'u')
+      .replace(/[Ã¶Ã–]/g, 'o')
       .replace(/\s+/g, '')
       .replace(/[\/\-\.]/g, '');
     
-    // Önce key ile tam eşleştir (örn: "22602658#0", "22154388#1")
+    // Ã–nce key ile tam eÅŸleÅŸtir (Ã¶rn: "22602658#0", "22154388#1")
     let teacher = teachers.find(t => t.sinifSubeKey === classKeyOrDisplay);
     
-    // Bulamazsa display text ile tam eşleştir
+    // Bulamazsa display text ile tam eÅŸleÅŸtir
     if (!teacher) {
       teacher = teachers.find(t => t.sinifSubeDisplay === classKeyOrDisplay);
     }
     
-    // Hala bulamazsa normalize edilmiş karşılaştırma yap
+    // Hala bulamazsa normalize edilmiÅŸ karÅŸÄ±laÅŸtÄ±rma yap
     if (!teacher) {
       const normalizedInput = normalize(classKeyOrDisplay);
       teacher = teachers.find(t => {
@@ -342,7 +342,7 @@ export default function RandevuBildirimlerPage() {
       });
     }
     
-    // Son çare: kısmi eşleşme yap (örn: "1. Sınıf / A" -> "1. Sınıf / A Şubesi")
+    // Son Ã§are: kÄ±smi eÅŸleÅŸme yap (Ã¶rn: "1. SÄ±nÄ±f / A" -> "1. SÄ±nÄ±f / A Åubesi")
     if (!teacher) {
       const normalizedInput = normalize(classKeyOrDisplay);
       teacher = teachers.find(t => {
@@ -354,11 +354,11 @@ export default function RandevuBildirimlerPage() {
     return teacher?.label || teacher?.value;
   };
 
-  // Randevuları ve öğretmenleri yükle
+  // RandevularÄ± ve Ã¶ÄŸretmenleri yÃ¼kle
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Paralel olarak randevuları ve öğretmenleri çek
+        // Paralel olarak randevularÄ± ve Ã¶ÄŸretmenleri Ã§ek
         const [appointmentsRes, teachersRes] = await Promise.all([
           fetch("/api/appointments?status=planned"),
           fetch("/api/teachers")
@@ -374,7 +374,7 @@ export default function RandevuBildirimlerPage() {
           setTeachers(data.teachers || []);
         }
       } catch (error) {
-        console.error("Veriler yüklenirken hata:", error);
+        console.error("Veriler yÃ¼klenirken hata:", error);
       } finally {
         setLoading(false);
       }
@@ -383,21 +383,21 @@ export default function RandevuBildirimlerPage() {
     fetchData();
   }, []);
 
-  // Aktif tab'a göre şablonları filtrele
+  // Aktif tab'a gÃ¶re ÅŸablonlarÄ± filtrele
   const filteredTemplates = useMemo(() => {
     return NOTIFICATION_TEMPLATES.filter(t => t.type === activeTab);
   }, [activeTab]);
 
-  // Bildirim metnini oluştur
+  // Bildirim metnini oluÅŸtur
   const generateNotification = (template: NotificationTemplate) => {
     if (!selectedAppointment) {
-      toast.error("Lütfen önce bir randevu seçin");
+      toast.error("LÃ¼tfen Ã¶nce bir randevu seÃ§in");
       return;
     }
     
     setSelectedTemplate(template);
     
-    // Öğretmen şablonları için sınıftan öğretmen adını çek
+    // Ã–ÄŸretmen ÅŸablonlarÄ± iÃ§in sÄ±nÄ±ftan Ã¶ÄŸretmen adÄ±nÄ± Ã§ek
     let teacherName: string | undefined;
     if (template.type === "teacher" && selectedAppointment.participant_class) {
       teacherName = getTeacherByClass(selectedAppointment.participant_class);
@@ -414,21 +414,21 @@ export default function RandevuBildirimlerPage() {
     try {
       await navigator.clipboard.writeText(generatedText);
       setCopied(true);
-      toast.success("Metin panoya kopyalandı!");
+      toast.success("Metin panoya kopyalandÄ±!");
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      toast.error("Kopyalama başarısız oldu");
+      toast.error("Kopyalama baÅŸarÄ±sÄ±z oldu");
     }
   };
 
-  // WhatsApp paylaşımı
+  // WhatsApp paylaÅŸÄ±mÄ±
   const shareWhatsApp = () => {
     if (!generatedText) return;
     const encoded = encodeURIComponent(generatedText);
     window.open(`https://wa.me/?text=${encoded}`, "_blank");
   };
 
-  // SMS linki (telefon uygulaması açar)
+  // SMS linki (telefon uygulamasÄ± aÃ§ar)
   const openSMS = () => {
     if (!generatedText) return;
     const encoded = encodeURIComponent(generatedText);
@@ -443,7 +443,7 @@ export default function RandevuBildirimlerPage() {
     window.open(`mailto:?subject=${subject}&body=${body}`, "_blank");
   };
 
-  // Metin dosyası olarak indir
+  // Metin dosyasÄ± olarak indir
   const downloadAsText = () => {
     if (!generatedText || !selectedAppointment) return;
     
@@ -455,12 +455,12 @@ export default function RandevuBildirimlerPage() {
     toast.success("Dosya indirildi");
   };
 
-  // PDF olarak indir - Tarayıcı yazdırma ile (Türkçe karakter tam desteği)
+  // PDF olarak indir - TarayÄ±cÄ± yazdÄ±rma ile (TÃ¼rkÃ§e karakter tam desteÄŸi)
   const downloadAsPDF = () => {
     if (!generatedText || !selectedAppointment) return;
     
     try {
-      // Yeni pencere oluştur
+      // Yeni pencere oluÅŸtur
       const printWindow = window.open('', '_blank');
       if (!printWindow) {
         toast.error("Pop-up engelleyici aktif olabilir");
@@ -472,7 +472,7 @@ export default function RandevuBildirimlerPage() {
       const participantType = PARTICIPANT_TYPES.find(p => p.value === selectedAppointment.participant_type)?.label || "";
       const location = APPOINTMENT_LOCATIONS.find(l => l.value === selectedAppointment.location)?.label || "";
 
-      // HTML içeriği oluştur
+      // HTML iÃ§eriÄŸi oluÅŸtur
       const htmlContent = `
         <!DOCTYPE html>
         <html lang="tr">
@@ -655,53 +655,53 @@ export default function RandevuBildirimlerPage() {
         <body>
           <div class="header">
             <div class="logo-area">
-              <div class="logo-icon">📋</div>
+              <div class="logo-icon">ğŸ“‹</div>
               <div class="school-name">${schoolName}</div>
             </div>
             <h1 class="title">Randevu Bildirimi</h1>
-            <p class="subtitle">Rehberlik ve Psikolojik Danışmanlık Servisi</p>
+            <p class="subtitle">Rehberlik ve Psikolojik DanÄ±ÅŸmanlÄ±k Servisi</p>
           </div>
           
           <div class="info-grid">
             <div class="info-item">
-              <div class="info-icon">👤</div>
+              <div class="info-icon">ğŸ‘¤</div>
               <div class="info-content">
-                <div class="info-label">Katılımcı</div>
+                <div class="info-label">KatÄ±lÄ±mcÄ±</div>
                 <div class="info-value">${selectedAppointment.participant_name}</div>
               </div>
             </div>
             <div class="info-item">
-              <div class="info-icon">🏫</div>
+              <div class="info-icon">ğŸ«</div>
               <div class="info-content">
-                <div class="info-label">Sınıf</div>
+                <div class="info-label">SÄ±nÄ±f</div>
                 <div class="info-value">${selectedAppointment.participant_class || "-"}</div>
               </div>
             </div>
             <div class="info-item">
-              <div class="info-icon">📅</div>
+              <div class="info-icon">ğŸ“…</div>
               <div class="info-content">
                 <div class="info-label">Tarih</div>
                 <div class="info-value">${appointmentDate}</div>
               </div>
             </div>
             <div class="info-item">
-              <div class="info-icon">⏰</div>
+              <div class="info-icon">â°</div>
               <div class="info-content">
                 <div class="info-label">Saat</div>
                 <div class="info-value">${appointmentTime}</div>
               </div>
             </div>
             <div class="info-item">
-              <div class="info-icon">📍</div>
+              <div class="info-icon">ğŸ“</div>
               <div class="info-content">
                 <div class="info-label">Konum</div>
                 <div class="info-value">${location}</div>
               </div>
             </div>
             <div class="info-item">
-              <div class="info-icon">🏷️</div>
+              <div class="info-icon">ğŸ·ï¸</div>
               <div class="info-content">
-                <div class="info-label">Katılımcı Tipi</div>
+                <div class="info-label">KatÄ±lÄ±mcÄ± Tipi</div>
                 <div class="info-value">${participantType}</div>
               </div>
             </div>
@@ -713,8 +713,8 @@ export default function RandevuBildirimlerPage() {
           </div>
           
           <div class="footer">
-            <p class="footer-text">Bu belge ${new Date().toLocaleDateString('tr-TR')} tarihinde oluşturulmuştur.</p>
-            <span class="badge">✓ Rehberlik Servisi</span>
+            <p class="footer-text">Bu belge ${new Date().toLocaleDateString('tr-TR')} tarihinde oluÅŸturulmuÅŸtur.</p>
+            <span class="badge">âœ“ Rehberlik Servisi</span>
           </div>
           
           <div class="no-print" style="text-align: center; margin-top: 24px;">
@@ -728,7 +728,7 @@ export default function RandevuBildirimlerPage() {
               font-weight: 600;
               cursor: pointer;
               margin-right: 12px;
-            ">📄 PDF Olarak Kaydet</button>
+            ">ğŸ“„ PDF Olarak Kaydet</button>
             <button onclick="window.close()" style="
               background: #f1f5f9;
               color: #64748b;
@@ -738,7 +738,7 @@ export default function RandevuBildirimlerPage() {
               font-size: 14px;
               font-weight: 600;
               cursor: pointer;
-            ">✕ Kapat</button>
+            ">âœ• Kapat</button>
           </div>
         </body>
         </html>
@@ -746,14 +746,14 @@ export default function RandevuBildirimlerPage() {
 
       printWindow.document.write(htmlContent);
       printWindow.document.close();
-      toast.success("PDF penceresi açıldı - Kaydetmek için yazdır butonuna basın");
+      toast.success("PDF penceresi aÃ§Ä±ldÄ± - Kaydetmek iÃ§in yazdÄ±r butonuna basÄ±n");
     } catch (error) {
-      console.error("PDF oluşturma hatası:", error);
-      toast.error("PDF oluşturulamadı");
+      console.error("PDF oluÅŸturma hatasÄ±:", error);
+      toast.error("PDF oluÅŸturulamadÄ±");
     }
   };
 
-  // Word olarak indir - Profesyonel tasarım
+  // Word olarak indir - Profesyonel tasarÄ±m
   const downloadAsWord = async () => {
     if (!generatedText || !selectedAppointment) return;
     
@@ -763,7 +763,7 @@ export default function RandevuBildirimlerPage() {
       const participantType = PARTICIPANT_TYPES.find(p => p.value === selectedAppointment.participant_type)?.label || "";
       const location = APPOINTMENT_LOCATIONS.find(l => l.value === selectedAppointment.location)?.label || "";
 
-      // Metin paragraflarını oluştur
+      // Metin paragraflarÄ±nÄ± oluÅŸtur
       const contentParagraphs = generatedText.split('\n').filter(line => line.trim()).map(line => {
         return new Paragraph({
           children: [
@@ -812,13 +812,13 @@ export default function RandevuBildirimlerPage() {
                 new Paragraph({
                   children: [
                     new TextRun({
-                      text: "Rehberlik ve Psikolojik Danışmanlık Servisi | ",
+                      text: "Rehberlik ve Psikolojik DanÄ±ÅŸmanlÄ±k Servisi | ",
                       size: 18,
                       color: "999999",
                       font: "Calibri",
                     }),
                     new TextRun({
-                      text: `Oluşturulma: ${new Date().toLocaleDateString('tr-TR')}`,
+                      text: `OluÅŸturulma: ${new Date().toLocaleDateString('tr-TR')}`,
                       size: 18,
                       color: "999999",
                       font: "Calibri",
@@ -830,11 +830,11 @@ export default function RandevuBildirimlerPage() {
             }),
           },
           children: [
-            // Başlık
+            // BaÅŸlÄ±k
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "RANDEVU BİLDİRİMİ",
+                  text: "RANDEVU BÄ°LDÄ°RÄ°MÄ°",
                   bold: true,
                   size: 36, // 18pt
                   color: "7C3AED",
@@ -853,7 +853,7 @@ export default function RandevuBildirimlerPage() {
               },
             }),
             
-            // Boşluk
+            // BoÅŸluk
             new Paragraph({ spacing: { after: 300 } }),
             
             // Bilgi tablosu
@@ -872,7 +872,7 @@ export default function RandevuBildirimlerPage() {
                   children: [
                     new TableCell({
                       children: [new Paragraph({
-                        children: [new TextRun({ text: "📋 Katılımcı", bold: true, size: 22, font: "Calibri" })],
+                        children: [new TextRun({ text: "ğŸ“‹ KatÄ±lÄ±mcÄ±", bold: true, size: 22, font: "Calibri" })],
                         spacing: { before: 100, after: 100 },
                       })],
                       width: { size: 25, type: WidthType.PERCENTAGE },
@@ -887,7 +887,7 @@ export default function RandevuBildirimlerPage() {
                     }),
                     new TableCell({
                       children: [new Paragraph({
-                        children: [new TextRun({ text: "🏫 Sınıf", bold: true, size: 22, font: "Calibri" })],
+                        children: [new TextRun({ text: "ğŸ« SÄ±nÄ±f", bold: true, size: 22, font: "Calibri" })],
                         spacing: { before: 100, after: 100 },
                       })],
                       width: { size: 25, type: WidthType.PERCENTAGE },
@@ -906,7 +906,7 @@ export default function RandevuBildirimlerPage() {
                   children: [
                     new TableCell({
                       children: [new Paragraph({
-                        children: [new TextRun({ text: "📅 Tarih", bold: true, size: 22, font: "Calibri" })],
+                        children: [new TextRun({ text: "ğŸ“… Tarih", bold: true, size: 22, font: "Calibri" })],
                         spacing: { before: 100, after: 100 },
                       })],
                       shading: { fill: "F8FAFC" },
@@ -919,7 +919,7 @@ export default function RandevuBildirimlerPage() {
                     }),
                     new TableCell({
                       children: [new Paragraph({
-                        children: [new TextRun({ text: "⏰ Saat", bold: true, size: 22, font: "Calibri" })],
+                        children: [new TextRun({ text: "â° Saat", bold: true, size: 22, font: "Calibri" })],
                         spacing: { before: 100, after: 100 },
                       })],
                       shading: { fill: "F8FAFC" },
@@ -936,7 +936,7 @@ export default function RandevuBildirimlerPage() {
                   children: [
                     new TableCell({
                       children: [new Paragraph({
-                        children: [new TextRun({ text: "📍 Konum", bold: true, size: 22, font: "Calibri" })],
+                        children: [new TextRun({ text: "ğŸ“ Konum", bold: true, size: 22, font: "Calibri" })],
                         spacing: { before: 100, after: 100 },
                       })],
                       shading: { fill: "F8FAFC" },
@@ -949,7 +949,7 @@ export default function RandevuBildirimlerPage() {
                     }),
                     new TableCell({
                       children: [new Paragraph({
-                        children: [new TextRun({ text: "🏷️ Tip", bold: true, size: 22, font: "Calibri" })],
+                        children: [new TextRun({ text: "ğŸ·ï¸ Tip", bold: true, size: 22, font: "Calibri" })],
                         spacing: { before: 100, after: 100 },
                       })],
                       shading: { fill: "F8FAFC" },
@@ -965,14 +965,14 @@ export default function RandevuBildirimlerPage() {
               ],
             }),
             
-            // Boşluk
+            // BoÅŸluk
             new Paragraph({ spacing: { after: 400 } }),
             
-            // Bildirim Metni başlığı
+            // Bildirim Metni baÅŸlÄ±ÄŸÄ±
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "BİLDİRİM METNİ",
+                  text: "BÄ°LDÄ°RÄ°M METNÄ°",
                   bold: true,
                   size: 24,
                   color: "7C3AED",
@@ -990,10 +990,10 @@ export default function RandevuBildirimlerPage() {
               },
             }),
             
-            // Boşluk
+            // BoÅŸluk
             new Paragraph({ spacing: { after: 200 } }),
             
-            // İçerik paragrafları
+            // Ä°Ã§erik paragraflarÄ±
             ...contentParagraphs,
           ],
         }],
@@ -1002,18 +1002,13 @@ export default function RandevuBildirimlerPage() {
       const blob = await Packer.toBlob(doc);
       const fileName = `randevu-bildirimi-${selectedAppointment.participant_name.replace(/\s+/g, "-")}.docx`;
       saveAs(blob, fileName);
-      toast.success("Word dosyası indirildi");
+      toast.success("Word dosyasÄ± indirildi");
     } catch (error) {
-      console.error("Word oluşturma hatası:", error);
-      toast.error("Word dosyası oluşturulamadı");
+      console.error("Word oluÅŸturma hatasÄ±:", error);
+      toast.error("Word dosyasÄ± oluÅŸturulamadÄ±");
     }
   };
 
-  // Telegram paylaşımı
-  const shareViaTelegram = () => {
-    if (!generatedText) return;
-    const encoded = encodeURIComponent(generatedText);
-    window.open(`https://t.me/share/url?url=&text=${encoded}`, "_blank");
   };
 
   if (loading) {
@@ -1033,7 +1028,7 @@ export default function RandevuBildirimlerPage() {
             <Bell className="w-7 h-7 text-purple-500" />
             Randevu Bildirimleri
           </h1>
-          <p className="text-slate-500 mt-1">Öğrenci, veli ve öğretmenler için bildirim metinleri oluşturun</p>
+          <p className="text-slate-500 mt-1">Ã–ÄŸrenci, veli ve Ã¶ÄŸretmenler iÃ§in bildirim metinleri oluÅŸturun</p>
         </div>
         <Button
           variant="outline"
@@ -1053,23 +1048,23 @@ export default function RandevuBildirimlerPage() {
           <CardContent className="pt-4">
             <div className="grid md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-slate-700">Okul Adı</label>
+                <label className="text-sm font-medium text-slate-700">Okul AdÄ±</label>
                 <input
                   type="text"
                   value={schoolName}
                   onChange={(e) => setSchoolName(e.target.value)}
                   className="w-full mt-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="Okul adını girin"
+                  placeholder="Okul adÄ±nÄ± girin"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-slate-700">Danışman Adı</label>
+                <label className="text-sm font-medium text-slate-700">DanÄ±ÅŸman AdÄ±</label>
                 <input
                   type="text"
                   value={counselorName}
                   onChange={(e) => setCounselorName(e.target.value)}
                   className="w-full mt-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="Danışman adını girin"
+                  placeholder="DanÄ±ÅŸman adÄ±nÄ± girin"
                 />
               </div>
             </div>
@@ -1078,24 +1073,24 @@ export default function RandevuBildirimlerPage() {
       )}
 
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Sol Panel - Randevu Seçimi */}
+        {/* Sol Panel - Randevu SeÃ§imi */}
         <div className="lg:col-span-1 space-y-4">
           <Card className="border-0 shadow-lg">
             <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-purple-500" />
-                Randevu Seçin
+                Randevu SeÃ§in
               </CardTitle>
               <CardDescription>
-                Bildirim oluşturmak için bir randevu seçin
+                Bildirim oluÅŸturmak iÃ§in bir randevu seÃ§in
               </CardDescription>
             </CardHeader>
             <CardContent>
               {appointments.length === 0 ? (
                 <div className="text-center py-8">
                   <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-500">Planlanmış randevu bulunamadı</p>
-                  <p className="text-sm text-slate-400 mt-1">Önce bir randevu oluşturun</p>
+                  <p className="text-slate-500">PlanlanmÄ±ÅŸ randevu bulunamadÄ±</p>
+                  <p className="text-sm text-slate-400 mt-1">Ã–nce bir randevu oluÅŸturun</p>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
@@ -1139,13 +1134,13 @@ export default function RandevuBildirimlerPage() {
             </CardContent>
           </Card>
 
-          {/* Seçili Randevu Detayı */}
+          {/* SeÃ§ili Randevu DetayÄ± */}
           {selectedAppointment && (
             <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-500 to-pink-500 text-white">
               <CardContent className="pt-4">
                 <div className="flex items-center gap-2 mb-3">
                   <CheckCircle className="w-5 h-5" />
-                  <span className="font-medium">Seçili Randevu</span>
+                  <span className="font-medium">SeÃ§ili Randevu</span>
                 </div>
                 <h3 className="text-xl font-bold">{selectedAppointment.participant_name}</h3>
                 <p className="text-purple-100">{selectedAppointment.participant_class}</p>
@@ -1168,14 +1163,14 @@ export default function RandevuBildirimlerPage() {
           )}
         </div>
 
-        {/* Orta ve Sağ Panel - Şablonlar ve Önizleme */}
+        {/* Orta ve SaÄŸ Panel - Åablonlar ve Ã–nizleme */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Şablon Seçimi */}
+          {/* Åablon SeÃ§imi */}
           <Card className="border-0 shadow-lg">
             <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Wand2 className="w-5 h-5 text-purple-500" />
-                Şablon Seçin
+                Åablon SeÃ§in
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1183,7 +1178,7 @@ export default function RandevuBildirimlerPage() {
                 <TabsList className="grid w-full grid-cols-3 mb-4">
                   <TabsTrigger value="student" className="gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white">
                     <GraduationCap className="w-4 h-4" />
-                    Öğrenci
+                    Ã–ÄŸrenci
                   </TabsTrigger>
                   <TabsTrigger value="parent" className="gap-2 data-[state=active]:bg-emerald-500 data-[state=active]:text-white">
                     <Users className="w-4 h-4" />
@@ -1191,7 +1186,7 @@ export default function RandevuBildirimlerPage() {
                   </TabsTrigger>
                   <TabsTrigger value="teacher" className="gap-2 data-[state=active]:bg-violet-500 data-[state=active]:text-white">
                     <User className="w-4 h-4" />
-                    Öğretmen
+                    Ã–ÄŸretmen
                   </TabsTrigger>
                 </TabsList>
 
@@ -1219,8 +1214,8 @@ export default function RandevuBildirimlerPage() {
                           </div>
                           <p className="font-medium text-slate-800">{template.name}</p>
                           <p className="text-xs text-slate-500 mt-1">
-                            {template.type === "student" ? "Öğrenci için" : 
-                             template.type === "parent" ? "Veli için" : "Öğretmen için"}
+                            {template.type === "student" ? "Ã–ÄŸrenci iÃ§in" : 
+                             template.type === "parent" ? "Veli iÃ§in" : "Ã–ÄŸretmen iÃ§in"}
                           </p>
                         </button>
                       );
@@ -1231,14 +1226,14 @@ export default function RandevuBildirimlerPage() {
             </CardContent>
           </Card>
 
-          {/* Önizleme ve Paylaşım */}
+          {/* Ã–nizleme ve PaylaÅŸÄ±m */}
           {generatedText && (
             <Card className="border-0 shadow-lg">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <MessageSquare className="w-5 h-5 text-purple-500" />
-                    Oluşturulan Bildirim
+                    OluÅŸturulan Bildirim
                   </CardTitle>
                   <div className="flex items-center gap-2">
                     <Button
@@ -1254,17 +1249,17 @@ export default function RandevuBildirimlerPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                {/* Metin Önizleme */}
+                {/* Metin Ã–nizleme */}
                 <div className="bg-slate-50 rounded-xl p-4 mb-4 max-h-[300px] overflow-y-auto">
                   <pre className="whitespace-pre-wrap font-sans text-sm text-slate-700">
                     {generatedText}
                   </pre>
                 </div>
 
-                {/* Düzenleme */}
+                {/* DÃ¼zenleme */}
                 <div className="mb-4">
                   <label className="text-sm font-medium text-slate-700 mb-2 block">
-                    Metni Düzenle (isteğe bağlı)
+                    Metni DÃ¼zenle (isteÄŸe baÄŸlÄ±)
                   </label>
                   <textarea
                     value={generatedText}
@@ -1273,14 +1268,14 @@ export default function RandevuBildirimlerPage() {
                   />
                 </div>
 
-                {/* Paylaşım Butonları */}
+                {/* PaylaÅŸÄ±m ButonlarÄ± */}
                 <div className="flex flex-wrap gap-2">
                   <Button
                     onClick={copyToClipboard}
                     className={`gap-2 ${copied ? "bg-green-500 hover:bg-green-600" : "bg-purple-500 hover:bg-purple-600"}`}
                   >
                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    {copied ? "Kopyalandı!" : "Kopyala"}
+                    {copied ? "KopyalandÄ±!" : "Kopyala"}
                   </Button>
                   
                   <Button
@@ -1301,14 +1296,6 @@ export default function RandevuBildirimlerPage() {
                     Word
                   </Button>
                   
-                  <Button
-                    variant="outline"
-                    onClick={shareViaTelegram}
-                    className="gap-2 border-sky-500 text-sky-600 hover:bg-sky-50"
-                  >
-                    <Send className="w-4 h-4" />
-                    Telegram
-                  </Button>
                   
                   <Button
                     variant="outline"
@@ -1343,14 +1330,14 @@ export default function RandevuBildirimlerPage() {
             </Card>
           )}
 
-          {/* Boş Durum */}
+          {/* BoÅŸ Durum */}
           {!generatedText && selectedAppointment && (
             <Card className="shadow-lg border-dashed border-2 border-slate-200">
               <CardContent className="py-12 text-center">
                 <Sparkles className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-slate-600 mb-2">Şablon Seçin</h3>
+                <h3 className="text-lg font-medium text-slate-600 mb-2">Åablon SeÃ§in</h3>
                 <p className="text-slate-400">
-                  Yukarıdan bir bildirim şablonu seçerek metin oluşturun
+                  YukarÄ±dan bir bildirim ÅŸablonu seÃ§erek metin oluÅŸturun
                 </p>
               </CardContent>
             </Card>
@@ -1360,9 +1347,9 @@ export default function RandevuBildirimlerPage() {
             <Card className="shadow-lg border-dashed border-2 border-slate-200">
               <CardContent className="py-12 text-center">
                 <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-slate-600 mb-2">Randevu Seçin</h3>
+                <h3 className="text-lg font-medium text-slate-600 mb-2">Randevu SeÃ§in</h3>
                 <p className="text-slate-400">
-                  Bildirim oluşturmak için sol panelden bir randevu seçin
+                  Bildirim oluÅŸturmak iÃ§in sol panelden bir randevu seÃ§in
                 </p>
               </CardContent>
             </Card>
@@ -1370,7 +1357,7 @@ export default function RandevuBildirimlerPage() {
         </div>
       </div>
 
-      {/* İpuçları */}
+      {/* Ä°puÃ§larÄ± */}
       <Card className="border-0 shadow-lg bg-gradient-to-r from-purple-50 to-pink-50">
         <CardContent className="py-4">
           <div className="flex items-start gap-3">
@@ -1378,10 +1365,10 @@ export default function RandevuBildirimlerPage() {
               <Sparkles className="w-4 h-4 text-purple-600" />
             </div>
             <div>
-              <h4 className="font-medium text-slate-800 mb-1">İpucu</h4>
+              <h4 className="font-medium text-slate-800 mb-1">Ä°pucu</h4>
               <p className="text-sm text-slate-600">
-                Oluşturulan bildirimi düzenleyebilir, kişiselleştirebilir ve farklı kanallardan paylaşabilirsiniz. 
-                WhatsApp butonu ile doğrudan mesaj gönderebilir, SMS ile telefona aktarabilirsiniz.
+                OluÅŸturulan bildirimi dÃ¼zenleyebilir, kiÅŸiselleÅŸtirebilir ve farklÄ± kanallardan paylaÅŸabilirsiniz. 
+                WhatsApp butonu ile doÄŸrudan mesaj gÃ¶nderebilir, SMS ile telefona aktarabilirsiniz.
               </p>
             </div>
           </div>

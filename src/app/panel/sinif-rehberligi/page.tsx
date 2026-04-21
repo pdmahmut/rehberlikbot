@@ -71,7 +71,7 @@ function useBusySlots() {
           .from("guidance_plans")
           .select("id, lesson_period")
           .eq("plan_date", date)
-          .eq("status", "planned")
+          .in("status", ["planned", "completed"])
       ])
 
       if (appointmentRes.ok) {

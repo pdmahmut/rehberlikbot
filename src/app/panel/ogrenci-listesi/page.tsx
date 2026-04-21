@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
@@ -192,7 +192,7 @@ export default function OgrenciListesiPage() {
   const [urlProcessed, setUrlProcessed] = useState(false);
 
   // Export işlemleri için state'ler
-  const [sendingTelegram, setSendingTelegram] = useState(false);
+  
   const [exportingWord, setExportingWord] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
 
@@ -405,32 +405,6 @@ export default function OgrenciListesiPage() {
     
     return message;
   };
-
-  // Telegram'a gönder
-  const sendToTelegram = async () => {
-    if (!selectedStudent || !studentHistory) return;
-    
-    setSendingTelegram(true);
-    toast.loading("Telegram'a gönderiliyor...", { id: "telegram-send" });
-    
-    try {
-      const message = formatHistoryMessage();
-      const res = await fetch("/api/telegram-send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-      });
-      
-      if (res.ok) {
-        toast.success("Öğrenci geçmişi Telegram'a gönderildi!", { id: "telegram-send" });
-      } else {
-        toast.error("Telegram'a gönderilemedi", { id: "telegram-send" });
-      }
-    } catch (error) {
-      console.error("Telegram send error:", error);
-      toast.error("Telegram gönderiminde hata oluştu", { id: "telegram-send" });
-    } finally {
-      setSendingTelegram(false);
     }
   };
 
@@ -1014,20 +988,6 @@ export default function OgrenciListesiPage() {
               <Card className="bg-white/80 backdrop-blur border-0 shadow-lg">
                 <CardContent className="p-4">
                   <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50"
-                      onClick={sendToTelegram}
-                      disabled={sendingTelegram}
-                    >
-                      {sendingTelegram ? (
-                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Send className="h-3.5 w-3.5" />
-                      )}
-                      Telegram'a Gönder
-                    </Button>
                     <Button
                       size="sm"
                       variant="outline"

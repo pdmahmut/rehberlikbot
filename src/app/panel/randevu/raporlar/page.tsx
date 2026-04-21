@@ -594,7 +594,7 @@ export default function RandevuRaporlariPage() {
             <tr>
               <td style="vertical-align: top;">
                 <h1 style="margin: 0 0 8px 0; font-size: 24px; font-weight: bold;">${reportType?.label || "Rapor"}</h1>
-                <p style="margin: 0; font-size: 14px; color: #e0e0e0;">Dumlupınar İlkokulu Rehberlik Servisi</p>
+                <p style="margin: 0; font-size: 14px; color: #e0e0e0;">Dumlupınar Ortaokulu Rehberlik Servisi</p>
               </td>
               <td style="text-align: right; vertical-align: top;">
                 <div style="background-color: ${colors.accent}; padding: 12px 16px; border-radius: 8px; display: inline-block;">
@@ -990,7 +990,7 @@ export default function RandevuRaporlariPage() {
                   new TableCell({
                     children: [
                       new Paragraph({
-                        children: [new TextRun({ text: "Dumlupınar İlkokulu", size: 18, color: "999999" })],
+                        children: [new TextRun({ text: "Dumlupınar Ortaokulu", size: 18, color: "999999" })],
                         alignment: AlignmentType.RIGHT
                       }),
                       new Paragraph({
