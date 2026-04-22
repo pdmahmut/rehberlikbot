@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { formatTelegramMessage } from '@/lib/data';
-import { sendTelegramMessage, formatTelegramMessageHTML } from '@/lib/telegram';
 import { writeToGoogleSheets } from '@/lib/sheets';
 import { YonlendirilenOgrenci, ReferralRecord } from '@/types';
 import { supabase } from '@/lib/supabase';
@@ -12,7 +10,7 @@ export const runtime = 'nodejs';
 export async function POST(request: NextRequest) {
   try {
     const { students }: { students: YonlendirilenOgrenci[] } = await request.json();
-    
+
     if (!students || students.length === 0) {
       return NextResponse.json(
         { error: 'Öğrenci listesi boş' },
@@ -22,11 +20,9 @@ export async function POST(request: NextRequest) {
 
     console.log(`📋 ${students.length} öğrenci için gönderim işlemi başlatılıyor...`);
 
-    // Validate teacher-class mapping using teachers.xlsx
-  const { records } = getTeachersData();
+    const { records } = getTeachersData();
     if (records.length > 0) {
       for (const s of students) {
-        // s.sinifSube is display text; we validate against teacher's single allowed class
         const keyCandidate = resolveKeyFromDisplay(s.sinifSube) || s.sinifSube;
         const res = validateTeacherClass(s.ogretmenAdi, keyCandidate, records);
         if (!res.valid) {
@@ -39,40 +35,10 @@ export async function POST(request: NextRequest) {
       students.map((student) => normalizeGuidanceStudent(student))
     );
 
-    // Results tracking
-    let telegramSuccess = false;
     let sheetsSuccess = false;
     const errors: string[] = [];
 
-    // 1. Telegram Bot API entegrasyonu
-    try {
-      const telegramMessages = normalizedStudents.map((student) =>
-        formatTelegramMessageHTML(
-          student.ogretmenAdi,
-          student.ogrenciAdi,
-          student.sinifSube,
-          student.yonlendirmeNedenleri,
-          student.not
-        )
-      );
-
-      const telegramResult = await sendTelegramMessage(telegramMessages);
-
-      if (telegramResult.sent === telegramResult.total) {
-        telegramSuccess = true;
-      } else {
-        telegramSuccess = telegramResult.sent > 0;
-        const failureDetails = telegramResult.failures
-          .map((f) => `#${f.index + 1}:${f.status ?? 'err'} ${f.body ?? f.error ?? ''}`)
-          .join('; ');
-        errors.push(`Telegram: ${telegramResult.sent}/${telegramResult.total} gönderildi. Hatalar: ${failureDetails}`);
-      }
-    } catch (error) {
-      console.error('Telegram entegrasyonu hatası:', error);
-      errors.push('Telegram entegrasyonu hatası');
-    }
-
-    // 2. Google Sheets entegrasyonu
+    // Google Sheets entegrasyonu
     try {
       sheetsSuccess = await writeToGoogleSheets(normalizedStudents);
       if (!sheetsSuccess) {
@@ -83,7 +49,7 @@ export async function POST(request: NextRequest) {
       errors.push('Google Sheets entegrasyonu hatası');
     }
 
-    // 3. Supabase referrals tablosuna kayıt (opsiyonel, akışı bozmaz)
+    // Supabase referrals tablosuna kayıt
     try {
       if (supabase) {
         const payload: ReferralRecord[] = normalizedStudents.map((student) => ({
@@ -104,58 +70,30 @@ export async function POST(request: NextRequest) {
           console.error('Supabase referrals insert hatası:', supabaseError.message);
           errors.push('Supabase istatistik kaydı yapılamadı');
         }
-      } else {
-        console.warn('Supabase client tanımlı değil, referrals kaydı atlanıyor');
       }
     } catch (error) {
       console.error('Supabase referrals entegrasyonu hatası:', error);
       errors.push('Supabase istatistik kaydı hatası');
     }
 
-    // 4. Console log (backup)
-    console.log('=== RPD Öğrenci Yönlendirme ===');
-    normalizedStudents.forEach((student, index) => {
-      const message = formatTelegramMessage(
-        student.ogretmenAdi,
-        student.ogrenciAdi,
-        student.sinifSube,
-        student.yonlendirmeNedenleri
-      );
-      console.log(`\nÖğrenci ${index + 1}:`);
-      console.log(message);
-    });
-
-    // Response based on results
-    const successCount = (telegramSuccess ? 1 : 0) + (sheetsSuccess ? 1 : 0);
     const sentCount = normalizedStudents.length;
-    
-    if (successCount === 2) {
+
+    if (sheetsSuccess) {
       return NextResponse.json({
         success: true,
-        message: `${sentCount} öğrenci başarıyla Telegram ve Google Sheets'e gönderildi`,
+        message: `${sentCount} öğrenci başarıyla Google Sheets'e gönderildi`,
         sentCount,
-        telegram: telegramSuccess,
         sheets: sheetsSuccess
-      });
-    } else if (successCount === 1) {
-      return NextResponse.json({
-        success: true,
-        message: `${sentCount} öğrenci kısmen gönderildi. ${errors.join(', ')}`,
-        sentCount,
-        telegram: telegramSuccess,
-        sheets: sheetsSuccess,
-        warnings: errors
       });
     } else {
       return NextResponse.json({
         success: false,
         message: `Gönderim başarısız: ${errors.join(', ')}`,
-        telegram: telegramSuccess,
         sheets: sheetsSuccess,
         errors: errors
       }, { status: 500 });
     }
-    
+
   } catch (error) {
     console.error('Send Guidance API Error:', error);
     return NextResponse.json(

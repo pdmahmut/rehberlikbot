@@ -1,12 +1,5 @@
-import RPDYonlendirme from "@/components/RPDYonlendirme";
+﻿import { redirect } from "next/navigation";
 
 export default function Home() {
-  return (
-    <main className="min-h-screen bg-slate-50">
-      <div className="px-4 pb-12 lg:px-6">
-        <RPDYonlendirme />
-      </div>
-    </main>
-  );
+  redirect("/login");
 }
-

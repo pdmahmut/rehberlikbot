@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
-import { Plus, CheckCircle2, Clock, Calendar, BookOpen, X, AlertTriangle, Sparkles, CircleDashed, Trash2 } from "lucide-react"
+import { Plus, CheckCircle2, Clock, Calendar, BookOpen, X, AlertTriangle, Sparkles, CircleDashed, Trash2, MessageSquare, ChevronDown, RefreshCw, Send } from "lucide-react"
+import { toast } from "sonner"
 import { normalizeLessonSlot } from "@/lib/lessonSlots"
 
 type GuidanceTopic = {
@@ -26,6 +27,27 @@ type GuidancePlan = {
   lesson_period: number | null
   teacher_name: string | null
   completed_at: string | null
+}
+
+type ClassRequest = {
+  id: string
+  teacher_name: string
+  class_key: string
+  class_display: string
+  topic: string
+  description: string | null
+  status: 'pending' | 'scheduled' | 'completed' | 'rejected'
+  scheduled_date: string | null
+  lesson_slot: number | null
+  feedback: string | null
+  created_at: string
+}
+
+const CLASS_REQUEST_STATUS: Record<ClassRequest['status'], { label: string; cls: string }> = {
+  pending:   { label: 'Bekliyor',   cls: 'bg-amber-100 text-amber-700' },
+  scheduled: { label: 'Planlandı',  cls: 'bg-blue-100 text-blue-700' },
+  completed: { label: 'Tamamlandı', cls: 'bg-emerald-100 text-emerald-700' },
+  rejected:  { label: 'Reddedildi', cls: 'bg-red-100 text-red-700' },
 }
 
 const CLASSES = [
@@ -109,6 +131,22 @@ function useBusySlots() {
         console.error(err)
       }
 
+      try {
+        const { data: classReqs, error } = await supabase
+          .from("class_requests")
+          .select("id, lesson_slot")
+          .eq("scheduled_date", date)
+          .eq("status", "scheduled")
+
+        if (!error && classReqs) {
+          classReqs.forEach((cr: { id: string; lesson_slot: number | null }) => {
+            if (cr.lesson_slot) allBusySlots.add(String(cr.lesson_slot))
+          })
+        }
+      } catch (err) {
+        console.error(err)
+      }
+
       setBusySlots(allBusySlots)
       return allBusySlots
     } catch (err) {
@@ -126,7 +164,7 @@ function useBusySlots() {
 export default function SinifRehberligiPage() {
   const [topics, setTopics] = useState<GuidanceTopic[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'planlama' | 'gecmis'>('planlama')
+  const [activeTab, setActiveTab] = useState<'planlama' | 'gecmis' | 'talepler'>('planlama')
 
   const [showNewTopicModal, setShowNewTopicModal] = useState(false)
   const [newTopicTitle, setNewTopicTitle] = useState("")
@@ -151,6 +189,18 @@ export default function SinifRehberligiPage() {
   const [selectedTopicForGrades, setSelectedTopicForGrades] = useState<GuidanceTopic | null>(null)
   const [managedGrades, setManagedGrades] = useState<number[]>([])
   const [savingGrades, setSavingGrades] = useState(false)
+
+  // Gelen Talepler state
+  const [classRequests, setClassRequests] = useState<ClassRequest[]>([])
+  const [classRequestsLoading, setClassRequestsLoading] = useState(false)
+  const [requestsFilter, setRequestsFilter] = useState<'pending' | 'scheduled' | 'completed' | 'all'>('pending')
+  const [showRequestPlanModal, setShowRequestPlanModal] = useState(false)
+  const [selectedRequest, setSelectedRequest] = useState<ClassRequest | null>(null)
+  const [requestPlanDate, setRequestPlanDate] = useState('')
+  const [requestPlanPeriod, setRequestPlanPeriod] = useState<number | null>(null)
+  const [requestPlanTeacher, setRequestPlanTeacher] = useState('')
+  const [requestPlanConflict, setRequestPlanConflict] = useState<string | null>(null)
+  const [savingRequestPlan, setSavingRequestPlan] = useState(false)
 
   const fetchTopics = useCallback(async () => {
     setLoading(true)
@@ -223,6 +273,25 @@ export default function SinifRehberligiPage() {
   useEffect(() => {
     if (selectedGrade) fetchHistory(selectedGrade)
   }, [selectedGrade, fetchHistory])
+
+  const fetchClassRequests = useCallback(async () => {
+    setClassRequestsLoading(true)
+    try {
+      const qs = requestsFilter !== 'all' ? `?status=${requestsFilter}` : ''
+      const res = await fetch(`/api/class-requests${qs}`)
+      const data = await res.json()
+      setClassRequests(data.requests || [])
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setClassRequestsLoading(false)
+    }
+  }, [requestsFilter])
+
+  useEffect(() => {
+    if (activeTab === 'talepler') fetchClassRequests()
+  }, [activeTab, fetchClassRequests])
+
 
   useEffect(() => {
     if (!showPlanModal || !planDate) return
@@ -315,6 +384,90 @@ export default function SinifRehberligiPage() {
       setConflictWarning(null)
     }
   }, [fetchBusySlots, selectedPlan?.id])
+
+  // --- Class Request handlers ---
+
+  const openRequestPlanModal = (req: ClassRequest) => {
+    setSelectedRequest(req)
+    const today = new Date()
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+    const date = req.scheduled_date || todayStr
+    setRequestPlanDate(date)
+    setRequestPlanPeriod(req.lesson_slot || null)
+    setRequestPlanTeacher((req as any).lesson_teacher || '')
+    setRequestPlanConflict(null)
+    setShowRequestPlanModal(true)
+    fetchBusySlots(date)
+  }
+
+  const checkRequestConflict = useCallback(async (date: string, period: number) => {
+    if (!date || !period) { setRequestPlanConflict(null); return }
+    const busy = await fetchBusySlots(date)
+    setRequestPlanConflict(busy.has(String(period)) ? 'Bu saat başka bir etkinlik tarafından kullanılıyor!' : null)
+  }, [fetchBusySlots])
+
+  const handleScheduleRequest = async () => {
+    if (!selectedRequest || !requestPlanDate || !requestPlanPeriod) return
+    setSavingRequestPlan(true)
+    try {
+      const busy = await fetchBusySlots(requestPlanDate)
+      if (busy.has(String(requestPlanPeriod))) {
+        setRequestPlanConflict('Bu saat artık dolu görünüyor. Başka bir ders saati seçin.')
+        return
+      }
+      const res = await fetch('/api/class-requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: selectedRequest.id, status: 'scheduled', scheduledDate: requestPlanDate, lessonSlot: requestPlanPeriod, lessonTeacher: requestPlanTeacher.trim() || null }),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
+      toast.success('Talep planlandı')
+      setShowRequestPlanModal(false)
+      setSelectedRequest(null)
+      fetchClassRequests()
+    } catch (err: any) {
+      toast.error(err.message || 'Kaydedilemedi')
+    } finally {
+      setSavingRequestPlan(false)
+    }
+  }
+
+  const handleCompleteRequest = async (req: ClassRequest) => {
+    try {
+      const res = await fetch('/api/class-requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: req.id, status: 'completed' }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success('Tamamlandı olarak işaretlendi')
+      fetchClassRequests()
+    } catch { toast.error('Kaydedilemedi') }
+  }
+
+  const handleDeleteRequest = async (req: ClassRequest) => {
+    if (!confirm('Bu talebi kalıcı olarak silmek istediğinize emin misiniz?')) return
+    try {
+      const res = await fetch(`/api/class-requests?id=${req.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      toast.success('Talep silindi')
+      fetchClassRequests()
+    } catch { toast.error('Silinemedi') }
+  }
+
+  const handleRejectRequest = async (req: ClassRequest) => {
+    if (!confirm('Bu talebi reddetmek istediğinize emin misiniz?')) return
+    try {
+      const res = await fetch('/api/class-requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: req.id, status: 'rejected' }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success('Talep reddedildi')
+      fetchClassRequests()
+    } catch { toast.error('Kaydedilemedi') }
+  }
 
   const handleSavePlan = async () => {
     if (!selectedPlan || !planDate || !planPeriod || conflictWarning) return
@@ -654,6 +807,17 @@ export default function SinifRehberligiPage() {
         >
           🗂️ Geçmiş Kayıtlar
         </button>
+        <button
+          onClick={() => setActiveTab('talepler')}
+          className={`flex items-center gap-1.5 px-5 py-2.5 text-sm font-semibold border-b-2 transition-all ${
+            activeTab === 'talepler'
+              ? 'border-emerald-500 text-emerald-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <MessageSquare className="h-4 w-4" />
+          Gelen Talepler
+        </button>
       </div>
 
       {/* GEÇMİŞ SEKMESİ */}
@@ -733,6 +897,130 @@ export default function SinifRehberligiPage() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TALEPLER SEKMESİ */}
+      {activeTab === 'talepler' && (
+        <div className="space-y-5">
+          {/* Filter + refresh */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+              {(['pending', 'scheduled', 'completed', 'all'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setRequestsFilter(f)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    requestsFilter === f ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {f === 'pending' ? 'Bekleyenler' : f === 'scheduled' ? 'Planlananlar' : f === 'completed' ? 'Tamamlananlar' : 'Tümü'}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={fetchClassRequests}
+              className="p-2 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+            >
+              <RefreshCw className={`h-4 w-4 ${classRequestsLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          {classRequestsLoading ? (
+            <div className="flex items-center justify-center h-40">
+              <div className="w-8 h-8 border-4 border-emerald-500/30 rounded-full animate-spin border-t-emerald-500" />
+            </div>
+          ) : classRequests.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 bg-white rounded-2xl border border-slate-200 shadow-sm text-slate-400">
+              <MessageSquare className="h-10 w-10 mb-3 opacity-30" />
+              <p className="font-medium">Talep bulunmuyor</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {classRequests.map(req => {
+                const statusInfo = CLASS_REQUEST_STATUS[req.status]
+                return (
+                  <div key={req.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="p-4">
+                      <div className="flex items-start gap-4">
+                        {/* Class badge */}
+                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shrink-0 shadow-md">
+                          <span className="text-white text-sm font-black">{req.class_display}</span>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="font-bold text-slate-800 text-sm">{req.topic}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${statusInfo.cls}`}>
+                              {statusInfo.label}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 mb-1">
+                            <span className="font-medium">{req.teacher_name}</span> —{' '}
+                            {new Date(req.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                          </p>
+                          {req.description && (
+                            <p className="text-xs text-slate-600 leading-relaxed">{req.description}</p>
+                          )}
+                          {req.status === 'scheduled' && req.scheduled_date && (
+                            <div className="flex items-center gap-1.5 mt-2 text-xs text-blue-700 font-semibold">
+                              <Calendar className="h-3.5 w-3.5" />
+                              {new Date(req.scheduled_date + 'T00:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}
+                              {req.lesson_slot && <span className="ml-1">— {req.lesson_slot}. ders</span>}
+                            </div>
+                          )}
+                          {req.feedback && (
+                            <div className="mt-2 p-2.5 bg-slate-50 rounded-lg">
+                              <p className="text-xs text-slate-500 font-medium mb-0.5">Öğretmen geri bildirimi:</p>
+                              <p className="text-xs text-slate-700 italic">{req.feedback}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex flex-col gap-1.5 shrink-0">
+                          {req.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => openRequestPlanModal(req)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded-xl hover:bg-blue-600 transition-colors"
+                              >
+                                <Calendar className="h-3.5 w-3.5" /> Planla
+                              </button>
+                              <button
+                                onClick={() => handleRejectRequest(req)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 border border-red-200 text-red-500 text-xs font-semibold rounded-xl hover:bg-red-50 transition-colors"
+                              >
+                                <X className="h-3.5 w-3.5" /> Reddet
+                              </button>
+                            </>
+                          )}
+                          {req.status === 'scheduled' && (
+                            <>
+                              <button
+                                onClick={() => openRequestPlanModal(req)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-500 text-xs font-semibold rounded-xl hover:bg-slate-50 transition-colors"
+                              >
+                                <Clock className="h-3.5 w-3.5" /> Düzenle
+                              </button>
+                              <span className="text-[11px] text-blue-600 font-medium">Takvimden tamamlayın</span>
+                            </>
+                          )}
+                          <button
+                            onClick={() => handleDeleteRequest(req)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-400 text-xs font-semibold rounded-xl hover:border-red-200 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Sil
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
@@ -1165,6 +1453,100 @@ export default function SinifRehberligiPage() {
                 className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:from-blue-600 hover:to-indigo-700 transition-all"
               >
                 {savingGrades ? 'Kaydediliyor...' : 'Kaydet'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Talep Plan Modalı */}
+      {showRequestPlanModal && selectedRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h3 className="text-base font-bold text-slate-800">{selectedRequest.class_display} — Plan</h3>
+              <button onClick={() => setShowRequestPlanModal(false)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700">Tarih</label>
+                <input
+                  type="date"
+                  value={requestPlanDate}
+                  onChange={e => {
+                    setRequestPlanDate(e.target.value)
+                    setRequestPlanConflict(null)
+                    setRequestPlanPeriod(null)
+                    fetchBusySlots(e.target.value)
+                  }}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700">Ders Saati</label>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {[1,2,3,4,5,6,7].map(p => (
+                    <button
+                      key={p}
+                      disabled={busyLoading || busySlots.has(String(p))}
+                      onClick={() => {
+                        setRequestPlanPeriod(p)
+                        if (requestPlanDate) checkRequestConflict(requestPlanDate, p)
+                      }}
+                      className={`py-2 rounded-lg text-sm font-bold border-2 transition-all ${
+                        busyLoading || busySlots.has(String(p))
+                          ? 'bg-slate-100 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
+                          : requestPlanPeriod === p
+                          ? 'bg-blue-500 border-blue-500 text-white'
+                          : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300'
+                      }`}
+                    >
+                      {p}{busySlots.has(String(p)) ? ' •' : ''}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-500">
+                  Dolu saatler pasif gösterilir ve seçilemez.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700">
+                  Öğretmen Adı <span className="text-slate-400 font-normal">(isteğe bağlı)</span>
+                </label>
+                <input
+                  type="text"
+                  value={requestPlanTeacher}
+                  onChange={e => setRequestPlanTeacher(e.target.value)}
+                  placeholder="örn: Ahmet Yılmaz"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {requestPlanConflict && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl">
+                  <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+                  <span className="text-sm text-red-600 font-medium">{requestPlanConflict}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 px-6 pb-6">
+              <button
+                onClick={() => setShowRequestPlanModal(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleScheduleRequest}
+                disabled={!requestPlanDate || !requestPlanPeriod || !!requestPlanConflict || savingRequestPlan || busyLoading}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:from-blue-600 hover:to-indigo-700 transition-all"
+              >
+                {savingRequestPlan ? 'Kaydediliyor...' : 'Planla'}
               </button>
             </div>
           </div>

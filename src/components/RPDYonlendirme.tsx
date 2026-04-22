@@ -28,7 +28,12 @@ const formSchema = z.object({
   not: z.string().optional(),
 });
 
-export default function RPDYonlendirme() {
+interface RPDYonlendirmeProps {
+  teacherName?: string;
+  classKey?: string;
+}
+
+export default function RPDYonlendirme({ teacherName: initTeacher, classKey: initClassKey }: RPDYonlendirmeProps = {}) {
   const [sinifSubeList, setSinifSubeList] = useState<SinifSube[]>([]);
   const [ogrenciList, setOgrenciList] = useState<Ogrenci[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,8 +46,8 @@ export default function RPDYonlendirme() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      ogretmenAdi: "",
-      sinifSube: "",
+      ogretmenAdi: initTeacher || "",
+      sinifSube: initClassKey || "",
       ogrenci: "",
       yonlendirmeNedenleri: [],
       not: "",
@@ -112,6 +117,14 @@ export default function RPDYonlendirme() {
     }
   };
 
+  // Başlangıçta classKey verilmişse öğrencileri yükle
+  useEffect(() => {
+    if (!loading && initClassKey) {
+      handleSinifChange(initClassKey);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     const sinifSubeText = sinifSubeList.find(s => s.value === values.sinifSube)?.text || "";
     const ogrenciAdi = ogrenciList.find(o => o.value === values.ogrenci)?.text || "";
@@ -157,15 +170,13 @@ export default function RPDYonlendirme() {
       const result = await parseJsonResponse<any>(response);
 
       if (response.ok && result.success) {
-        if (result.telegram && result.sheets) {
-          toast.success("✅ Öğrenci Telegram ve Google Sheets'e başarıyla gönderildi!");
-        } else if (result.telegram || result.sheets) {
-          toast.success("⚠️ Öğrenci kısmen gönderildi. " + result.message);
+        if (result.sheets) {
+          toast.success("✅ Öğrenci Google Sheets'e başarıyla gönderildi!");
         } else {
           toast.error("❌ Gönderim başarısız: " + result.message);
         }
 
-        if (result.telegram || result.sheets) {
+        if (result.sheets) {
           notifyGuidanceReferralsChanged({
             action: "create",
             studentName: students[0]?.ogrenciAdi || "",
@@ -277,26 +288,32 @@ export default function RPDYonlendirme() {
                           Öğretmen *
                         </FormLabel>
                         <FormControl>
-                          <Select
-                            onValueChange={(val) => {
-                              console.log('👨‍🏫 Öğretmen değişti:', val);
-                              field.onChange(val);
-                              // Öğretmen değiştiğinde sınıf ve öğrenci seçimini sıfırla
-                              form.setValue('sinifSube', '');
-                              form.setValue('ogrenci', '');
-                              setOgrenciList([]);
-                            }}
-                            value={field.value}
-                          >
-                            <SelectTrigger className="border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all duration-300 bg-white/70 backdrop-blur-sm hover:bg-white/90 hover:shadow-md min-h-[48px] sm:min-h-[52px] px-3 sm:px-4 text-sm sm:text-base w-full rounded-xl active:scale-[0.99]">
-                              <SelectValue placeholder="🧑‍🏫 Öğretmen seçin" />
-                            </SelectTrigger>
-                            <SelectContent position="item-aligned" className="max-h-none overflow-visible">
-                              {teacherOptions.map(t => (
-                                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          {initTeacher ? (
+                            <div className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-blue-200 bg-blue-50/70 min-h-[48px] sm:min-h-[52px]">
+                              <UserCheck className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                              <span className="text-sm sm:text-base font-medium text-blue-800">{field.value}</span>
+                              <span className="ml-auto text-[10px] text-blue-400 bg-blue-100 px-2 py-0.5 rounded-full">Giriş yapıldı</span>
+                            </div>
+                          ) : (
+                            <Select
+                              onValueChange={(val) => {
+                                field.onChange(val);
+                                form.setValue('sinifSube', '');
+                                form.setValue('ogrenci', '');
+                                setOgrenciList([]);
+                              }}
+                              value={field.value}
+                            >
+                              <SelectTrigger className="border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all duration-300 bg-white/70 backdrop-blur-sm hover:bg-white/90 hover:shadow-md min-h-[48px] sm:min-h-[52px] px-3 sm:px-4 text-sm sm:text-base w-full rounded-xl active:scale-[0.99]">
+                                <SelectValue placeholder="🧑‍🏫 Öğretmen seçin" />
+                              </SelectTrigger>
+                              <SelectContent position="item-aligned" className="max-h-none overflow-visible">
+                                {teacherOptions.map(t => (
+                                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
                         </FormControl>
                         <FormMessage />
                       </FormItem>

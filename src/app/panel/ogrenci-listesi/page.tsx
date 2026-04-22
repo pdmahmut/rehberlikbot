@@ -7,17 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { 
-  GraduationCap, 
-  Search, 
-  RefreshCw, 
-  User, 
-  Calendar, 
+  GraduationCap,
+  Search,
+  RefreshCw,
+  User,
+  Calendar,
   FileText,
   X,
   UserCheck,
   ChevronRight,
   History,
-  Send,
   FileDown,
   FileType,
   Users,
@@ -192,7 +191,6 @@ export default function OgrenciListesiPage() {
   const [urlProcessed, setUrlProcessed] = useState(false);
 
   // Export işlemleri için state'ler
-  const [sendingTelegram, setSendingTelegram] = useState(false);
   const [exportingWord, setExportingWord] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
 
@@ -362,76 +360,6 @@ export default function OgrenciListesiPage() {
     if (reasonLower.includes('ders')) return 'bg-blue-100 text-blue-700 border-blue-200';
     if (reasonLower.includes('sosyal') || reasonLower.includes('uyum')) return 'bg-purple-100 text-purple-700 border-purple-200';
     return 'bg-slate-100 text-slate-700 border-slate-200';
-  };
-
-  // Öğrenci geçmişi mesaj formatı
-  const formatHistoryMessage = () => {
-    if (!selectedStudent || !studentHistory) return "";
-    
-    const classDisplay = urlClass || classes.find(c => c.value === selectedClass)?.text || "";
-    let message = `📋 *ÖĞRENCİ GEÇMİŞİ RAPORU*\n`;
-    message += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-    message += `👤 *Öğrenci:* ${selectedStudent.text}\n`;
-    message += `🏫 *Sınıf:* ${classDisplay}\n`;
-    message += `📊 *Toplam Yönlendirme:* ${studentHistory.totalReferrals}\n`;
-    
-    if (studentHistory.stats.topReason) {
-      message += `⚠️ *En Sık Neden:* ${studentHistory.stats.topReason.name} (${studentHistory.stats.topReason.count})\n`;
-    }
-    
-    message += `\n━━━━━━━━━━━━━━━━━━━━━━\n`;
-    
-    if (studentHistory.totalReferrals === 0) {
-      message += `\n✅ Bu öğrenci için yönlendirme kaydı bulunmuyor.\n`;
-    } else {
-      message += `\n📝 *Yönlendirme Detayları:*\n\n`;
-      
-      studentHistory.referrals.forEach((r, idx) => {
-        const date = new Date(r.date);
-        const dateStr = date.toLocaleDateString('tr-TR');
-        message += `*${idx + 1}.* ${r.reason}\n`;
-        message += `   👨‍🏫 ${r.teacherName} | 📅 ${dateStr}\n`;
-        if (r.notes) {
-          message += `   📌 ${r.notes}\n`;
-        }
-        if (idx < studentHistory.referrals.length - 1) {
-          message += `───────────────────\n`;
-        }
-      });
-    }
-    
-    message += `\n━━━━━━━━━━━━━━━━━━━━━━\n`;
-    message += `_Rapor Tarihi: ${new Date().toLocaleDateString('tr-TR')}_`;
-    
-    return message;
-  };
-
-  // Telegram'a gönder
-  const sendToTelegram = async () => {
-    if (!selectedStudent || !studentHistory) return;
-    
-    setSendingTelegram(true);
-    toast.loading("Telegram'a gönderiliyor...", { id: "telegram-send" });
-    
-    try {
-      const message = formatHistoryMessage();
-      const res = await fetch("/api/telegram-send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-      });
-      
-      if (res.ok) {
-        toast.success("Öğrenci geçmişi Telegram'a gönderildi!", { id: "telegram-send" });
-      } else {
-        toast.error("Telegram'a gönderilemedi", { id: "telegram-send" });
-      }
-    } catch (error) {
-      console.error("Telegram send error:", error);
-      toast.error("Telegram gönderiminde hata oluştu", { id: "telegram-send" });
-    } finally {
-      setSendingTelegram(false);
-    }
   };
 
   // Word olarak indir
@@ -1014,20 +942,6 @@ export default function OgrenciListesiPage() {
               <Card className="bg-white/80 backdrop-blur border-0 shadow-lg">
                 <CardContent className="p-4">
                   <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50"
-                      onClick={sendToTelegram}
-                      disabled={sendingTelegram}
-                    >
-                      {sendingTelegram ? (
-                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Send className="h-3.5 w-3.5" />
-                      )}
-                      Telegram'a Gönder
-                    </Button>
                     <Button
                       size="sm"
                       variant="outline"

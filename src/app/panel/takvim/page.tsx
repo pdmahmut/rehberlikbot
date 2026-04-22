@@ -20,7 +20,9 @@ import {
   ListTodo,
   XCircle,
   Users,
-  X
+  X,
+  Bell,
+  AlertTriangle
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
@@ -113,7 +115,7 @@ interface CalendarEvent {
   date: string;
   time?: string;
   title: string;
-  type: 'appointment' | 'guidance_plan' | 'task' | 'follow_up';
+  type: 'appointment' | 'guidance_plan' | 'class_request' | 'task' | 'follow_up';
   status?: string;
   color: string;
   data: any;
@@ -175,9 +177,15 @@ export default function TakvimPage() {
   const [viewType, setViewType] = useState<ViewType>('day');
   const [isLoading, setIsLoading] = useState(true);
 
+  // Auth & Bildirim State'leri
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<{ pendingRequests: any[]; recentReferrals: any[] }>({ pendingRequests: [], recentReferrals: [] });
+  const [notifLoading, setNotifLoading] = useState(false);
+
   // Veri State'leri
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [guidancePlans, setGuidancePlans] = useState<any[]>([]);
+  const [classRequests, setClassRequests] = useState<any[]>([]);
   const [guidanceTopicMap, setGuidanceTopicMap] = useState<Record<string, string>>({});
   const [tasks, setTasks] = useState<any[]>([]);
   const [followUps, setFollowUps] = useState<any[]>([]);
@@ -189,6 +197,16 @@ export default function TakvimPage() {
 
   // Modallar
   const [dayModalDate, setDayModalDate] = useState<Date | null>(null);
+
+  // Sınıf Talebi Düzenleme Modal State'leri
+  const [showCrEditModal, setShowCrEditModal] = useState(false);
+  const [editingCr, setEditingCr] = useState<any>(null);
+  const [crEditDate, setCrEditDate] = useState('');
+  const [crEditPeriod, setCrEditPeriod] = useState<number | null>(null);
+  const [crEditTeacher, setCrEditTeacher] = useState('');
+  const [crEditBusySlots, setCrEditBusySlots] = useState<Set<string>>(new Set());
+  const [crEditConflict, setCrEditConflict] = useState<string | null>(null);
+  const [crEditSaving, setCrEditSaving] = useState(false);
   
   const [showAttendanceChoiceModal, setShowAttendanceChoiceModal] = useState(false);
   const [attendanceChoiceAppointment, setAttendanceChoiceAppointment] = useState<Appointment | null>(null);
@@ -313,6 +331,35 @@ export default function TakvimPage() {
     }
   }, [classes]);
 
+  // --- Auth & Bildirimler ---
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(d => {
+      setUserRole(d.role || null);
+      if (d.role === 'admin') loadNotifications();
+    }).catch(() => {});
+  }, []);
+
+  const loadNotifications = async () => {
+    setNotifLoading(true);
+    try {
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+      const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7);
+      const weekAgoStr = `${weekAgo.getFullYear()}-${String(weekAgo.getMonth()+1).padStart(2,'0')}-${String(weekAgo.getDate()).padStart(2,'0')}`;
+
+      const [reqRes, refResult] = await Promise.all([
+        fetch('/api/class-requests?status=pending'),
+        supabase.from('referrals').select('id, teacher_name, class_display, student_name, reason, created_at').gte('created_at', weekAgoStr).order('created_at', { ascending: false }).limit(10)
+      ]);
+      const reqData = reqRes.ok ? await reqRes.json() : { requests: [] };
+      setNotifications({
+        pendingRequests: reqData.requests || [],
+        recentReferrals: refResult.data || []
+      });
+    } catch { /* ignore */ }
+    finally { setNotifLoading(false); }
+  };
+
   // --- Data Fetching ---
   useEffect(() => {
     loadData();
@@ -332,18 +379,20 @@ export default function TakvimPage() {
       const startStr = getLocalDateString(startDate);
       const endStr = getLocalDateString(endDate);
 
-      const [appResult, planResult, taskResult, followResult, topicResult] = await Promise.all([
+      const [appResult, planResult, taskResult, followResult, topicResult, classReqResult] = await Promise.all([
         supabase.from('appointments').select('*').gte('appointment_date', startStr).lte('appointment_date', endStr),
         supabase.from('guidance_plans').select('*').gte('plan_date', startStr).lte('plan_date', endStr),
         supabase.from('tasks').select('*').gte('due_date', startStr).lte('due_date', endStr),
         supabase.from('follow_ups').select('*').gte('follow_up_date', startStr).lte('follow_up_date', endStr),
-        supabase.from('guidance_topics').select('id, title')
+        supabase.from('guidance_topics').select('id, title'),
+        supabase.from('class_requests').select('*').in('status', ['scheduled', 'completed']).gte('scheduled_date', startStr).lte('scheduled_date', endStr)
       ]);
 
       setAppointments(appResult.data || []);
       setGuidancePlans(planResult.data || []);
       setTasks(taskResult.data || []);
       setFollowUps(followResult.data || []);
+      setClassRequests(classReqResult.data || []);
       setGuidanceTopicMap(
         Object.fromEntries(
           (topicResult.data || []).map((topic: { id: string; title: string }) => [topic.id, topic.title])
@@ -842,6 +891,97 @@ export default function TakvimPage() {
     }
   };
 
+  const toggleClassRequestStatus = async (id: string, currentStatus?: string) => {
+    if (currentStatus === 'completed') return;
+    try {
+      const res = await fetch('/api/class-requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: 'completed' })
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Sınıf talebi tamamlandı');
+      await loadData();
+    } catch {
+      toast.error('Hata oluştu');
+    }
+  };
+
+  const handleResetClassRequest = async (id: string) => {
+    if (!confirm('Bu talep tekrar "Bekliyor" durumuna alınsın mı? Planlama bilgileri silinecek.')) return;
+    try {
+      const res = await fetch('/api/class-requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: 'pending', scheduledDate: null, lessonSlot: null, lessonTeacher: null })
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Talep tekrar bekliyor durumuna alındı');
+      await loadData();
+    } catch {
+      toast.error('Hata oluştu');
+    }
+  };
+
+  const fetchCrBusySlots = async (date: string, excludeId?: string) => {
+    const allBusy = new Set<string>();
+    try {
+      const aptRes = await fetch(`/api/appointments?date=${date}`);
+      if (aptRes.ok) {
+        const d = await aptRes.json();
+        d.appointments?.forEach((a: any) => {
+          if (a.status !== 'cancelled' && a.status !== 'pending') allBusy.add(normalizeLessonSlot(a.start_time));
+        });
+      }
+      const { data: plans } = await supabase.from('guidance_plans').select('lesson_period').eq('plan_date', date).eq('status', 'planned');
+      plans?.forEach((p: any) => allBusy.add(normalizeLessonSlot(p.lesson_period)));
+      const { data: activities } = await supabase.from('class_activities').select('activity_time').eq('activity_date', date);
+      activities?.forEach((a: any) => allBusy.add(normalizeLessonSlot(a.activity_time)));
+      let crQuery = supabase.from('class_requests').select('id, lesson_slot').eq('scheduled_date', date).eq('status', 'scheduled');
+      if (excludeId) crQuery = crQuery.neq('id', excludeId);
+      const { data: crs } = await crQuery;
+      crs?.forEach((r: any) => { if (r.lesson_slot) allBusy.add(String(r.lesson_slot)); });
+    } catch { /* ignore */ }
+    setCrEditBusySlots(allBusy);
+    return allBusy;
+  };
+
+  const openCrEditModal = (req: any) => {
+    setEditingCr(req);
+    const date = req.scheduled_date || getLocalDateString(currentDate);
+    setCrEditDate(date);
+    setCrEditPeriod(req.lesson_slot ? Number(req.lesson_slot) : null);
+    setCrEditTeacher(req.lesson_teacher || '');
+    setCrEditConflict(null);
+    setShowCrEditModal(true);
+    fetchCrBusySlots(date, req.id);
+  };
+
+  const handleSaveCrEdit = async () => {
+    if (!editingCr || !crEditDate || !crEditPeriod) return;
+    if (crEditBusySlots.has(String(crEditPeriod))) {
+      setCrEditConflict('Bu saat başka bir etkinlik tarafından kullanılıyor!');
+      return;
+    }
+    setCrEditSaving(true);
+    try {
+      const res = await fetch('/api/class-requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editingCr.id, status: 'scheduled', scheduledDate: crEditDate, lessonSlot: crEditPeriod, lessonTeacher: crEditTeacher.trim() || null })
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Talep güncellendi');
+      setShowCrEditModal(false);
+      setEditingCr(null);
+      await loadData();
+    } catch {
+      toast.error('Kaydedilemedi');
+    } finally {
+      setCrEditSaving(false);
+    }
+  };
+
   const toggleGuidancePlanStatus = async (id: string, currentStatus?: string) => {
     const newStatus = currentStatus === 'completed' ? 'planned' : 'completed';
     try {
@@ -906,6 +1046,18 @@ export default function TakvimPage() {
           }
         });
       });
+      classRequests.forEach(req => {
+        allEvents.push({
+          id: req.id,
+          date: req.scheduled_date,
+          time: String(req.lesson_slot),
+          title: `${req.class_display} — ${req.topic}` + (req.lesson_teacher ? ` (${req.lesson_teacher})` : ''),
+          type: 'class_request',
+          color: 'violet',
+          status: req.status,
+          data: req
+        });
+      });
     }
     if (showTasks) {
       tasks.forEach(task => {
@@ -916,7 +1068,7 @@ export default function TakvimPage() {
       });
     }
     return allEvents;
-  }, [appointments, guidancePlans, tasks, followUps, showAppointments, showActivities, showTasks, guidanceTopicMap]);
+  }, [appointments, guidancePlans, classRequests, tasks, followUps, showAppointments, showActivities, showTasks, guidanceTopicMap]);
 
   const getEventsForDate = (date: Date) => {
     const dateStr = getLocalDateString(date);
@@ -982,6 +1134,161 @@ export default function TakvimPage() {
   return (
     <div className="space-y-6">
 
+      {/* Admin Bildirim Paneli */}
+      {userRole === 'admin' && (notifications.pendingRequests.length > 0 || notifications.recentReferrals.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Bekleyen Sınıf Talepleri */}
+          {notifications.pendingRequests.length > 0 && (
+            <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50 p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-500 shadow-sm">
+                    <Bell className="h-4 w-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-violet-800">Sınıf Rehberliği Talepleri</p>
+                    <p className="text-xs text-violet-600">{notifications.pendingRequests.length} bekleyen talep</p>
+                  </div>
+                </div>
+                <a href="/panel/sinif-rehberligi" className="text-xs font-semibold text-violet-600 hover:text-violet-800 transition-colors">Görüntüle →</a>
+              </div>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {notifications.pendingRequests.slice(0, 5).map((req: any) => (
+                  <div key={req.id} className="flex items-center gap-2 rounded-xl bg-white/70 border border-violet-100 px-3 py-2">
+                    <div className="h-2 w-2 rounded-full bg-violet-400 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-slate-800 truncate">{req.class_display} — {req.topic}</p>
+                      <p className="text-[11px] text-slate-500">{req.teacher_name}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Son Öğretmen Yönlendirmeleri */}
+          {notifications.recentReferrals.length > 0 && (
+            <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50 p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-500 shadow-sm">
+                    <Bell className="h-4 w-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-blue-800">Yeni Öğrenci Yönlendirmeleri</p>
+                    <p className="text-xs text-blue-600">Son 7 günde {notifications.recentReferrals.length} yönlendirme</p>
+                  </div>
+                </div>
+                <a href="/panel/ogrenci-yonlendirmesi" className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">Görüntüle →</a>
+              </div>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {notifications.recentReferrals.slice(0, 5).map((ref: any) => (
+                  <div key={ref.id} className="flex items-center gap-2 rounded-xl bg-white/70 border border-blue-100 px-3 py-2">
+                    <div className="h-2 w-2 rounded-full bg-blue-400 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-slate-800 truncate">{ref.student_name} ({ref.class_display})</p>
+                      <p className="text-[11px] text-slate-500">{ref.teacher_name} — {ref.reason}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sınıf Talebi Planlama Güncelle Modalı */}
+      {showCrEditModal && editingCr && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
+          <div className="absolute inset-0" onClick={() => setShowCrEditModal(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-purple-50 px-5 py-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-violet-600">Planlama Güncelle</p>
+                <p className="text-sm font-bold text-slate-800 mt-0.5">{editingCr.class_display} — {editingCr.topic}</p>
+              </div>
+              <button onClick={() => setShowCrEditModal(false)} className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
+                <X className="h-4 w-4 text-slate-500" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* Tarih */}
+              <div>
+                <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 block">Tarih</Label>
+                <Input
+                  type="date"
+                  value={crEditDate}
+                  onChange={e => {
+                    setCrEditDate(e.target.value);
+                    setCrEditPeriod(null);
+                    setCrEditConflict(null);
+                    if (e.target.value) fetchCrBusySlots(e.target.value, editingCr.id);
+                  }}
+                  className="w-full rounded-xl border-slate-200"
+                />
+              </div>
+              {/* Ders Saati */}
+              <div>
+                <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 block">Ders Saati</Label>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {Array.from({ length: 7 }, (_, i) => i + 1).map(slot => {
+                    const busy = crEditBusySlots.has(String(slot));
+                    const selected = crEditPeriod === slot;
+                    return (
+                      <button
+                        key={slot}
+                        disabled={busy}
+                        onClick={() => { setCrEditPeriod(slot); setCrEditConflict(null); }}
+                        className={`flex flex-col items-center gap-0.5 rounded-xl border py-2 text-xs font-bold transition-all ${
+                          selected
+                            ? 'border-violet-500 bg-violet-500 text-white shadow-md'
+                            : busy
+                              ? 'border-red-200 bg-red-50 text-red-300 cursor-not-allowed'
+                              : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-violet-300 hover:bg-violet-50'
+                        }`}
+                      >
+                        {slot}
+                        <span className={`text-[8px] font-semibold ${selected ? 'text-violet-100' : busy ? 'text-red-300' : 'text-slate-400'}`}>
+                          {busy ? 'dolu' : 'boş'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {crEditConflict && (
+                  <p className="mt-2 text-xs font-semibold text-red-600 flex items-center gap-1">
+                    <AlertTriangle className="h-3.5 w-3.5" /> {crEditConflict}
+                  </p>
+                )}
+              </div>
+              {/* Öğretmen */}
+              <div>
+                <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 block">Dersin Öğretmeni</Label>
+                <Input
+                  placeholder="Hangi öğretmenin dersine girilecek?"
+                  value={crEditTeacher}
+                  onChange={e => setCrEditTeacher(e.target.value)}
+                  className="w-full rounded-xl border-slate-200"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 border-t border-slate-100 px-5 py-4 bg-slate-50">
+              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setShowCrEditModal(false)}>
+                İptal
+              </Button>
+              <Button
+                disabled={!crEditDate || !crEditPeriod || crEditSaving}
+                onClick={handleSaveCrEdit}
+                className="flex-1 rounded-xl bg-violet-600 hover:bg-violet-700 text-white"
+              >
+                {crEditSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Kaydet
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Randevu Outcome Modal */}
       <AppointmentOutcomeModal
         open={showAttendanceChoiceModal}
@@ -1026,7 +1333,7 @@ export default function TakvimPage() {
                   {Array.from({ length: 7 }, (_, i) => i + 1).map(lesson => {
                     const periodStr = String(lesson);
                     const lessonEvents = getEventsForDate(dayModalDate).filter(e => {
-                      if (e.type === 'appointment' || e.type === 'guidance_plan') {
+                      if (e.type === 'appointment' || e.type === 'guidance_plan' || e.type === 'class_request') {
                         return normalizeLessonSlot(e.time) === periodStr;
                       }
                       return false;
@@ -1045,10 +1352,11 @@ export default function TakvimPage() {
                           ) : lessonEvents.map(e => {
                             const isCompleted = e.status === 'attended' || e.status === 'completed';
                             const isApt = e.type === 'appointment';
+                            const isClassReq = e.type === 'class_request';
 
-                            let containerClass = isCompleted ? "border-slate-200 bg-slate-50 opacity-75" : isApt ? "border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-50" : "border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50";
-                            let typeText = isCompleted ? "text-slate-500" : isApt ? "text-blue-700" : "text-emerald-700";
-                            let typeLabel = isCompleted ? "Tamamlandı" : isApt ? "Randevu" : "Etkinlik";
+                            let containerClass = isCompleted ? "border-slate-200 bg-slate-50 opacity-75" : isApt ? "border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-50" : isClassReq ? "border-violet-200 bg-gradient-to-r from-violet-50 to-purple-50" : "border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50";
+                            let typeText = isCompleted ? "text-slate-500" : isApt ? "text-blue-700" : isClassReq ? "text-violet-700" : "text-emerald-700";
+                            let typeLabel = isCompleted ? "Tamamlandı" : isApt ? "Randevu" : isClassReq ? "Sınıf Talebi" : "Etkinlik";
 
                             return (
                               <div key={e.id} className={`relative rounded-lg border px-2.5 py-2 transition-colors ${containerClass}`}>
@@ -1056,7 +1364,7 @@ export default function TakvimPage() {
                                   <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2 flex-wrap mb-0.5">
                                       <p className={`text-[10px] font-black uppercase tracking-wider ${typeText}`}>
-                                        {isApt ? 'Görüşme' : 'Rehberlik'}
+                                        {isApt ? 'Görüşme' : isClassReq ? 'Sınıf Talebi' : 'Rehberlik'}
                                       </p>
                                       <span className={`rounded-full px-1.5 py-0 text-[9px] font-bold border ${isCompleted ? 'bg-slate-100 text-slate-600 border-slate-200' : 'bg-white/80 border-white/50 ' + typeText}`}>
                                         {typeLabel}
@@ -1071,12 +1379,22 @@ export default function TakvimPage() {
                                       onClick={() => {
                                         if (e.type === 'appointment') openAttendanceChoiceModal(e.data);
                                         else if (e.type === 'guidance_plan') toggleGuidancePlanStatus(e.id, e.status);
+                                        else if (e.type === 'class_request') toggleClassRequestStatus(e.id, e.status);
                                       }}
                                       className={`flex h-7 w-7 items-center justify-center rounded-full border-2 transition-all ${isCompleted ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white text-slate-400 hover:border-emerald-400 hover:text-emerald-500'}`}
                                       title={isCompleted ? 'Tamamlandı' : 'Tamamla'}
                                     >
                                       {isCompleted && <CheckCircle2 className="h-4 w-4" />}
                                     </button>
+                                    {isClassReq ? (
+                                    <button
+                                      onClick={() => handleResetClassRequest(e.id)}
+                                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-transparent text-slate-300 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                      title="Planlamayı İptal Et (Bekliyor'a Al)"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                    ) : (
                                     <button
                                       onClick={() => e.type === 'appointment' ? handleDeleteAppointment(e.id) : handleDeleteGuidancePlan(e.id)}
                                       className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-transparent text-slate-300 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
@@ -1084,6 +1402,7 @@ export default function TakvimPage() {
                                     >
                                       <Trash2 className="h-3.5 w-3.5" />
                                     </button>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -1671,8 +1990,8 @@ export default function TakvimPage() {
                         <div className="flex-1 divide-y divide-slate-100">
                           {Array.from({ length: 7 }, (_, idx) => {
                             const lessonNum = idx + 1;
-                            const periodEvents = dayEvents.filter(e => 
-                              (e.type === 'appointment' || e.type === 'guidance_plan') && 
+                            const periodEvents = dayEvents.filter(e =>
+                              (e.type === 'appointment' || e.type === 'guidance_plan' || e.type === 'class_request') &&
                               normalizeLessonSlot(e.time) === String(lessonNum)
                             );
 
@@ -1702,21 +2021,25 @@ export default function TakvimPage() {
                                     )
                                   ) : periodEvents.map(e => {
                                     const isAppointment = e.type === 'appointment';
+                                    const isClassReq = e.type === 'class_request';
                                     const isCompleted = e.status === 'attended' || e.status === 'completed';
                                     const cardClasses = isAppointment
                                       ? isCompleted
                                         ? "border-slate-200 bg-slate-50"
                                         : "border-sky-200 bg-sky-50"
-                                      : "border-amber-200 bg-amber-50";
+                                      : isClassReq
+                                        ? "border-violet-200 bg-violet-50"
+                                        : "border-amber-200 bg-amber-50";
                                     const titleText = e.title.replace(/\s*\((Öğrenci|Veli|Öğretmen)\)\s*$/i, "");
                                     const guidanceClass = e.data?.class_display || titleText;
                                     const guidanceTopic =
                                       e.data?.topic_title ||
+                                      e.data?.topic ||
                                       e.data?.subject ||
                                       e.data?.detail ||
                                       e.data?.note ||
                                       "";
-                                    const guidanceTeacher = e.data?.teacher_name || "";
+                                    const guidanceTeacher = e.data?.lesson_teacher || e.data?.teacher_name || "";
 
                                     return (
                                       <div
@@ -1751,14 +2074,14 @@ export default function TakvimPage() {
                                           ) : (
                                             <>
                                               <p
-                                                className={`line-clamp-2 text-center text-[20px] font-extrabold leading-6 ${isCompleted ? 'text-slate-500 line-through' : 'text-amber-900'}`}
+                                                className={`line-clamp-2 text-center text-[20px] font-extrabold leading-6 ${isCompleted ? 'text-slate-500 line-through' : isClassReq ? 'text-violet-900' : 'text-amber-900'}`}
                                                 title={guidanceTopic ? `${guidanceClass} · ${guidanceTopic}` : guidanceClass}
                                               >
                                                 {guidanceClass}
                                               </p>
                                               {guidanceTopic && (
                                                 <p
-                                                  className={`line-clamp-2 text-center text-[14px] font-semibold leading-5 ${isCompleted ? 'text-slate-400' : 'text-amber-700'}`}
+                                                  className={`line-clamp-2 text-center text-[14px] font-semibold leading-5 ${isCompleted ? 'text-slate-400' : isClassReq ? 'text-violet-700' : 'text-amber-700'}`}
                                                   title={guidanceTopic}
                                                 >
                                                   {guidanceTopic}
@@ -1767,6 +2090,11 @@ export default function TakvimPage() {
                                               {guidanceTeacher && (
                                                 <p className="text-center text-[11px] text-slate-500">
                                                   Öğretmen: {guidanceTeacher}
+                                                </p>
+                                              )}
+                                              {isClassReq && (
+                                                <p className={`text-center text-[10px] font-bold ${isCompleted ? 'text-slate-400' : 'text-violet-600'}`}>
+                                                  {isCompleted ? 'Tamamlandı' : 'Sınıf Talebi'}
                                                 </p>
                                               )}
                                             </>
@@ -1818,7 +2146,7 @@ export default function TakvimPage() {
                     {Array.from({ length: 7 }, (_, i) => i + 1).map(lesson => {
                       const periodStr = String(lesson);
                       const lessonEvents = getEventsForDate(currentDate).filter(e => {
-                        if (e.type === 'appointment' || e.type === 'guidance_plan') {
+                        if (e.type === 'appointment' || e.type === 'guidance_plan' || e.type === 'class_request') {
                           return normalizeLessonSlot(e.time) === periodStr;
                         }
                         return false;
@@ -1843,6 +2171,7 @@ export default function TakvimPage() {
                             ) : lessonEvents.map(e => {
                               const isCompleted = e.status === 'attended' || e.status === 'completed';
                               const isApt = e.type === 'appointment';
+                              const isClassReq = e.type === 'class_request';
 
                               let containerClass = "";
                               let typeText = "";
@@ -1856,6 +2185,10 @@ export default function TakvimPage() {
                                 containerClass = "border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-50";
                                 typeText = "text-blue-700";
                                 typeLabel = "Randevu";
+                              } else if (isClassReq) {
+                                containerClass = "border-violet-200 bg-gradient-to-r from-violet-50 to-purple-50";
+                                typeText = "text-violet-700";
+                                typeLabel = "Sınıf Talebi";
                               } else {
                                 containerClass = "border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50";
                                 typeText = "text-emerald-700";
@@ -1868,15 +2201,17 @@ export default function TakvimPage() {
                                   onClick={() => {
                                     if (e.type === 'appointment') {
                                       openAppointmentEditModal(e.data as Appointment);
+                                    } else if (e.type === 'class_request' && !isCompleted) {
+                                      openCrEditModal(e.data);
                                     }
                                   }}
-                                  className={`relative rounded-xl border px-3 py-2.5 transition-colors ${containerClass} ${e.type === 'appointment' ? 'cursor-pointer hover:shadow-sm' : ''}`}
+                                  className={`relative rounded-xl border px-3 py-2.5 transition-colors ${containerClass} ${(e.type === 'appointment' || (e.type === 'class_request' && !isCompleted)) ? 'cursor-pointer hover:shadow-sm' : ''}`}
                                 >
                                   <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-center gap-2 flex-wrap">
                                         <p className={`text-[11px] font-black uppercase tracking-[0.12em] ${typeText}`}>
-                                          {isApt ? 'Görüşme' : 'Sınıf Rehberliği'}
+                                          {isApt ? 'Görüşme' : isClassReq ? 'Sınıf Talebi' : 'Sınıf Rehberliği'}
                                         </p>
                                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${isCompleted ? 'bg-slate-100 text-slate-600 border-slate-200' : 'bg-white/80 border-white/50 ' + typeText}`}>
                                           {typeLabel}
@@ -1892,12 +2227,22 @@ export default function TakvimPage() {
                                           event.stopPropagation();
                                           if (e.type === 'appointment') openAttendanceChoiceModal(e.data);
                                           else if (e.type === 'guidance_plan') toggleGuidancePlanStatus(e.id, e.status);
+                                          else if (e.type === 'class_request') toggleClassRequestStatus(e.id, e.status);
                                         }}
                                         className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all ${isCompleted ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white text-slate-400 hover:border-emerald-400 hover:text-emerald-500'}`}
                                         title={isCompleted ? 'Tamamlandı' : 'Tamamla'}
                                       >
                                         {isCompleted && <CheckCircle2 className="h-5 w-5" />}
                                       </button>
+                                      {isClassReq ? (
+                                      <button
+                                        onClick={(event) => { event.stopPropagation(); handleResetClassRequest(e.id); }}
+                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-transparent text-slate-300 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                        title="Planlamayı İptal Et (Bekliyor'a Al)"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </button>
+                                      ) : (
                                       <button
                                         onClick={(event) => {
                                           event.stopPropagation();
@@ -1909,6 +2254,7 @@ export default function TakvimPage() {
                                       >
                                         <Trash2 className="h-4 w-4" />
                                       </button>
+                                      )}
                                     </div>
                                   </div>
                                 </div>

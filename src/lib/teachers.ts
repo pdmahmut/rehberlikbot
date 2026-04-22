@@ -30,7 +30,7 @@ export interface TeacherRecord {
   sinifSubeDisplay?: string; // optional, no longer enforced
 }
 
-function normalizeTr(value: string): string {
+export function normalizeTr(value: string): string {
   return value
     .toLocaleLowerCase('tr-TR')
     .normalize('NFKD')
@@ -147,4 +147,55 @@ export function importTeachersFromExcelToStore() {
   const records = loadTeachersFromExcel();
   if (records.length > 0) saveTeachersToStore(records);
   return records.length;
+}
+
+export function addTeacher(teacherName: string): { success: boolean; teacher?: TeacherRecord; error?: string } {
+  const records = loadTeachersFromStore();
+  const norm = normalizeTr(teacherName.trim());
+  if (records.find(r => r.teacherNameNormalized === norm)) {
+    return { success: false, error: 'Bu öğretmen zaten kayıtlı' };
+  }
+  const newTeacher: TeacherRecord = {
+    teacherId: 't' + Date.now(),
+    teacherName: teacherName.trim(),
+    teacherNameNormalized: norm,
+  };
+  records.push(newTeacher);
+  saveTeachersToStore(records);
+  return { success: true, teacher: newTeacher };
+}
+
+export function removeTeacher(teacherId: string): boolean {
+  const records = loadTeachersFromStore();
+  const filtered = records.filter(r => r.teacherId !== teacherId);
+  if (filtered.length === records.length) return false;
+  saveTeachersToStore(filtered);
+  return true;
+}
+
+export function assignTeacherToClass(teacherId: string, sinifSubeKey: string, sinifSubeDisplay: string): { success: boolean; error?: string } {
+  const records = loadTeachersFromStore();
+  // Önce bu sınıfa atanmış öğretmenin atamasını kaldır
+  for (const r of records) {
+    if (r.sinifSubeKey === sinifSubeKey) {
+      delete r.sinifSubeKey;
+      delete r.sinifSubeDisplay;
+    }
+  }
+  const teacher = records.find(r => r.teacherId === teacherId);
+  if (!teacher) return { success: false, error: 'Öğretmen bulunamadı' };
+  teacher.sinifSubeKey = sinifSubeKey;
+  teacher.sinifSubeDisplay = sinifSubeDisplay;
+  saveTeachersToStore(records);
+  return { success: true };
+}
+
+export function removeTeacherClassAssignment(teacherId: string): boolean {
+  const records = loadTeachersFromStore();
+  const teacher = records.find(r => r.teacherId === teacherId);
+  if (!teacher) return false;
+  delete teacher.sinifSubeKey;
+  delete teacher.sinifSubeDisplay;
+  saveTeachersToStore(records);
+  return true;
 }

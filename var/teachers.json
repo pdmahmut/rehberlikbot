@@ -2,47 +2,65 @@
   {
     "teacherId": "t1",
     "teacherName": "Gülbahar Öztürk",
-    "teacherNameNormalized": "gulbahar ozturk"
+    "teacherNameNormalized": "gulbahar ozturk",
+    "sinifSubeKey": "5A",
+    "sinifSubeDisplay": "5. Sınıf / A Şubesi"
   },
   {
     "teacherId": "t2",
     "teacherName": "Furkan Cin",
-    "teacherNameNormalized": "furkan cin"
+    "teacherNameNormalized": "furkan cin",
+    "sinifSubeKey": "5B",
+    "sinifSubeDisplay": "5. Sınıf / B Şubesi"
   },
   {
     "teacherId": "t3",
     "teacherName": "Ömer Akdağ",
-    "teacherNameNormalized": "omer akdag"
+    "teacherNameNormalized": "omer akdag",
+    "sinifSubeKey": "5C",
+    "sinifSubeDisplay": "5. Sınıf / C Şubesi"
   },
   {
     "teacherId": "t4",
     "teacherName": "Sami Kan",
-    "teacherNameNormalized": "sami kan"
+    "teacherNameNormalized": "sami kan",
+    "sinifSubeKey": "6B",
+    "sinifSubeDisplay": "6. Sınıf / B Şubesi"
   },
   {
     "teacherId": "t5",
     "teacherName": "Ebru Can",
-    "teacherNameNormalized": "ebru can"
+    "teacherNameNormalized": "ebru can",
+    "sinifSubeKey": "6A",
+    "sinifSubeDisplay": "6. Sınıf / A Şubesi"
   },
   {
     "teacherId": "t6",
     "teacherName": "Orhan Kökçe",
-    "teacherNameNormalized": "orhan kokce"
+    "teacherNameNormalized": "orhan kokce",
+    "sinifSubeKey": "6C",
+    "sinifSubeDisplay": "6. Sınıf / C Şubesi"
   },
   {
     "teacherId": "t7",
     "teacherName": "Reyyan Cennet Yılmaz",
-    "teacherNameNormalized": "reyyan cennet yilmaz"
+    "teacherNameNormalized": "reyyan cennet yilmaz",
+    "sinifSubeKey": "7A",
+    "sinifSubeDisplay": "7. Sınıf / A Şubesi"
   },
   {
     "teacherId": "t8",
     "teacherName": "Firdevs Basat",
-    "teacherNameNormalized": "firdevs basat"
+    "teacherNameNormalized": "firdevs basat",
+    "sinifSubeKey": "7B",
+    "sinifSubeDisplay": "7. Sınıf / B Şubesi"
   },
   {
     "teacherId": "t9",
     "teacherName": "İsmail Özmen",
-    "teacherNameNormalized": "ismail ozmen"
+    "teacherNameNormalized": "ismail ozmen",
+    "sinifSubeKey": "7C",
+    "sinifSubeDisplay": "7. Sınıf / C Şubesi"
   },
   {
     "teacherId": "t10",
@@ -52,12 +70,16 @@
   {
     "teacherId": "t11",
     "teacherName": "Beytullah Gürbüz",
-    "teacherNameNormalized": "beytullah gurbuz"
+    "teacherNameNormalized": "beytullah gurbuz",
+    "sinifSubeKey": "8B",
+    "sinifSubeDisplay": "8. Sınıf / B Şubesi"
   },
   {
     "teacherId": "t12",
     "teacherName": "Hüseyin Çabuk",
-    "teacherNameNormalized": "huseyin cabuk"
+    "teacherNameNormalized": "huseyin cabuk",
+    "sinifSubeKey": "8C",
+    "sinifSubeDisplay": "8. Sınıf / C Şubesi"
   },
   {
     "teacherId": "t13",
@@ -72,7 +94,9 @@
   {
     "teacherId": "t15",
     "teacherName": "Ezgi Sevili",
-    "teacherNameNormalized": "ezgi sevili"
+    "teacherNameNormalized": "ezgi sevili",
+    "sinifSubeKey": "8A",
+    "sinifSubeDisplay": "8. Sınıf / A Şubesi"
   },
   {
     "teacherId": "t16",

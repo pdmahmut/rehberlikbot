@@ -1,16 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CheckCircle, XCircle, Settings } from "lucide-react";
+import { CheckCircle, Settings } from "lucide-react";
 
 interface ConfigStatus {
-  telegram: boolean;
   sheets: boolean;
   configured: boolean;
 }
 
 export default function ConfigurationStatus() {
-  const [status, setStatus] = useState<ConfigStatus>({ telegram: false, sheets: false, configured: false });
+  const [status, setStatus] = useState<ConfigStatus>({ sheets: false, configured: false });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -33,20 +32,17 @@ export default function ConfigurationStatus() {
     return null;
   }
 
-  const allConfigured = status.telegram && status.sheets;
-
-  // Marquee içeriği
-  const statusText = allConfigured 
-    ? `✓ Sistem Aktif • Telegram: Bağlı • Google Sheets: Bağlı • Tüm entegrasyonlar çalışıyor`
-    : `⚠ Yapılandırma Gerekli • Telegram: ${status.telegram ? 'Aktif' : 'Bekliyor'} • Google Sheets: ${status.sheets ? 'Aktif' : 'Bekliyor'}`;
+  const statusText = status.configured
+    ? `✓ Sistem Aktif • Google Sheets: Bağlı • Tüm entegrasyonlar çalışıyor`
+    : `⚠ Yapılandırma Gerekli • Google Sheets: ${status.sheets ? 'Aktif' : 'Bekliyor'}`;
 
   return (
     <div className="w-full overflow-hidden bg-gradient-to-r from-slate-50 via-slate-100 to-slate-50 border-t border-slate-200/50 py-2">
       <div className="marquee-container">
         <div className="marquee-content">
           <div className="flex items-center gap-8 px-8">
-            <div className={`flex items-center gap-2 text-xs ${allConfigured ? 'text-emerald-600' : 'text-amber-600'}`}>
-              {allConfigured ? <CheckCircle className="h-3 w-3" /> : <Settings className="h-3 w-3 animate-spin-slow" />}
+            <div className={`flex items-center gap-2 text-xs ${status.configured ? 'text-emerald-600' : 'text-amber-600'}`}>
+              {status.configured ? <CheckCircle className="h-3 w-3" /> : <Settings className="h-3 w-3 animate-spin-slow" />}
               <span className="font-medium whitespace-nowrap">{statusText}</span>
             </div>
             <span className="text-slate-300">•</span>
@@ -63,8 +59,8 @@ export default function ConfigurationStatus() {
             </div>
           </div>
           <div className="flex items-center gap-8 px-8">
-            <div className={`flex items-center gap-2 text-xs ${allConfigured ? 'text-emerald-600' : 'text-amber-600'}`}>
-              {allConfigured ? <CheckCircle className="h-3 w-3" /> : <Settings className="h-3 w-3 animate-spin-slow" />}
+            <div className={`flex items-center gap-2 text-xs ${status.configured ? 'text-emerald-600' : 'text-amber-600'}`}>
+              {status.configured ? <CheckCircle className="h-3 w-3" /> : <Settings className="h-3 w-3 animate-spin-slow" />}
               <span className="font-medium whitespace-nowrap">{statusText}</span>
             </div>
             <span className="text-slate-300">•</span>
