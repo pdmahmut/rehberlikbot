@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const COOKIE_NAME = 'rehberlik_session';
 
+function base64urlDecode(str: string): string {
+  const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+  return atob(padded);
+}
+
 function getSessionFromToken(token: string): { role: string } | null {
   try {
-    const payload = JSON.parse(Buffer.from(token, 'base64url').toString());
+    const payload = JSON.parse(base64urlDecode(token));
     if (payload.exp < Date.now()) return null;
     return payload;
   } catch {
