@@ -32,9 +32,10 @@ const formSchema = z.object({
 interface RPDYonlendirmeProps {
   teacherName?: string;
   classKey?: string;
+  classDisplay?: string;
 }
 
-export default function RPDYonlendirme({ teacherName: initTeacher, classKey: initClassKey }: RPDYonlendirmeProps = {}) {
+export default function RPDYonlendirme({ teacherName, classKey, classDisplay }: RPDYonlendirmeProps = {}) {
   const [sinifSubeList, setSinifSubeList] = useState<SinifSube[]>([]);
   const [ogrenciList, setOgrenciList] = useState<Ogrenci[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,8 +112,8 @@ export default function RPDYonlendirme({ teacherName: initTeacher, classKey: ini
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      ogretmenAdi: initTeacher || "",
-      sinifSube: initClassKey || "",
+      ogretmenAdi: teacherName || "",
+      sinifSube: classKey || "",
       ogrenci: "",
       yonlendirmeNedenleri: [],
       not: "",
@@ -161,7 +162,7 @@ export default function RPDYonlendirme({ teacherName: initTeacher, classKey: ini
       .then(data => { setOgrenciList(Array.isArray(data) ? data : []); })
       .catch(() => setOgrenciList([]))
       .finally(() => setOgrenciLoading(false));
-  }, [isHomeroom, classKey]);
+  }, [classKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sınıf değiştiğinde öğrenci listesini güncelle
   const handleSinifChange = async (sinifSube: string) => {
@@ -193,8 +194,8 @@ export default function RPDYonlendirme({ teacherName: initTeacher, classKey: ini
 
   // Başlangıçta classKey verilmişse öğrencileri yükle
   useEffect(() => {
-    if (!loading && initClassKey) {
-      handleSinifChange(initClassKey);
+    if (!loading && classKey) {
+      handleSinifChange(classKey);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
@@ -379,7 +380,7 @@ export default function RPDYonlendirme({ teacherName: initTeacher, classKey: ini
                           Öğretmen *
                         </FormLabel>
                         <FormControl>
-                          {initTeacher ? (
+                          {teacherName ? (
                             <div className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-blue-200 bg-blue-50/70 min-h-[48px] sm:min-h-[52px]">
                               <UserCheck className="w-4 h-4 text-blue-500 flex-shrink-0" />
                               <span className="text-sm sm:text-base font-medium text-blue-800">{field.value}</span>
@@ -414,7 +415,7 @@ export default function RPDYonlendirme({ teacherName: initTeacher, classKey: ini
                   </div>
 
                   {/* ── Öğrenci seçimi: 3 mod ── */}
-                  {isHomeroom ? (
+                  {classKey ? (
                     /* MOD 1: Sınıf Rehber Öğretmeni — kendi sınıfı varsayılan, değiştirilebilir */
                     <div className="animate-fade-in space-y-3" style={{ animationDelay: '0.15s' }}>
                       {/* Sınıf — dropdown, varsayılan atanmış sınıf */}

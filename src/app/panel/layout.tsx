@@ -30,8 +30,8 @@ const menuCategories = [
 ];
 
 const teacherMenuItems = [
-  { href: "/panel/ogrenci-yonlendirmesi", label: "Ogrenci Yonlendirme" },
-  { href: "/panel/sinifim", label: "Sinifim" },
+  { href: "/panel/ogrenci-yonlendirmesi", label: "Ogrenci Yonlendirme", icon: Users, color: "blue" },
+  { href: "/panel/sinifim", label: "Sinifim", icon: GraduationCap, color: "emerald" },
 ];
 const allMenuItems = [...menuCategories.flatMap(cat => cat.items), ...teacherMenuItems];
 
