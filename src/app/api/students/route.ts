@@ -12,8 +12,12 @@ type StudentLookupOption = {
 function normalizeText(value: string) {
   return value
     .toLowerCase()
+    .replace(/İ/g, 'i').replace(/I/g, 'i') // Türkçe büyük İ ve I
+    .replace(/\u0131/g, 'i')               // Türkçe ı (noktasız i) → i
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ğ/g, 'g').replace(/ş/g, 's')
+    .replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c')
     .trim();
 }
 

@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { CheckCircle, Settings } from "lucide-react";
 
@@ -20,7 +19,7 @@ export default function ConfigurationStatus() {
     try {
       const response = await fetch('/api/config-check');
       const data = await response.json();
-      setStatus(data);
+      setStatus({ sheets: data.sheets, configured: data.sheets });
     } catch (error) {
       console.error('Configuration check failed:', error);
     } finally {
@@ -28,9 +27,7 @@ export default function ConfigurationStatus() {
     }
   };
 
-  if (loading) {
-    return null;
-  }
+  if (loading) return null;
 
   const statusText = status.configured
     ? `✓ Sistem Aktif • Google Sheets: Bağlı • Tüm entegrasyonlar çalışıyor`

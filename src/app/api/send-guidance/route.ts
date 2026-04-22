@@ -12,10 +12,7 @@ export async function POST(request: NextRequest) {
     const { students }: { students: YonlendirilenOgrenci[] } = await request.json();
 
     if (!students || students.length === 0) {
-      return NextResponse.json(
-        { error: 'Öğrenci listesi boş' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Öğrenci listesi boş' }, { status: 400 });
     }
 
     console.log(`📋 ${students.length} öğrenci için gönderim işlemi başlatılıyor...`);
@@ -41,9 +38,7 @@ export async function POST(request: NextRequest) {
     // Google Sheets entegrasyonu
     try {
       sheetsSuccess = await writeToGoogleSheets(normalizedStudents);
-      if (!sheetsSuccess) {
-        errors.push('Google Sheets kaydı başarısız');
-      }
+      if (!sheetsSuccess) errors.push('Google Sheets kaydı başarısız');
     } catch (error) {
       console.error('Google Sheets entegrasyonu hatası:', error);
       errors.push('Google Sheets entegrasyonu hatası');
@@ -62,10 +57,7 @@ export async function POST(request: NextRequest) {
           source: 'web',
         }));
 
-        const { error: supabaseError } = await supabase
-          .from('referrals')
-          .insert(payload);
-
+        const { error: supabaseError } = await supabase.from('referrals').insert(payload);
         if (supabaseError) {
           console.error('Supabase referrals insert hatası:', supabaseError.message);
           errors.push('Supabase istatistik kaydı yapılamadı');
@@ -90,15 +82,12 @@ export async function POST(request: NextRequest) {
         success: false,
         message: `Gönderim başarısız: ${errors.join(', ')}`,
         sheets: sheetsSuccess,
-        errors: errors
+        errors
       }, { status: 500 });
     }
 
   } catch (error) {
     console.error('Send Guidance API Error:', error);
-    return NextResponse.json(
-      { error: 'Gönderim sırasında hata oluştu' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Gönderim sırasında hata oluştu' }, { status: 500 });
   }
 }

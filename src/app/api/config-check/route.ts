@@ -1,7 +1,5 @@
-import { NextResponse } from 'next/server';
-
+﻿import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
-
 export async function GET() {
   const sheets = Boolean(
     process.env.SHEETS_SPREADSHEET_ID &&

@@ -465,7 +465,7 @@ export default function TakvimPage() {
           });
         }
         
-        const { data: plans } = await supabase.from('guidance_plans').select('lesson_period').eq('plan_date', date).eq('status', 'planned');
+        const { data: plans } = await supabase.from('guidance_plans').select('lesson_period').eq('plan_date', date).in('status', ['planned', 'completed']);
         plans?.forEach(p => allBusySlots.add(normalizeLessonSlot(p.lesson_period)));
 
         const { data: activities } = await supabase.from('class_activities').select('activity_time').eq('activity_date', date);
@@ -987,7 +987,12 @@ export default function TakvimPage() {
     try {
       const { error } = await supabase.from('guidance_plans').update({ status: newStatus }).eq('id', id);
       if (error) throw error;
-      toast.success(newStatus === 'completed' ? 'Sınıf rehberliği tamamlandı' : 'Durum geri alındı');
+      // Bu plana bağlı bir sınıf çalışma talebi varsa onu da güncelle
+      await supabase
+        .from('work_requests')
+        .update({ status: newStatus === 'completed' ? 'tamamlandi' : 'planlandı' })
+        .eq('guidance_plan_id', id);
+      toast.success(newStatus === 'completed' ? 'Tamamlandı' : 'Durum geri alındı');
       await loadData();
     } catch { toast.error('Güncellenemedi'); }
   };
