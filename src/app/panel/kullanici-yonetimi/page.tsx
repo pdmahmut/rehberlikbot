@@ -178,11 +178,11 @@ export default function KullaniciYonetimiPage() {
   });
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div className="mx-auto max-w-4xl space-y-5 sm:space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700 p-6 text-white shadow-xl">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700 p-4 text-white shadow-xl sm:p-6">
         <div className="absolute -top-16 -right-16 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
-        <div className="relative flex items-center justify-between">
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-3 mb-1">
               <div className="p-2.5 rounded-xl bg-white/20 backdrop-blur">
@@ -192,17 +192,17 @@ export default function KullaniciYonetimiPage() {
             </div>
             <p className="text-white/70 text-sm">Öğretmen hesaplarını yönetin</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button onClick={loadUsers} className="p-2.5 rounded-xl bg-white/20 hover:bg-white/30 transition-colors">
               <RefreshCw className="h-5 w-5" />
             </button>
-            <button onClick={() => setShowAddForm(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-violet-700 font-semibold text-sm hover:bg-white/90 transition-colors">
+            <button onClick={() => setShowAddForm(true)} className="flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-violet-700 transition-colors hover:bg-white/90">
               <Plus className="h-4 w-4" /> Öğretmen Ekle
             </button>
           </div>
         </div>
         {/* İstatistikler */}
-        <div className="relative mt-4 grid grid-cols-3 gap-3">
+        <div className="relative mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {[
             { label: "Toplam", value: users.length },
             { label: "Sınıf Rehberi", value: homeroomCount },
@@ -218,34 +218,34 @@ export default function KullaniciYonetimiPage() {
 
       {/* Yeni kullanıcı formu */}
       {showAddForm && (
-        <div className="bg-white rounded-2xl border border-violet-200 shadow-lg p-5 space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="space-y-4 rounded-2xl border border-violet-200 bg-white p-4 shadow-lg sm:p-5">
+          <div className="flex items-start justify-between gap-3">
             <h2 className="font-semibold text-slate-800">Yeni Öğretmen Ekle</h2>
             <button onClick={() => setShowAddForm(false)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400">
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Ad Soyad</label>
               <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Ahmet Yilmaz"
-                className="w-full h-9 px-3 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Kullanıcı Adı</label>
               <input value={newUsername} onChange={e => setNewUsername(e.target.value)} placeholder="ahmet.yilmaz"
-                className="w-full h-9 px-3 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Şifre</label>
               <input value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Şifre"
-                className="w-full h-9 px-3 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
             </div>
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <button onClick={() => setShowAddForm(false)} className="px-4 py-2 text-sm rounded-lg border border-slate-200 hover:bg-slate-50">İptal</button>
             <button onClick={handleAdd} disabled={isAdding}
-              className="px-4 py-2 text-sm rounded-lg bg-violet-600 hover:bg-violet-700 text-white font-medium disabled:opacity-50 flex items-center gap-2">
+              className="flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-violet-700">
               {isAdding && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Ekle
             </button>
           </div>
@@ -266,7 +266,7 @@ export default function KullaniciYonetimiPage() {
         <div className="space-y-2">
           {sortedUsers.map(user => (
             <div key={user.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="flex items-center gap-4 p-4">
+              <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
                 {/* Avatar */}
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ${
                   user.class_key ? "bg-gradient-to-br from-teal-500 to-emerald-600" : "bg-gradient-to-br from-violet-500 to-purple-600"
@@ -281,7 +281,7 @@ export default function KullaniciYonetimiPage() {
                 </div>
 
                 {/* Sınıf badge */}
-                <div className="hidden sm:block">
+                <div className="sm:block">
                   {user.class_key ? (
                     <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
                       {user.class_display}
@@ -295,7 +295,7 @@ export default function KullaniciYonetimiPage() {
 
                 {/* Aksiyonlar */}
                 {deletingId === user.id ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs text-red-600">Emin misiniz?</span>
                     <button onClick={() => handleDelete(user.id)} disabled={isDeleting}
                       className="px-3 py-1.5 text-xs rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-50">
@@ -304,7 +304,7 @@ export default function KullaniciYonetimiPage() {
                     <button onClick={() => setDeletingId(null)} className="px-3 py-1.5 text-xs rounded-lg border hover:bg-slate-50">İptal</button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       onClick={() => { setAssigningClassId(assigningClassId === user.id ? null : user.id); setSelectedClassKey(user.class_key || ""); }}
                       className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600">
@@ -327,7 +327,7 @@ export default function KullaniciYonetimiPage() {
               {/* Sınıf atama paneli */}
               {assigningClassId === user.id && (
                 <div className="px-4 pb-4 pt-0 border-t border-slate-100 bg-slate-50">
-                  <div className="flex items-end gap-3 mt-3">
+                  <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
                     <div className="flex-1">
                       <label className="text-xs text-slate-500 mb-1 block">Sınıf Ata</label>
                       <select value={selectedClassKey} onChange={e => setSelectedClassKey(e.target.value)}

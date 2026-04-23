@@ -382,11 +382,11 @@ export default function SinifimPage() {
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       {/* ── Header ── */}
-      <div className="rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700 p-5 text-white shadow-xl relative overflow-hidden">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700 p-4 text-white shadow-xl sm:p-5">
         <div className="absolute -top-12 -right-12 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
-        <div className="relative flex items-center gap-4">
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center">
           <div className="p-3 rounded-2xl bg-white/20 backdrop-blur shrink-0">
             <GraduationCap className="h-7 w-7 text-white" />
           </div>
@@ -402,7 +402,7 @@ export default function SinifimPage() {
             <p className="text-white/80 text-sm mt-0.5">{auth.teacherName}</p>
           </div>
           {auth.classDisplay && (
-            <div className="text-right shrink-0">
+            <div className="shrink-0 rounded-2xl bg-white/10 px-3 py-2 text-left backdrop-blur sm:bg-transparent sm:px-0 sm:py-0 sm:text-right">
               <p className="text-2xl font-bold">{auth.classDisplay}</p>
               <p className="text-white/60 text-xs">{students.length} öğrenci</p>
             </div>
@@ -417,15 +417,15 @@ export default function SinifimPage() {
       </div>
 
       {/* ── Tabs ── */}
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto">
+      <div className="flex gap-2 overflow-x-auto rounded-xl bg-slate-100 p-1.5">
         {tabs.filter(t => !t.hidden).map(tab => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
           return (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all flex-1 justify-center ${active ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+              className={`flex min-w-[148px] flex-none items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-all sm:min-w-0 sm:flex-1 sm:justify-center ${active ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
               <Icon className="h-4 w-4 shrink-0" />
-              <span className="hidden md:inline">{tab.label}</span>
+              <span className="flex-1 whitespace-normal leading-tight sm:flex-none sm:whitespace-nowrap">{tab.label}</span>
               <Badge variant="secondary" className={`text-xs ${active ? "bg-violet-100 text-violet-700" : "bg-slate-200 text-slate-600"}`}>
                 {tab.count}
               </Badge>
@@ -462,7 +462,7 @@ export default function SinifimPage() {
           )}
 
           <Card className="border-0 shadow-sm">
-            <CardHeader className="pb-3 flex-row items-center justify-between">
+            <CardHeader className="flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-base">
                 Yönlendirme Listesi
                 <span className="ml-2 text-sm font-normal text-slate-400">({groupedReferrals.length} öğrenci)</span>
@@ -539,7 +539,7 @@ export default function SinifimPage() {
       {/* ── Class List ── */}
       {activeTab === "class-list" && (
         <Card className="border-0 shadow-sm">
-          <CardHeader className="pb-3 flex-row items-center justify-between">
+          <CardHeader className="flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-base">
               Sınıf Listesi
               {auth.classDisplay && <span className="ml-2 text-sm font-normal text-slate-500">({auth.classDisplay})</span>}
@@ -555,7 +555,7 @@ export default function SinifimPage() {
               </div>
             ) : (
               <>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <input type="text" placeholder="Öğrenci adı soyadı" value={newStudentName}
                     onChange={e => setNewStudentName(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && handleAddStudent()}
@@ -563,8 +563,8 @@ export default function SinifimPage() {
                   <input type="text" placeholder="No" value={newStudentNumber}
                     onChange={e => setNewStudentNumber(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && handleAddStudent()}
-                    className="w-16 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400" />
-                  <Button onClick={handleAddStudent} disabled={!newStudentName.trim() || addingStudent} size="sm" className="bg-violet-600 hover:bg-violet-700 text-white px-3">
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 sm:w-20" />
+                  <Button onClick={handleAddStudent} disabled={!newStudentName.trim() || addingStudent} size="sm" className="bg-violet-600 hover:bg-violet-700 text-white px-3 sm:self-auto">
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
@@ -579,12 +579,12 @@ export default function SinifimPage() {
                     {students.map((s, i) => {
                       const pending = getStudentPendingRequest(s.text);
                       return (
-                        <div key={s.value} className="py-2.5 flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-3 min-w-0">
+                        <div key={s.value} className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex min-w-0 items-center gap-3">
                             <span className="text-xs text-slate-400 w-5 text-right shrink-0">{i + 1}</span>
                             <span className="text-sm text-slate-800 font-medium truncate">{s.text}</span>
                           </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
+                          <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
                             {pending ? (
                               <Badge className="text-xs bg-amber-100 text-amber-700">
                                 {pending.request_type === "delete" ? "Silme" : "Sınıf değişikliği"} talebi bekliyor
@@ -618,7 +618,7 @@ export default function SinifimPage() {
       {/* ── Class Referrals ── */}
       {activeTab === "class-referrals" && (
         <Card className="border-0 shadow-sm">
-          <CardHeader className="pb-3 flex-row items-center justify-between">
+          <CardHeader className="flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-base">
               Sınıfa Yapılan Yönlendirmeler
               {auth.classDisplay && <span className="ml-2 text-sm font-normal text-slate-500">({auth.classDisplay})</span>}
@@ -660,12 +660,12 @@ export default function SinifimPage() {
       {/* ── Guidance Requests ── */}
       {activeTab === "guidance-requests" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-base font-semibold text-slate-800">Rehberlik Servisine Talepler</h2>
               <p className="text-xs text-slate-500 mt-0.5">Rehber öğretmenden sınıfınız için çalışma talep edin</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 sm:justify-end">
               <Button variant="ghost" size="sm" onClick={() => auth.teacherName && loadGuidanceRequests(auth.teacherName)} disabled={guidanceRequestsLoading}>
                 <RefreshCw className={`h-4 w-4 ${guidanceRequestsLoading ? "animate-spin" : ""}`} />
               </Button>
@@ -701,9 +701,9 @@ export default function SinifimPage() {
                   <Card key={req.id} className="border-0 shadow-sm overflow-hidden">
                     <CardContent className="p-4 space-y-3">
                       {/* Top row */}
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-3 mb-1">
+                          <div className="mb-1 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="flex items-center gap-2 flex-wrap min-w-0">
                               <span className="font-semibold text-slate-800 text-sm">
                                 {displayCategory || "Çalışma konusu planlama sonrası belirlenecek"}
@@ -760,7 +760,7 @@ export default function SinifimPage() {
 
                       {/* Scheduled info */}
                       {req.status === "scheduled" && req.scheduled_date && (
-                        <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl">
+                        <div className="flex items-start gap-3 rounded-xl bg-blue-50 p-3 sm:items-center">
                           <Calendar className="h-4 w-4 text-blue-500 shrink-0" />
                           <div>
                             <p className="text-sm font-semibold text-blue-800">{formatDateShort(req.scheduled_date)}</p>
@@ -775,7 +775,7 @@ export default function SinifimPage() {
 
                       {/* Completed info */}
                       {req.status === "completed" && (
-                        <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-xl">
+                        <div className="flex items-start gap-2 rounded-xl bg-emerald-50 p-3 sm:items-center">
                           <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-semibold text-emerald-700">Çalışma tamamlandı</p>
@@ -796,7 +796,7 @@ export default function SinifimPage() {
                       {showFeedbackBox && (
                         <div className="space-y-2">
                           <p className="text-xs font-medium text-slate-600">Geri bildirim ekleyin (isteğe bağlı)</p>
-                          <div className="flex gap-2">
+                          <div className="flex flex-col gap-2 sm:flex-row">
                             <textarea
                               rows={2}
                               placeholder="Çalışma hakkında görüşlerinizi paylaşın..."
@@ -859,7 +859,7 @@ export default function SinifimPage() {
                   Bu öğrenci için silme talebi yöneticiye gönderilecek. Yönetici onayladıktan sonra işlem gerçekleşecek.
                 </div>
               )}
-              <div className="flex gap-2 pt-1">
+              <div className="flex flex-col gap-2 pt-1 sm:flex-row">
                 <Button variant="outline" className="flex-1" onClick={() => setRequestModal({ student: null, type: null })}>
                   İptal
                 </Button>
@@ -879,7 +879,7 @@ export default function SinifimPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/50" onClick={closeEditGuidanceModal} />
           <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden z-10">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-amber-100">
                   <Pencil className="h-4 w-4 text-amber-600" />
@@ -914,7 +914,7 @@ export default function SinifimPage() {
               </div>
             </div>
 
-            <div className="flex gap-3 px-5 pb-5">
+            <div className="flex flex-col gap-3 px-5 pb-5 sm:flex-row">
               <button
                 onClick={closeEditGuidanceModal}
                 className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
@@ -937,7 +937,7 @@ export default function SinifimPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowNewGuidanceModal(false)} />
           <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden z-10">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-emerald-100">
                   <MessageSquare className="h-4 w-4 text-emerald-600" />
@@ -972,7 +972,7 @@ export default function SinifimPage() {
               </div>
             </div>
 
-            <div className="flex gap-3 px-5 pb-5">
+            <div className="flex flex-col gap-3 px-5 pb-5 sm:flex-row">
               <button
                 onClick={() => { setShowNewGuidanceModal(false); setNewTeacherDescription(""); }}
                 className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"

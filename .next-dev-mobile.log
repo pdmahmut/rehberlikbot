@@ -1,0 +1,15 @@
+
+> rpd-app@0.1.0 dev
+> node --no-experimental-webstorage ./node_modules/next/dist/bin/next dev -p 3123
+
+   ▲ Next.js 15.3.9
+   - Local:        http://localhost:3123
+   - Network:      http://192.168.1.168:3123
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 4.7s
+ ✓ Compiled /middleware in 412ms (108 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 3.5s (808 modules)
+ GET /login 200 in 4192ms

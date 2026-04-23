@@ -752,7 +752,7 @@ export default function BasvurularPage() {
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
-              <div className="flex items-center justify-between border-b bg-slate-50 px-6 py-4">
+              <div className="flex items-start justify-between gap-3 border-b bg-slate-50 px-4 py-4 sm:px-6">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">{ch.icon}</span>
                   <h2 className="text-base font-bold text-slate-800">{ch.label}</h2>
@@ -761,7 +761,7 @@ export default function BasvurularPage() {
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              <div className="px-6 py-5 space-y-4">
+              <div className="space-y-4 px-4 py-5 sm:px-6">
                 {/* Geliş Türü */}
                 <div>
                   <Label className="text-xs font-medium text-slate-600 mb-1 block">Geliş Türü</Label>
@@ -809,7 +809,7 @@ export default function BasvurularPage() {
                   )}
                 </div>
                 {/* Sınıf (otomatik) + Tarih */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <Label className="text-xs font-medium text-slate-600 mb-1 block">Sınıf</Label>
                     <Input
@@ -862,7 +862,7 @@ export default function BasvurularPage() {
                   />
                 </div>
               </div>
-              <div className="border-t bg-slate-50 px-6 py-4 flex justify-end gap-3">
+              <div className="flex flex-col gap-3 border-t bg-slate-50 px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
                 <Button variant="outline" onClick={() => setShowEntryForm(false)} disabled={entryFormSaving}>İptal</Button>
                 <Button onClick={handleSaveEntry} disabled={entryFormSaving} className="bg-blue-600 hover:bg-blue-700">
                   {entryFormSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
@@ -886,9 +886,9 @@ export default function BasvurularPage() {
             </Badge>
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-6 space-y-6">
+        <CardContent className="space-y-6 p-4 sm:p-6">
           {/* Filtreler */}
-          <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Search className="h-4 w-4 text-purple-500" />Öğrenci Ara</Label>
               <Input value={applicationsSearchQuery} onChange={(e) => setApplicationsSearchQuery(e.target.value)} placeholder="Ad soyad ara..." className="border-purple-200 focus:border-purple-400" />
@@ -937,7 +937,7 @@ export default function BasvurularPage() {
             </div>}          </div>
 
           {/* Tablo */}
-          <div className="overflow-x-auto bg-white rounded-xl border border-slate-200 shadow-sm">
+          <div className="responsive-scroll overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-gradient-to-r from-purple-50 to-pink-50">
                 <tr className="border-b border-slate-200 text-slate-700">
@@ -1029,7 +1029,7 @@ export default function BasvurularPage() {
       {statusChoiceRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b bg-slate-50 px-6 py-4">
+            <div className="flex items-start justify-between gap-3 border-b bg-slate-50 px-4 py-4 sm:px-6">
               <div>
                 <h2 className="text-base font-bold text-slate-800">{statusChoiceRecord.student_name}</h2>
                 <p className="text-xs text-slate-500 mt-0.5">{statusChoiceRecord.class_display || "-"} · {statusChoiceRecord.source}</p>

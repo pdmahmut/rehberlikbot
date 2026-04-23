@@ -740,7 +740,7 @@ function UpcomingAppointmentsWidget() {
       
       <CardContent className="p-5 relative space-y-5">
         {/* Hafta Özeti - Animated Stats */}
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[
             { label: 'Bu Hafta', value: weekSummary.total, color: 'from-slate-500 to-slate-600', icon: Calendar },
             { label: 'Bekliyor', value: weekSummary.planned, color: 'from-teal-500 to-cyan-600', icon: Clock },
