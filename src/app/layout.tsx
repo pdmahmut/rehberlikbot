@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'RPD Ogrenci Yonlendirme',
-  description: 'RPD Ogrenci Yonlendirme Uygulamasi',
+  title: 'RPD Öğrenci Yönlendirme',
+  description: 'RPD Öğrenci Yönlendirme Uygulaması',
   icons: {
     icon: '/icon.svg',
   },

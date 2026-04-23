@@ -28,39 +28,39 @@ import { toast } from 'sonner';
 const menuCategories = [
   { title: 'Genel', items: [{ href: '/panel/takvim', label: 'Takvim', icon: Calendar }] },
   {
-    title: 'Sinif Rehberligi',
+    title: 'Sınıf Rehberliği',
     items: [
-      { href: '/panel/sinif-rehberligi', label: 'Sinif Rehberligi', icon: BookOpen },
-      { href: '/panel/ogretmen-yonetimi', label: 'Ogretmen Yonetimi', icon: Users },
+      { href: '/panel/sinif-rehberligi', label: 'Sınıf Rehberliği', icon: BookOpen },
+      { href: '/panel/ogretmen-yonetimi', label: 'Öğretmen Yönetimi', icon: Users },
     ],
   },
   {
-    title: 'Ogrenci Takip',
+    title: 'Öğrenci Takip',
     items: [
-      { href: '/panel/basvurular', label: 'Basvurular', icon: MessageSquare },
-      { href: '/panel/ogrenci-listesi', label: 'Ogrenci Listesi', icon: GraduationCap },
-      { href: '/panel/ogrenci-gecmisi', label: 'Ogrenci Gecmisi', icon: History },
-      { href: '/panel/vaka-dosyalari', label: 'Vaka Dosyalari', icon: FolderOpen },
-      { href: '/panel/ogrenciler', label: 'Ogrenci Yonetimi', icon: Users },
+      { href: '/panel/basvurular', label: 'Başvurular', icon: MessageSquare },
+      { href: '/panel/ogrenci-listesi', label: 'Öğrenci Listesi', icon: GraduationCap },
+      { href: '/panel/ogrenci-gecmisi', label: 'Öğrenci Geçmişi', icon: History },
+      { href: '/panel/vaka-dosyalari', label: 'Vaka Dosyaları', icon: FolderOpen },
+      { href: '/panel/ogrenciler', label: 'Öğrenci Yönetimi', icon: Users },
     ],
   },
   {
     title: 'Analiz ve Raporlar',
     items: [
-      { href: '/panel/nedenler', label: 'Yonlendirme Nedenleri', icon: Target },
-      { href: '/panel/zaman', label: 'Zaman Istatistikleri', icon: CalendarDays },
-      { href: '/panel/ogretmen', label: 'Ogretmen ve Sinif', icon: UserCheck },
+      { href: '/panel/nedenler', label: 'Yönlendirme Nedenleri', icon: Target },
+      { href: '/panel/zaman', label: 'Zaman İstatistikleri', icon: CalendarDays },
+      { href: '/panel/ogretmen', label: 'Öğretmen ve Sınıf', icon: UserCheck },
     ],
   },
   {
-    title: 'Islemler',
-    items: [{ href: '/panel/kullanici-yonetimi', label: 'Kullanici Yonetimi', icon: Users }],
+    title: 'İşlemler',
+    items: [{ href: '/panel/kullanici-yonetimi', label: 'Kullanıcı Yönetimi', icon: Users }],
   },
 ];
 
 const teacherMenuItems = [
-  { href: '/panel/ogrenci-yonlendirmesi', label: 'Ogrenci Yonlendirme', icon: Users },
-  { href: '/panel/sinifim', label: 'Sinifim', icon: GraduationCap },
+  { href: '/panel/ogrenci-yonlendirmesi', label: 'Öğrenci Yönlendirme', icon: Users },
+  { href: '/panel/sinifim', label: 'Sınıfım', icon: GraduationCap },
 ];
 
 const allMenuItems = [...menuCategories.flatMap((category) => category.items), ...teacherMenuItems];
@@ -78,10 +78,10 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
   const [showSearch, setShowSearch] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<string[]>([
     'Genel',
-    'Sinif Rehberligi',
-    'Ogrenci Takip',
+    'Sınıf Rehberliği',
+    'Öğrenci Takip',
     'Analiz ve Raporlar',
-    'Islemler',
+    'İşlemler',
   ]);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -128,7 +128,6 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
   }, [searchQuery]);
 
   const isActive = (href: string) => pathname.startsWith(href);
-
   const currentPage = allMenuItems.find((item) => isActive(item.href))?.label || 'Panel';
 
   const toggleCategory = (title: string) => {
@@ -141,7 +140,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
-    toast.success('Cikis yapildi');
+    toast.success('Çıkış yapıldı');
     router.push('/login');
   };
 
@@ -150,7 +149,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
       <div className="min-h-screen flex items-center justify-center bg-slate-900">
         <div className="space-y-4 text-center">
           <div className="mx-auto h-16 w-16 animate-spin rounded-full border-4 border-blue-500/30 border-t-blue-500" />
-          <p className="text-sm text-slate-400">Yukleniyor...</p>
+          <p className="text-sm text-slate-400">Yükleniyor...</p>
         </div>
       </div>
     );
@@ -192,7 +191,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
               <Search className="h-5 w-5 text-slate-400" />
               <input
                 type="text"
-                placeholder="Menu icinde ara..."
+                placeholder="Menü içinde ara..."
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 autoFocus
@@ -224,7 +223,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
                 })
               ) : (
                 <div className="p-8 text-center text-slate-400">
-                  <p>Arama sonucu bulunamadi.</p>
+                  <p>Arama sonucu bulunamadı.</p>
                 </div>
               )}
             </div>
@@ -354,18 +353,18 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
                     : 'bg-gradient-to-br from-violet-500 to-purple-600'
                 }`}
               >
-                {role === 'admin' ? 'Y' : teacherName ? teacherName.charAt(0).toUpperCase() : 'O'}
+                {role === 'admin' ? 'Y' : teacherName ? teacherName.charAt(0).toUpperCase() : 'Ö'}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-medium text-white">
-                  {role === 'admin' ? 'Yonetici' : teacherName || 'Ogretmen'}
+                  {role === 'admin' ? 'Yönetici' : teacherName || 'Öğretmen'}
                 </p>
                 <p className="text-[10px] text-slate-500">
                   {role === 'admin'
-                    ? 'Tam erisim'
+                    ? 'Tam erişim'
                     : isHomeroom
-                      ? 'Sinif Rehber Ogretmeni'
-                      : 'Ogretmen'}
+                      ? 'Sınıf Rehber Öğretmeni'
+                      : 'Öğretmen'}
                 </p>
               </div>
             </div>
@@ -378,7 +377,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
             <div className="rounded-lg bg-slate-800 p-1.5 group-hover:bg-red-500/20">
               <LogOut className="h-4 w-4" />
             </div>
-            {(!sidebarCollapsed || role === 'teacher') && 'Cikis Yap'}
+            {(!sidebarCollapsed || role === 'teacher') && 'Çıkış Yap'}
           </button>
         </div>
       </aside>
@@ -390,14 +389,14 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
               <Bell className="h-4 w-4 text-amber-600" />
             </div>
             <p className="flex-1 text-sm text-amber-800">
-              <span className="font-semibold">{pendingRequestCount}</span> bekleyen sinif talebi var
-              {' '}(ogrenci silme veya sinif degistirme).
+              <span className="font-semibold">{pendingRequestCount}</span> bekleyen sınıf talebi var
+              {' '}(öğrenci silme veya sınıf değiştirme).
             </p>
             <Link
               href="/panel/sinif-talepleri"
               className="shrink-0 text-sm font-semibold text-amber-700 underline underline-offset-2 hover:text-amber-900"
             >
-              Incele
+              İncele
             </Link>
             <button
               onClick={() => setBannerDismissed(true)}

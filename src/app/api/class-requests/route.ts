@@ -79,12 +79,12 @@ const resolveAdminCategoryValue = async (
 export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) {
-    return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
+    return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
   const supabase = createRequestScopedSupabase(session);
   if (!supabase) {
-    return NextResponse.json({ error: "Supabase yapilandirilmamis" }, { status: 500 });
+    return NextResponse.json({ error: "Supabase yapılandırılmamış" }, { status: 500 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -121,12 +121,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const session = await getSession();
   if (!session) {
-    return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
+    return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
   const supabase = createRequestScopedSupabase(session);
   if (!supabase) {
-    return NextResponse.json({ error: "Supabase yapilandirilmamis" }, { status: 500 });
+    return NextResponse.json({ error: "Supabase yapılandırılmamış" }, { status: 500 });
   }
 
   const body = await request.json();
@@ -165,12 +165,12 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const session = await getSession();
   if (!session) {
-    return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
+    return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
   const supabase = createRequestScopedSupabase(session);
   if (!supabase) {
-    return NextResponse.json({ error: "Supabase yapilandirilmamis" }, { status: 500 });
+    return NextResponse.json({ error: "Supabase yapılandırılmamış" }, { status: 500 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -184,7 +184,7 @@ export async function DELETE(request: NextRequest) {
     .maybeSingle();
 
   if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
-  if (!existing) return NextResponse.json({ error: "Talep bulunamadi" }, { status: 404 });
+  if (!existing) return NextResponse.json({ error: "Talep bulunamadı" }, { status: 404 });
   if (session.role === "teacher" && existing.status !== "pending") {
     return NextResponse.json({ error: "Sadece bekleyen talepler iptal edilebilir" }, { status: 400 });
   }
@@ -197,12 +197,12 @@ export async function DELETE(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const session = await getSession();
   if (!session) {
-    return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
+    return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
   const supabase = createRequestScopedSupabase(session);
   if (!supabase) {
-    return NextResponse.json({ error: "Supabase yapilandirilmamis" }, { status: 500 });
+    return NextResponse.json({ error: "Supabase yapılandırılmamış" }, { status: 500 });
   }
 
   const body = await request.json();
@@ -228,7 +228,7 @@ export async function PATCH(request: NextRequest) {
     .maybeSingle();
 
   if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
-  if (!existing) return NextResponse.json({ error: "Talep bulunamadi" }, { status: 404 });
+  if (!existing) return NextResponse.json({ error: "Talep bulunamadı" }, { status: 404 });
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
@@ -239,10 +239,10 @@ export async function PATCH(request: NextRequest) {
 
     if (isEditingRequest) {
       if (existing.status !== "pending") {
-        return NextResponse.json({ error: "Sadece bekleyen talepler duzenlenebilir" }, { status: 400 });
+        return NextResponse.json({ error: "Sadece bekleyen talepler düzenlenebilir" }, { status: 400 });
       }
       if (status !== undefined || scheduledDate !== undefined || lessonSlot !== undefined || lessonTeacher !== undefined) {
-        return NextResponse.json({ error: "Planlama alanlarini guncelleme yetkiniz yok" }, { status: 403 });
+        return NextResponse.json({ error: "Planlama alanlarını güncelleme yetkiniz yok" }, { status: 403 });
       }
 
       const nextTeacherDescription = cleanClassRequestText(
@@ -250,7 +250,7 @@ export async function PATCH(request: NextRequest) {
       );
 
       if (!nextTeacherDescription) {
-        return NextResponse.json({ error: "Talep aciklamasi bos birakilamaz" }, { status: 400 });
+        return NextResponse.json({ error: "Talep açıklaması boş bırakılamaz" }, { status: 400 });
       }
 
       updates.teacher_description = nextTeacherDescription;
@@ -263,7 +263,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (!isEditingRequest && !isSavingFeedback) {
-      return NextResponse.json({ error: "Guncellenecek alan bulunamadi" }, { status: 400 });
+      return NextResponse.json({ error: "Güncellenecek alan bulunamadı" }, { status: 400 });
     }
   } else {
     const wantsScheduling =
@@ -285,7 +285,7 @@ export async function PATCH(request: NextRequest) {
       );
 
       if (!resolvedCategory) {
-        return NextResponse.json({ error: "Teknik kategori bos birakilamaz" }, { status: 400 });
+        return NextResponse.json({ error: "Teknik kategori boş bırakılamaz" }, { status: 400 });
       }
 
       updates.admin_category = resolvedCategory.label;
@@ -309,7 +309,7 @@ export async function PATCH(request: NextRequest) {
 
     if (wantsScheduling && !effectiveCategory) {
       return NextResponse.json(
-        { error: "Planlama yapmadan once teknik kategori belirlemelisiniz" },
+        { error: "Planlama yapmadan önce teknik kategori belirlemelisiniz" },
         { status: 400 }
       );
     }

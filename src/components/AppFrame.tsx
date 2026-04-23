@@ -46,7 +46,7 @@ export default function AppFrame({ children }: { children: React.ReactNode }) {
                 RPD
               </span>
               <span className="-mt-0.5 text-[10px] md:text-xs font-medium text-slate-400">
-                Ogrenci Takip
+                Öğrenci Takip
               </span>
             </div>
           </Link>

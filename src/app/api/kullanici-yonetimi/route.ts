@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 function getSupabase() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) throw new Error('Supabase yapilandirmasi eksik');
+  if (!url || !key) throw new Error('Supabase yapılandırması eksik');
   return createClient(url, key);
 }
 
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     const { username, password, teacher_name } = body;
 
     if (!username || !password || !teacher_name) {
-      return NextResponse.json({ error: 'Kullanici adi, sifre ve ad zorunludur' }, { status: 400 });
+      return NextResponse.json({ error: 'Kullanıcı adı, şifre ve ad zorunludur' }, { status: 400 });
     }
 
     const supabase = getSupabase();
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (existing) {
-      return NextResponse.json({ error: 'Bu kullanici adi zaten kullanimda' }, { status: 409 });
+      return NextResponse.json({ error: 'Bu kullanıcı adı zaten kullanımda' }, { status: 409 });
     }
 
     const { data, error } = await supabase
@@ -84,7 +84,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    if (!password) return NextResponse.json({ error: 'Yeni sifre zorunludur' }, { status: 400 });
+    if (!password) return NextResponse.json({ error: 'Yeni şifre zorunludur' }, { status: 400 });
     const { error } = await supabase
       .from('teacher_users')
       .update({ password_hash: password })

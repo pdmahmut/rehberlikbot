@@ -29,16 +29,16 @@ const createRequestScopedSupabase = (session: SessionUser): SupabaseClient | nul
 export async function GET() {
   const session = await getSession();
   if (!session) {
-    return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
+    return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
   if (session.role !== "admin") {
-    return NextResponse.json({ error: "Bu alan sadece yonetici icindir" }, { status: 403 });
+    return NextResponse.json({ error: "Bu alan sadece yönetici içindir" }, { status: 403 });
   }
 
   const supabase = createRequestScopedSupabase(session);
   if (!supabase) {
-    return NextResponse.json({ error: "Supabase yapilandirilmamis" }, { status: 500 });
+    return NextResponse.json({ error: "Supabase yapılandırılmamış" }, { status: 500 });
   }
 
   const { data, error } = await supabase
