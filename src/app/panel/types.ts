@@ -44,7 +44,6 @@ export type ClassStudent = {
 export const STUDENT_STATUSES = [
   { value: "tumu", label: "Tümü" },
   { value: "aktif_takip", label: "Aktif Takip" },
-  { value: "duzenli_gorusme", label: "Düzenli Görüşme" },
   { value: "tamamlandi", label: "Tamamlandı" }
 ] as const;
 

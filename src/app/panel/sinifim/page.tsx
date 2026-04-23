@@ -97,7 +97,7 @@ const REQUEST_STATUS: Record<GuidanceRequest["status"], { label: string; cls: st
 
 export default function SinifimPage() {
   const [auth, setAuth] = useState<AuthInfo | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>("my-referrals");
+  const [activeTab, setActiveTab] = useState<TabId>("class-list");
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [pendingRequests, setPendingRequests] = useState<ClassStudentRequest[]>([]);
@@ -376,7 +376,7 @@ export default function SinifimPage() {
   const activeGuidanceRequests = guidanceRequests.filter(r => r.status !== "rejected");
 
   const tabs: { id: TabId; label: string; icon: typeof History; count: number; hidden?: boolean }[] = [
-    { id: "my-referrals", label: "Yaptığım Yönlendirmeler", icon: History, count: myReferrals.length },
+    { id: "my-referrals", label: "Yaptığım Yönlendirmeler", icon: History, count: myReferrals.length, hidden: true },
     { id: "class-list", label: "Sınıf Listesi", icon: Users, count: students.length },
     { id: "class-referrals", label: "Sınıfa Yapılan Yönlendirmeler", icon: BookOpen, count: classReferrals.length },
     { id: "guidance-requests", label: "Rehberlik Talebi", icon: MessageSquare, count: activeGuidanceRequests.length, hidden: !auth.classKey },

@@ -7,7 +7,12 @@ export const runtime = 'nodejs';
 // Bu endpoint Supabase "class_students" tablosu üzerinden
 // sınıf bazlı öğrenci listeleme, ekleme ve silme işlemlerini yönetir.
 
-const VALID_STATUSES: StudentStatus[] = ["tumu", "aktif_takip", "duzenli_gorusme", "tamamlandi"];
+const VALID_STATUSES: StudentStatus[] = ["tumu", "aktif_takip", "tamamlandi"];
+
+function normalizeStudentStatus(value: unknown): StudentStatus {
+  if (value === "duzenli_gorusme") return "aktif_takip";
+  return isValidStatus(value) ? value : "tumu";
+}
 
 function isValidStatus(value: unknown): value is StudentStatus {
   return typeof value === "string" && VALID_STATUSES.includes(value as StudentStatus);
@@ -62,11 +67,12 @@ export async function GET(request: NextRequest) {
 
     const normalizedStudents = (data ?? []).map((student) => ({
       ...student,
-      status: isValidStatus(student.status) ? student.status : "tumu"
+      status: normalizeStudentStatus(student.status)
     }));
 
-    const filtered = status && isValidStatus(status)
-      ? normalizedStudents.filter((student) => student.status === status)
+    const normalizedFilterStatus = normalizeStudentStatus(status);
+    const filtered = status && isValidStatus(normalizedFilterStatus)
+      ? normalizedStudents.filter((student) => student.status === normalizedFilterStatus)
       : normalizedStudents;
 
     return NextResponse.json({ students: filtered });
@@ -209,7 +215,7 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
     const id = body.id as string | undefined;
-    const status = body.status as StudentStatus | undefined;
+    const status = normalizeStudentStatus(body.status);
 
     if (!id) {
       return NextResponse.json(

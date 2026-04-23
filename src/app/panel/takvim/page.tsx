@@ -908,14 +908,12 @@ export default function TakvimPage() {
 
     const choiceMap: Record<Exclude<AppointmentOutcomeChoice, "cancel">, Partial<Appointment> & { source_application_status?: string }> = {
       completed: { status: "attended", outcome_decision: ["Tamamlandı"], source_application_status: "completed" },
-      active_follow: { status: "attended", outcome_decision: ["Aktif Takip"], source_application_status: "active_follow" },
-      regular_meeting: { status: "attended", outcome_decision: ["Düzenli Görüşme"], source_application_status: "regular_meeting" }
+      active_follow: { status: "attended", outcome_decision: ["Aktif Takip"], source_application_status: "active_follow" }
     };
 
     const messages: Record<Exclude<AppointmentOutcomeChoice, "cancel">, string> = {
       completed: "Tamamlandı olarak işaretlendi",
-      active_follow: "Aktif Takip olarak işaretlendi",
-      regular_meeting: "Düzenli Görüşme olarak işaretlendi"
+      active_follow: "Aktif Takip olarak işaretlendi"
     };
 
     try {

@@ -18,7 +18,7 @@ export default function OgrencilerPage() {
   const students = classStudents;
   
   const [selectedClass, setSelectedClass] = useState<string>("");
-  const [selectedStatusView, setSelectedStatusView] = useState<"tumu" | "aktif_takip" | "duzenli_gorusme" | "basvurular">("tumu");
+  const [selectedStatusView, setSelectedStatusView] = useState<"tumu" | "aktif_takip" | "basvurular">("tumu");
   const [searchTerm, setSearchTerm] = useState("");
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentClass, setNewStudentClass] = useState("");
@@ -120,9 +120,7 @@ export default function OgrencilerPage() {
             ? student.status === "tumu"
             : selectedStatusView === "aktif_takip"
               ? student.status === "aktif_takip"
-              : selectedStatusView === "duzenli_gorusme"
-                ? student.status === "duzenli_gorusme"
-                : ["aktif_takip", "duzenli_gorusme", "tamamlandi"].includes(student.status);
+              : ["aktif_takip", "tamamlandi"].includes(student.status);
 
         return matchesSearch && matchesView;
       })
@@ -139,15 +137,10 @@ export default function OgrencilerPage() {
     [students]
   );
 
-  const duzenliListesi = useMemo(
-    () => students.filter(s => s.status === "duzenli_gorusme"),
-    [students]
-  );
-
   const basvurularListesi = useMemo(
     () =>
       students.filter((s) =>
-        ["aktif_takip", "duzenli_gorusme", "tamamlandi"].includes(s.status)
+        ["aktif_takip", "tamamlandi"].includes(s.status)
       ),
     [students]
   );
@@ -168,8 +161,6 @@ export default function OgrencilerPage() {
             className={
               student.status === "aktif_takip"
                 ? "mt-1 border-cyan-200 bg-cyan-50 text-cyan-700"
-                : student.status === "duzenli_gorusme"
-                ? "mt-1 border-violet-200 bg-violet-50 text-violet-700"
                 : student.status === "tamamlandi"
                 ? "mt-1 border-emerald-200 bg-emerald-50 text-emerald-700"
                 : "mt-1 border-slate-200 bg-slate-50 text-slate-600"
@@ -179,8 +170,6 @@ export default function OgrencilerPage() {
               ? "Tümü"
               : student.status === "aktif_takip"
               ? "Aktif Takip"
-              : student.status === "duzenli_gorusme"
-              ? "Düzenli Görüşme"
               : "Tamamlandı"}
           </Badge>
         </div>
@@ -193,14 +182,6 @@ export default function OgrencilerPage() {
           onClick={() => handleStatusChange(student.id, "aktif_takip")}
         >
           Aktif Takip
-        </Button>
-        <Button
-          variant={student.status === "duzenli_gorusme" ? "default" : "outline"}
-          size="sm"
-          disabled={statusUpdatingId === student.id}
-          onClick={() => handleStatusChange(student.id, "duzenli_gorusme")}
-        >
-          Düzenli Görüşme
         </Button>
         <Button
           variant={student.status === "tamamlandi" ? "default" : "outline"}
@@ -313,7 +294,6 @@ export default function OgrencilerPage() {
               {[
                 { value: "tumu", label: "Tümü", icon: Layers3 },
                 { value: "aktif_takip", label: "Aktif Takip", icon: Target },
-                { value: "duzenli_gorusme", label: "Düzenli Görüşme", icon: BookOpen },
                 { value: "basvurular", label: "Başvurular", icon: CheckCircle2 }
               ].map((tab) => {
                 const Icon = tab.icon;
@@ -368,8 +348,6 @@ export default function OgrencilerPage() {
                       ? tumuListesi
                       : selectedStatusView === "aktif_takip"
                       ? aktifTakipListesi
-                      : selectedStatusView === "duzenli_gorusme"
-                      ? duzenliListesi
                       : basvurularListesi
                     ).map((student, idx) => renderStudentRow(student, idx))}
                   </ul>

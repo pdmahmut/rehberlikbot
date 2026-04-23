@@ -16,7 +16,7 @@ export interface StudentCardProps {
   appointmentUrl: string;
   isScheduled?: boolean;
   scheduledDate?: string | null; // randevu tarihi
-  requestStatus?: "pending" | "scheduled" | "active_follow" | "regular_meeting" | "completed" | "cancelled";
+  requestStatus?: "pending" | "scheduled" | "active_follow" | "completed" | "cancelled";
   hideDelete?: boolean;
   onClick?: () => void;
 }
@@ -132,11 +132,6 @@ export function StudentCard({
               <Badge className="bg-cyan-100 text-cyan-700 border-0 text-xs whitespace-nowrap">
                 <Calendar className="h-3 w-3 mr-1" />
                 Aktif Takip
-              </Badge>
-            ) : effectiveStatus === "regular_meeting" ? (
-              <Badge className="bg-violet-100 text-violet-700 border-0 text-xs whitespace-nowrap">
-                <Calendar className="h-3 w-3 mr-1" />
-                Düzenli Görüşme
               </Badge>
             ) : effectiveStatus === "completed" ? (
               <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs whitespace-nowrap">

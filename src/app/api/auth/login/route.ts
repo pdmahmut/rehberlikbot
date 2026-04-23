@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyAdminPassword } from '@/lib/adminPassword';
 
 const COOKIE_NAME = 'rehberlik_session';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
 function encodeSession(user: object): string {
   const payload = JSON.stringify({ ...user, exp: Date.now() + 8 * 60 * 60 * 1000 });
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     const { role, password } = await request.json();
 
     if (role === 'admin') {
-      if (password !== ADMIN_PASSWORD) {
+      if (!verifyAdminPassword(String(password || ''))) {
         return NextResponse.json({ error: 'Yanlış şifre' }, { status: 401 });
       }
       const token = encodeSession({ role: 'admin' });

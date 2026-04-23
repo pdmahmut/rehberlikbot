@@ -2,10 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, ListTodo, Sparkles, X } from "lucide-react";
+import { CheckCircle2, Sparkles, X } from "lucide-react";
 import type { Appointment } from "@/types";
 
-export type AppointmentOutcomeChoice = "completed" | "active_follow" | "regular_meeting" | "cancel";
+export type AppointmentOutcomeChoice = "completed" | "active_follow" | "cancel";
 
 type AppointmentOutcomeModalProps = {
   open: boolean;
@@ -35,13 +35,6 @@ const OPTIONS: Array<{
     description: "Öğrenci Aktif Takip durumuna geçer ve ilgili sekmeye taşınır.",
     icon: Sparkles,
     accent: "from-cyan-500 to-blue-600"
-  },
-  {
-    value: "regular_meeting",
-    title: "Düzenli Görüşme",
-    description: "Öğrenci Düzenli Görüşme durumuna geçer ve ilgili sekmeye taşınır.",
-    icon: ListTodo,
-    accent: "from-violet-500 to-indigo-600"
   }
 ];
 

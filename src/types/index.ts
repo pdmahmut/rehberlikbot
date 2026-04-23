@@ -98,7 +98,6 @@ export const APPLICATION_STATUSES = [
   { value: "pending", label: "Bekliyor", color: "amber" },
   { value: "scheduled", label: "Randevu Verildi", color: "blue" },
   { value: "active_follow", label: "Aktif Takip", color: "cyan" },
-  { value: "regular_meeting", label: "Düzenli Görüşme", color: "violet" },
   { value: "completed", label: "Görüşme Yapıldı", color: "emerald" }
 ] as const;
 

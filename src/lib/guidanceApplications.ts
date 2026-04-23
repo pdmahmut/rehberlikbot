@@ -16,7 +16,6 @@ export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
   pending: "Bekliyor",
   scheduled: "Randevu Verildi",
   active_follow: "Aktif Takip",
-  regular_meeting: "Düzenli Görüşme",
   completed: "Görüşme Yapıldı"
 };
 
@@ -24,7 +23,6 @@ export const APPLICATION_STATUS_COLORS: Record<ApplicationStatus, string> = {
   pending: "bg-amber-100 text-amber-700",
   scheduled: "bg-blue-100 text-blue-700",
   active_follow: "bg-cyan-100 text-cyan-700",
-  regular_meeting: "bg-violet-100 text-violet-700",
   completed: "bg-emerald-100 text-emerald-700"
 };
 
@@ -32,9 +30,10 @@ export function normalizeApplicationStatus(status?: string | null): ApplicationS
   switch (status) {
     case "scheduled":
     case "active_follow":
-    case "regular_meeting":
     case "completed":
       return status;
+    case "regular_meeting":
+      return "active_follow";
     case "randevu_verildi":
       return "scheduled";
     case "converted":

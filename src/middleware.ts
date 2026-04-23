@@ -44,7 +44,13 @@ export function middleware(request: NextRequest) {
     }
 
     // Öğretmen sadece belirli sayfalara erişebilir
-    const teacherAllowed = ['/panel/ogrenci-yonlendirmesi', '/panel/yonlendirme-gecmisi', '/panel/sinifim'];
+    const teacherAllowed = [
+      '/panel/ogrenci-yonlendirmesi',
+      '/panel/yonlendirme-gecmisi',
+      '/panel/sinifim',
+      '/panel/yaptigim-yonlendirmeler',
+      '/panel/hesabim',
+    ];
     if (session.role === 'teacher' && !teacherAllowed.some(p => pathname.startsWith(p))) {
       return NextResponse.redirect(new URL('/panel/ogrenci-yonlendirmesi', request.url));
     }

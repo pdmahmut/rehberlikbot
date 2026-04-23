@@ -17,6 +17,7 @@ import {
   LogOut,
   Menu,
   MessageSquare,
+  KeyRound,
   Search,
   Target,
   UserCheck,
@@ -26,7 +27,13 @@ import {
 import { toast } from 'sonner';
 
 const menuCategories = [
-  { title: 'Genel', items: [{ href: '/panel/takvim', label: 'Takvim', icon: Calendar }] },
+  {
+    title: 'Genel',
+    items: [
+      { href: '/panel/takvim', label: 'Takvim', icon: Calendar },
+      { href: '/panel/hesabim', label: 'Hesabım', icon: KeyRound },
+    ],
+  },
   {
     title: 'Sınıf Rehberliği',
     items: [
@@ -57,6 +64,8 @@ const menuCategories = [
 const teacherMenuItems = [
   { href: '/panel/ogrenci-yonlendirmesi', label: 'Öğrenci Yönlendirme', icon: Users },
   { href: '/panel/sinifim', label: 'Sınıfım', icon: GraduationCap },
+  { href: '/panel/yaptigim-yonlendirmeler', label: 'Yaptığım Yönlendirmeler', icon: History },
+  { href: '/panel/hesabim', label: 'Hesabım', icon: KeyRound },
 ];
 
 const allMenuItems = [...menuCategories.flatMap((category) => category.items), ...teacherMenuItems];

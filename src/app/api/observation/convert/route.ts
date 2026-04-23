@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
-type ObservationStatus = "pending" | "scheduled" | "converted" | "active_follow" | "regular_meeting" | "completed";
+type ObservationStatus = "pending" | "scheduled" | "converted" | "active_follow" | "completed";
 
 const VALID_STATUSES: ObservationStatus[] = [
   "pending",
   "scheduled",
   "converted",
   "active_follow",
-  "regular_meeting",
   "completed"
 ];
 
@@ -17,7 +16,7 @@ const isValidStatus = (value: unknown): value is ObservationStatus =>
 
 const normalizeIncomingStatus = (value: unknown): ObservationStatus => {
   if (value === "active") return "active_follow";
-  if (value === "regular") return "regular_meeting";
+  if (value === "regular" || value === "regular_meeting") return "active_follow";
   if (value === "randevu_verildi") return "converted";
   if (value === "scheduled") return "converted";
   if (isValidStatus(value)) return value;

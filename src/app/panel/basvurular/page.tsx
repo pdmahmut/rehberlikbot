@@ -121,8 +121,7 @@ const getOutcomeLabel = (decisions: string[] | null | undefined): string | null 
   for (const d of decisions) {
     const n = normalizeDecisionText(d);
     if (n.includes("tamamlandi")) return "Tamamlandı";
-    if (n.includes("aktif takip")) return "Aktif Takip";
-    if (n.includes("duzenli gorusme")) return "Düzenli Görüşme";
+    if (n.includes("aktif takip") || n.includes("duzenli gorusme")) return "Aktif Takip";
   }
   return null;
 };
@@ -181,7 +180,7 @@ export default function BasvurularPage() {
   const [applicationsSourceFilter, setApplicationsSourceFilter] = useState<"all" | ApplicationRecord["source"]>("all");
   const [applicationsReferrerFilter, setApplicationsReferrerFilter] = useState("");
   const [applicationsStatusFilter, setApplicationsStatusFilter] = useState<"all" | ApplicationStatus>("all");
-  const [applicationsOutcomeFilter, setApplicationsOutcomeFilter] = useState<"all" | "Tamamlandı" | "Aktif Takip" | "Düzenli Görüşme">("all");
+  const [applicationsOutcomeFilter, setApplicationsOutcomeFilter] = useState<"all" | "Tamamlandı" | "Aktif Takip">("all");
 
   const [loading, setLoading] = useState(true);
   const [savingOutcome, setSavingOutcome] = useState(false);
@@ -226,14 +225,12 @@ export default function BasvurularPage() {
 
     const choiceMap: Record<typeof choice, { outcome_decision: string[]; source_application_status: string }> = {
       completed: { outcome_decision: ["Tamamlandı"], source_application_status: "completed" },
-      active_follow: { outcome_decision: ["Aktif Takip"], source_application_status: "active_follow" },
-      regular_meeting: { outcome_decision: ["Düzenli Görüşme"], source_application_status: "regular_meeting" }
+      active_follow: { outcome_decision: ["Aktif Takip"], source_application_status: "active_follow" }
     };
 
     const messages: Record<typeof choice, string> = {
       completed: "Tamamlandı olarak işaretlendi",
-      active_follow: "Aktif Takip olarak işaretlendi",
-      regular_meeting: "Düzenli Görüşme olarak işaretlendi"
+      active_follow: "Aktif Takip olarak işaretlendi"
     };
 
     try {
@@ -644,14 +641,13 @@ export default function BasvurularPage() {
     const totals = {
       total: 0,
       status: { "Görüşüldü": 0, "Randevu verildi": 0, "Bekliyor": 0 },
-      outcome: { "Tamamlandı": 0, "Aktif Takip": 0, "Düzenli Görüşme": 0 }
+      outcome: { "Tamamlandı": 0, "Aktif Takip": 0 }
     };
     applicationRecordsWithOverrides.forEach((item) => {
       totals.total += 1;
       totals.status[item.status] += 1;
       if (item.outcome_label === "Tamamlandı") totals.outcome["Tamamlandı"] += 1;
       else if (item.outcome_label === "Aktif Takip") totals.outcome["Aktif Takip"] += 1;
-      else if (item.outcome_label === "Düzenli Görüşme") totals.outcome["Düzenli Görüşme"] += 1;
     });
     return totals;
   }, [applicationRecordsWithOverrides]);
@@ -710,7 +706,6 @@ export default function BasvurularPage() {
               { label: "Bekliyor", value: applicationStatistics.status["Bekliyor"], cls: "bg-cyan-500/30 border-cyan-400/30" },
               { label: "Tamamlandı", value: applicationStatistics.outcome["Tamamlandı"], cls: "bg-emerald-500/30 border-emerald-400/30" },
               { label: "Aktif Takip", value: applicationStatistics.outcome["Aktif Takip"], cls: "bg-sky-500/30 border-sky-400/30" },
-              { label: "Düzenli Görüşme", value: applicationStatistics.outcome["Düzenli Görüşme"], cls: "bg-purple-500/30 border-purple-400/30" },
             ].map(({ label, value, cls }) => (
               <div key={label} className={`flex items-center gap-2 rounded-lg backdrop-blur-sm px-3 py-2 border ${cls}`}>
                 <p className="text-[10px] text-white/70 uppercase tracking-wider">{label}</p>
@@ -926,7 +921,6 @@ export default function BasvurularPage() {
                 <option value="all">Tümü</option>
                 <option value="Tamamlandı">Tamamlandı</option>
                 <option value="Aktif Takip">Aktif Takip</option>
-                <option value="Düzenli Görüşme">Düzenli Görüşme</option>
               </select>
             </div>            {applicationsSourceFilter === "Öğretmen Yönlendirmeleri" && <div className="space-y-2">
               <Label className="text-sm font-medium text-slate-700 flex items-center gap-2"><User className="h-4 w-4 text-amber-500" />Yönlendiren</Label>
@@ -999,7 +993,7 @@ export default function BasvurularPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        {item.outcome_label && (item.status === "Görüşüldü" || item.outcome_label === "Aktif Takip" || item.outcome_label === "Düzenli Görüşme") ? (
+                        {item.outcome_label && (item.status === "Görüşüldü" || item.outcome_label === "Aktif Takip") ? (
                           <Badge className={
                             item.outcome_label === "Tamamlandı" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
                             item.outcome_label === "Aktif Takip" ? "bg-cyan-100 text-cyan-700 border-cyan-200" :
@@ -1073,7 +1067,7 @@ export default function BasvurularPage() {
                 <span className="text-lg">✅</span>
                 <div>
                   <div>Görüşüldü</div>
-                  <div className="text-xs font-normal text-emerald-500">Tamamlandı / Aktif Takip / Düzenli Görüşme seç</div>
+                  <div className="text-xs font-normal text-emerald-500">Tamamlandı / Aktif Takip seç</div>
                 </div>
               </button>
             </div>
