@@ -1,14 +1,14 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { getGoogleSheetsConfigStatus } from '@/lib/sheets';
+
 export const runtime = 'nodejs';
+
 export async function GET() {
-  const sheets = Boolean(
-    process.env.SHEETS_SPREADSHEET_ID &&
-    process.env.GOOGLE_SHEETS_CLIENT_EMAIL &&
-    process.env.GOOGLE_SHEETS_PRIVATE_KEY
-  );
+  const sheetsStatus = getGoogleSheetsConfigStatus();
 
   return NextResponse.json({
-    sheets,
-    configured: sheets,
+    sheets: sheetsStatus.configured,
+    configured: sheetsStatus.configured,
+    details: sheetsStatus,
   });
 }

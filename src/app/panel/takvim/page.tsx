@@ -1240,7 +1240,7 @@ export default function TakvimPage() {
                     <p className="text-xs text-blue-600">Son 7 günde {notifications.recentReferrals.length} yönlendirme</p>
                   </div>
                 </div>
-                <a href="/panel/ogrenci-yonlendirmesi" className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">Görüntüle →</a>
+                <a href="/panel/basvurular" className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">Görüntüle →</a>
               </div>
               <div className="space-y-2 max-h-40 overflow-y-auto">
                 {notifications.recentReferrals.slice(0, 5).map((ref: any) => (

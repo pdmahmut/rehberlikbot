@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
     );
 
     let sheetsSuccess = false;
+    let supabaseSuccess = false;
     const errors: string[] = [];
 
     // Google Sheets entegrasyonu
@@ -61,6 +62,8 @@ export async function POST(request: NextRequest) {
         if (supabaseError) {
           console.error('Supabase referrals insert hatası:', supabaseError.message);
           errors.push('Supabase istatistik kaydı yapılamadı');
+        } else {
+          supabaseSuccess = true;
         }
       }
     } catch (error) {
@@ -70,18 +73,23 @@ export async function POST(request: NextRequest) {
 
     const sentCount = normalizedStudents.length;
 
-    if (sheetsSuccess) {
+    if (sheetsSuccess || supabaseSuccess) {
       return NextResponse.json({
         success: true,
-        message: `${sentCount} öğrenci başarıyla Google Sheets'e gönderildi`,
+        message: sheetsSuccess
+          ? `${sentCount} öğrenci başarıyla Google Sheets'e gönderildi`
+          : `${sentCount} öğrenci sisteme kaydedildi, ancak Google Sheets senkronizasyonu yapılamadı`,
         sentCount,
-        sheets: sheetsSuccess
+        sheets: sheetsSuccess,
+        supabase: supabaseSuccess,
+        warnings: sheetsSuccess ? [] : ['Google Sheets senkronizasyonu yapılamadı']
       });
     } else {
       return NextResponse.json({
         success: false,
         message: `Gönderim başarısız: ${errors.join(', ')}`,
         sheets: sheetsSuccess,
+        supabase: supabaseSuccess,
         errors
       }, { status: 500 });
     }

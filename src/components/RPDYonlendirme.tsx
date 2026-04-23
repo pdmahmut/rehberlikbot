@@ -251,23 +251,21 @@ export default function RPDYonlendirme({ teacherName, classKey, classDisplay }: 
       const result = await parseJsonResponse<any>(response);
 
       if (response.ok && result.success) {
-        if (result.sheets) {
-          toast.success("✅ Öğrenci Google Sheets'e başarıyla gönderildi!");
-        } else {
-          toast.error("❌ Gönderim başarısız: " + result.message);
+        toast.success("Öğrenci yönlendirildi.");
+
+        if (!result.sheets) {
+          console.warn("Google Sheets senkronizasyonu yapılamadı:", result.message);
         }
 
-        if (result.sheets) {
-          notifyGuidanceReferralsChanged({
-            action: "create",
-            studentName: students[0]?.ogrenciAdi || "",
-          });
-          form.setValue("yonlendirmeNedenleri", []);
-          form.setValue("not", "");
-          form.setValue("ogrenci", "");
-          setSelectedStudent(null);
-          // sinifSube'yi koru — seçili sınıfta kalmaya devam etsin
-        }
+        notifyGuidanceReferralsChanged({
+          action: "create",
+          studentName: students[0]?.ogrenciAdi || "",
+        });
+        form.setValue("yonlendirmeNedenleri", []);
+        form.setValue("not", "");
+        form.setValue("ogrenci", "");
+        setSelectedStudent(null);
+        // sinifSube'yi koru — seçili sınıfta kalmaya devam etsin
       } else {
         toast.error("❌ Gönderim sırasında hata oluştu: " + (result.message || result.error));
       }
