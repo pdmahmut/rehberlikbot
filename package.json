@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build && node scripts/generate-middleware-nft.js",
-    "start": "next start",
+    "dev": "node --no-experimental-webstorage ./node_modules/next/dist/bin/next dev",
+    "build": "node --no-experimental-webstorage ./node_modules/next/dist/bin/next build && node --no-experimental-webstorage scripts/generate-middleware-nft.js",
+    "start": "node --no-experimental-webstorage ./node_modules/next/dist/bin/next start",
     "lint": "eslint",
     "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit",

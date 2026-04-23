@@ -8,30 +8,30 @@ import { toast } from "sonner";
 
 const menuCategories = [
   { title: "Genel", items: [{ href: "/panel/takvim", label: "Takvim", icon: Calendar, color: "teal" }] },
-  { title: "Sinif Rehberligi", items: [
-    { href: "/panel/sinif-rehberligi", label: "Sinif Rehberligi", icon: BookOpen, color: "emerald" },
-    { href: "/panel/ogretmen-yonetimi", label: "Ogretmen Yonetimi", icon: Users, color: "violet" },
+  { title: "Sınıf Rehberliği", items: [
+    { href: "/panel/sinif-rehberligi", label: "Sınıf Rehberliği", icon: BookOpen, color: "emerald" },
+    { href: "/panel/ogretmen-yonetimi", label: "Öğretmen Yönetimi", icon: Users, color: "violet" },
   ]},
-  { title: "Ogrenci Takip", items: [
-    { href: "/panel/basvurular", label: "Basvurular", icon: MessageSquare, color: "purple" },
-    { href: "/panel/ogrenci-listesi", label: "Ogrenci Listesi", icon: GraduationCap, color: "emerald" },
-    { href: "/panel/ogrenci-gecmisi", label: "Ogrenci Gecmisi", icon: History, color: "violet" },
-    { href: "/panel/vaka-dosyalari", label: "Vaka Dosyalari", icon: FolderOpen, color: "cyan" },
-    { href: "/panel/ogrenciler", label: "Ogrenci Yonetimi", icon: Users, color: "slate" },
+  { title: "Öğrenci Takip", items: [
+    { href: "/panel/basvurular", label: "Başvurular", icon: MessageSquare, color: "purple" },
+    { href: "/panel/ogrenci-listesi", label: "Öğrenci Listesi", icon: GraduationCap, color: "emerald" },
+    { href: "/panel/ogrenci-gecmisi", label: "Öğrenci Geçmişi", icon: History, color: "violet" },
+    { href: "/panel/vaka-dosyalari", label: "Vaka Dosyaları", icon: FolderOpen, color: "cyan" },
+    { href: "/panel/ogrenciler", label: "Öğrenci Yönetimi", icon: Users, color: "slate" },
   ]},
   { title: "Analiz & Raporlar", items: [
-    { href: "/panel/nedenler", label: "Yonlendirme Nedenleri", icon: Target, color: "amber" },
-    { href: "/panel/zaman", label: "Zaman Istatistikleri", icon: CalendarDays, color: "indigo" },
-    { href: "/panel/ogretmen", label: "Ogretmen & Sinif", icon: UserCheck, color: "emerald" },
+    { href: "/panel/nedenler", label: "Yönlendirme Nedenleri", icon: Target, color: "amber" },
+    { href: "/panel/zaman", label: "Zaman İstatistikleri", icon: CalendarDays, color: "indigo" },
+    { href: "/panel/ogretmen", label: "Öğretmen & Sınıf", icon: UserCheck, color: "emerald" },
   ]},
-  { title: "Islemler", items: [
-    { href: "/panel/kullanici-yonetimi", label: "Kullanici Yonetimi", icon: Users, color: "slate" },
+  { title: "İşlemler", items: [
+    { href: "/panel/kullanici-yonetimi", label: "Kullanıcı Yönetimi", icon: Users, color: "slate" },
   ]}
 ];
 
 const teacherMenuItems = [
-  { href: "/panel/ogrenci-yonlendirmesi", label: "Ogrenci Yonlendirme", icon: Users, color: "blue" },
-  { href: "/panel/sinifim", label: "Sinifim", icon: GraduationCap, color: "emerald" },
+  { href: "/panel/ogrenci-yonlendirmesi", label: "Öğrenci Yönlendirme", icon: Users, color: "blue" },
+  { href: "/panel/sinifim", label: "Sınıfım", icon: GraduationCap, color: "emerald" },
 ];
 const allMenuItems = [...menuCategories.flatMap(cat => cat.items), ...teacherMenuItems];
 
@@ -46,7 +46,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
-  const [expandedCategories, setExpandedCategories] = useState<string[]>(["Genel","Sinif Rehberligi","Ogrenci Takip","Analiz & Raporlar","Islemler"]);
+  const [expandedCategories, setExpandedCategories] = useState<string[]>(["Genel","Sınıf Rehberliği","Öğrenci Takip","Analiz & Raporlar","İşlemler"]);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
@@ -70,7 +70,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
-    toast.success("Cikis yapildi!"); router.push("/login");
+    toast.success("Çıkış yapıldı!"); router.push("/login");
   };
 
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
@@ -87,7 +87,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen flex items-center justify-center bg-slate-900">
       <div className="text-center space-y-4">
         <div className="w-16 h-16 border-4 border-blue-500/30 rounded-full animate-spin border-t-blue-500 mx-auto"></div>
-        <p className="text-slate-400 text-sm">Yukleniyor...</p>
+        <p className="text-slate-400 text-sm">Yükleniyor...</p>
       </div>
     </div>
   );
@@ -110,7 +110,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
           <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
             <div className="flex items-center gap-3 p-4 border-b border-slate-200">
               <Search className="h-5 w-5 text-slate-400" />
-              <input type="text" placeholder="Menude ara..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              <input type="text" placeholder="Menüde ara..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                 className="flex-1 bg-transparent outline-none text-slate-800" autoFocus />
               <button onClick={() => setShowSearch(false)}><X className="h-5 w-5 text-slate-400" /></button>
             </div>
@@ -151,8 +151,8 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
           {role === "teacher" && (
             <div className="space-y-1 px-1">
               {[
-                { href: "/panel/ogrenci-yonlendirmesi", label: "Ogrenci Yonlendirme" },
-                { href: "/panel/sinifim", label: "Sinifim" },
+                { href: "/panel/ogrenci-yonlendirmesi", label: "Öğrenci Yönlendirme" },
+                { href: "/panel/sinifim", label: "Sınıfım" },
               ].map(item => {
                 const active = pathname.startsWith(item.href);
                 return (
@@ -201,17 +201,17 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
           {!sidebarCollapsed && (
             <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/30 mb-1">
               <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-white text-sm font-bold ${role === "admin" ? "bg-gradient-to-br from-cyan-500 to-teal-600" : "bg-gradient-to-br from-violet-500 to-purple-600"}`}>
-                {role === "admin" ? "Y" : (teacherName ? teacherName.charAt(0).toUpperCase() : "O")}
+                {role === "admin" ? "Y" : (teacherName ? teacherName.charAt(0).toUpperCase() : "Ö")}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-white truncate">{role === "admin" ? "Yonetici" : (teacherName || "Ogretmen")}</p>
-                <p className="text-[10px] text-slate-500">{role === "admin" ? "Tam erisim" : (isHomeroom ? "Sinif Rehber Ogretmeni" : "Ogretmen")}</p>
+                <p className="text-xs font-medium text-white truncate">{role === "admin" ? "Yönetici" : (teacherName || "Öğretmen")}</p>
+                <p className="text-[10px] text-slate-500">{role === "admin" ? "Tam erişim" : (isHomeroom ? "Sınıf Rehber Öğretmeni" : "Öğretmen")}</p>
               </div>
             </div>
           )}
           <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all group">
             <div className="p-1.5 rounded-lg bg-slate-800 group-hover:bg-red-500/20"><LogOut className="h-4 w-4" /></div>
-            {!sidebarCollapsed && "Cikis Yap"}
+            {!sidebarCollapsed && "Çıkış Yap"}
           </button>
         </div>
       </aside>

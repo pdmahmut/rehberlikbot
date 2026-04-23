@@ -34,6 +34,11 @@ import {
   ParticipantType
 } from "@/types";
 import { AppointmentOutcomeModal, type AppointmentOutcomeChoice } from "@/components/AppointmentOutcomeModal";
+import { ClassRequestCategoryInput } from "@/components/ClassRequestCategoryInput";
+import {
+  getClassRequestDisplayCategory,
+  getClassRequestTeacherNote,
+} from "@/lib/classRequests";
 
 const normalizeLessonSlot = (timeStr?: string | null) => {
   if (!timeStr) return '';
@@ -65,6 +70,11 @@ const parseApplicationNote = (rawValue?: string | null) => {
     preparationNote: match[2]?.trim() || ""
   };
 };
+
+const getClassRequestCategoryLabel = (request: {
+  admin_category?: string | null;
+  topic?: string | null;
+}) => getClassRequestDisplayCategory(request) || "Teknik kategori bekliyor";
 
 const MONTHS_TR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 const DAYS_TR = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
@@ -204,9 +214,11 @@ export default function TakvimPage() {
   const [crEditDate, setCrEditDate] = useState('');
   const [crEditPeriod, setCrEditPeriod] = useState<number | null>(null);
   const [crEditTeacher, setCrEditTeacher] = useState('');
+  const [crEditCategory, setCrEditCategory] = useState('');
   const [crEditBusySlots, setCrEditBusySlots] = useState<Set<string>>(new Set());
   const [crEditConflict, setCrEditConflict] = useState<string | null>(null);
   const [crEditSaving, setCrEditSaving] = useState(false);
+  const [classRequestCategorySuggestions, setClassRequestCategorySuggestions] = useState<string[]>([]);
   
   const [showAttendanceChoiceModal, setShowAttendanceChoiceModal] = useState(false);
   const [attendanceChoiceAppointment, setAttendanceChoiceAppointment] = useState<Appointment | null>(null);
@@ -332,10 +344,25 @@ export default function TakvimPage() {
   }, [classes]);
 
   // --- Auth & Bildirimler ---
+  const loadClassRequestCategorySuggestions = async () => {
+    try {
+      const res = await fetch('/api/class-request-categories', {
+        headers: { Accept: 'application/json' }
+      });
+      const data = await res.json();
+      if (res.ok) setClassRequestCategorySuggestions(data.categories || []);
+    } catch {
+      // ignore
+    }
+  };
+
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
       setUserRole(d.role || null);
-      if (d.role === 'admin') loadNotifications();
+      if (d.role === 'admin') {
+        loadNotifications();
+        loadClassRequestCategorySuggestions();
+      }
     }).catch(() => {});
   }, []);
 
@@ -379,20 +406,27 @@ export default function TakvimPage() {
       const startStr = getLocalDateString(startDate);
       const endStr = getLocalDateString(endDate);
 
-      const [appResult, planResult, taskResult, followResult, topicResult, classReqResult] = await Promise.all([
+      const [appResult, planResult, taskResult, followResult, topicResult, classReqResponse] = await Promise.all([
         supabase.from('appointments').select('*').gte('appointment_date', startStr).lte('appointment_date', endStr),
         supabase.from('guidance_plans').select('*').gte('plan_date', startStr).lte('plan_date', endStr),
         supabase.from('tasks').select('*').gte('due_date', startStr).lte('due_date', endStr),
         supabase.from('follow_ups').select('*').gte('follow_up_date', startStr).lte('follow_up_date', endStr),
         supabase.from('guidance_topics').select('id, title'),
-        supabase.from('class_requests').select('*').in('status', ['scheduled', 'completed']).gte('scheduled_date', startStr).lte('scheduled_date', endStr)
+        fetch(`/api/class-requests?status=all&scheduledFrom=${encodeURIComponent(startStr)}&scheduledTo=${encodeURIComponent(endStr)}`, {
+          headers: { Accept: "application/json" }
+        })
       ]);
+
+      const classReqPayload = classReqResponse.ok ? await classReqResponse.json() : { requests: [] };
+      const filteredClassRequests = (classReqPayload.requests || []).filter((request: any) =>
+        request.status === 'scheduled' || request.status === 'completed'
+      );
 
       setAppointments(appResult.data || []);
       setGuidancePlans(planResult.data || []);
       setTasks(taskResult.data || []);
       setFollowUps(followResult.data || []);
-      setClassRequests(classReqResult.data || []);
+      setClassRequests(filteredClassRequests);
       setGuidanceTopicMap(
         Object.fromEntries(
           (topicResult.data || []).map((topic: { id: string; title: string }) => [topic.id, topic.title])
@@ -937,10 +971,19 @@ export default function TakvimPage() {
       plans?.forEach((p: any) => allBusy.add(normalizeLessonSlot(p.lesson_period)));
       const { data: activities } = await supabase.from('class_activities').select('activity_time').eq('activity_date', date);
       activities?.forEach((a: any) => allBusy.add(normalizeLessonSlot(a.activity_time)));
-      let crQuery = supabase.from('class_requests').select('id, lesson_slot').eq('scheduled_date', date).eq('status', 'scheduled');
-      if (excludeId) crQuery = crQuery.neq('id', excludeId);
-      const { data: crs } = await crQuery;
-      crs?.forEach((r: any) => { if (r.lesson_slot) allBusy.add(String(r.lesson_slot)); });
+      const query = new URLSearchParams({
+        status: 'scheduled',
+        scheduledDate: date
+      });
+      if (excludeId) query.set('excludeId', excludeId);
+
+      const crResponse = await fetch(`/api/class-requests?${query.toString()}`, {
+        headers: { Accept: "application/json" }
+      });
+      if (crResponse.ok) {
+        const payload = await crResponse.json();
+        payload.requests?.forEach((r: any) => { if (r.lesson_slot) allBusy.add(String(r.lesson_slot)); });
+      }
     } catch { /* ignore */ }
     setCrEditBusySlots(allBusy);
     return allBusy;
@@ -952,6 +995,7 @@ export default function TakvimPage() {
     setCrEditDate(date);
     setCrEditPeriod(req.lesson_slot ? Number(req.lesson_slot) : null);
     setCrEditTeacher(req.lesson_teacher || '');
+    setCrEditCategory(getClassRequestCategoryLabel(req));
     setCrEditConflict(null);
     setShowCrEditModal(true);
     fetchCrBusySlots(date, req.id);
@@ -959,6 +1003,10 @@ export default function TakvimPage() {
 
   const handleSaveCrEdit = async () => {
     if (!editingCr || !crEditDate || !crEditPeriod) return;
+    if (!crEditCategory.trim()) {
+      toast.error('Teknik kategori olmadan planlama güncellenemez');
+      return;
+    }
     if (crEditBusySlots.has(String(crEditPeriod))) {
       setCrEditConflict('Bu saat başka bir etkinlik tarafından kullanılıyor!');
       return;
@@ -968,12 +1016,20 @@ export default function TakvimPage() {
       const res = await fetch('/api/class-requests', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingCr.id, status: 'scheduled', scheduledDate: crEditDate, lessonSlot: crEditPeriod, lessonTeacher: crEditTeacher.trim() || null })
+        body: JSON.stringify({
+          id: editingCr.id,
+          status: 'scheduled',
+          scheduledDate: crEditDate,
+          lessonSlot: crEditPeriod,
+          lessonTeacher: crEditTeacher.trim() || null,
+          adminCategory: crEditCategory,
+        })
       });
       if (!res.ok) throw new Error();
       toast.success('Talep güncellendi');
       setShowCrEditModal(false);
       setEditingCr(null);
+      loadClassRequestCategorySuggestions();
       await loadData();
     } catch {
       toast.error('Kaydedilemedi');
@@ -1056,7 +1112,7 @@ export default function TakvimPage() {
           id: req.id,
           date: req.scheduled_date,
           time: String(req.lesson_slot),
-          title: `${req.class_display} — ${req.topic}` + (req.lesson_teacher ? ` (${req.lesson_teacher})` : ''),
+          title: `${req.class_display} — ${getClassRequestCategoryLabel(req)}` + (req.lesson_teacher ? ` (${req.lesson_teacher})` : ''),
           type: 'class_request',
           color: 'violet',
           status: req.status,
@@ -1162,7 +1218,7 @@ export default function TakvimPage() {
                   <div key={req.id} className="flex items-center gap-2 rounded-xl bg-white/70 border border-violet-100 px-3 py-2">
                     <div className="h-2 w-2 rounded-full bg-violet-400 shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-slate-800 truncate">{req.class_display} — {req.topic}</p>
+                      <p className="text-xs font-semibold text-slate-800 truncate">{req.class_display} — {getClassRequestCategoryLabel(req)}</p>
                       <p className="text-[11px] text-slate-500">{req.teacher_name}</p>
                     </div>
                   </div>
@@ -1206,17 +1262,31 @@ export default function TakvimPage() {
       {showCrEditModal && editingCr && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
           <div className="absolute inset-0" onClick={() => setShowCrEditModal(false)} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-2xl overflow-hidden">
+          <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white border border-slate-200 shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-purple-50 px-5 py-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-violet-600">Planlama Güncelle</p>
-                <p className="text-sm font-bold text-slate-800 mt-0.5">{editingCr.class_display} — {editingCr.topic}</p>
+                <p className="text-sm font-bold text-slate-800 mt-0.5">{editingCr.class_display} — {getClassRequestCategoryLabel(editingCr)}</p>
               </div>
               <button onClick={() => setShowCrEditModal(false)} className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
                 <X className="h-4 w-4 text-slate-500" />
               </button>
             </div>
             <div className="p-5 space-y-4">
+              <div className="rounded-xl bg-slate-50 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Öğretmen Notu</p>
+                <p className="mt-1 text-sm leading-relaxed text-slate-700">
+                  {getClassRequestTeacherNote(editingCr) || "Not belirtilmemiş"}
+                </p>
+              </div>
+
+              <ClassRequestCategoryInput
+                value={crEditCategory}
+                onChange={setCrEditCategory}
+                suggestions={classRequestCategorySuggestions}
+                hint="Yazdığınız ifade daha önce yoksa yeni kategori olarak kaydedilir."
+              />
+
               {/* Tarih */}
               <div>
                 <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 block">Tarih</Label>
@@ -1282,7 +1352,7 @@ export default function TakvimPage() {
                 İptal
               </Button>
               <Button
-                disabled={!crEditDate || !crEditPeriod || crEditSaving}
+                disabled={!crEditDate || !crEditPeriod || !crEditCategory.trim() || crEditSaving}
                 onClick={handleSaveCrEdit}
                 className="flex-1 rounded-xl bg-violet-600 hover:bg-violet-700 text-white"
               >
@@ -2039,6 +2109,7 @@ export default function TakvimPage() {
                                     const guidanceClass = e.data?.class_display || titleText;
                                     const guidanceTopic =
                                       e.data?.topic_title ||
+                                      e.data?.admin_category ||
                                       e.data?.topic ||
                                       e.data?.subject ||
                                       e.data?.detail ||

@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase"
 import { Plus, CheckCircle2, Clock, Calendar, BookOpen, X, AlertTriangle, Sparkles, CircleDashed, Trash2, MessageSquare, ChevronDown, RefreshCw, Send } from "lucide-react"
 import { toast } from "sonner"
 import { normalizeLessonSlot } from "@/lib/lessonSlots"
+import { ClassRequestCategoryInput } from "@/components/ClassRequestCategoryInput"
+import { getClassRequestDisplayCategory, getClassRequestTeacherNote } from "@/lib/classRequests"
 
 type GuidanceTopic = {
   id: string
@@ -34,11 +36,15 @@ type ClassRequest = {
   teacher_name: string
   class_key: string
   class_display: string
-  topic: string
+  teacher_description: string | null
+  admin_category: string | null
+  admin_category_normalized?: string | null
+  topic: string | null
   description: string | null
   status: 'pending' | 'scheduled' | 'completed' | 'rejected'
   scheduled_date: string | null
   lesson_slot: number | null
+  lesson_teacher?: string | null
   feedback: string | null
   created_at: string
 }
@@ -132,14 +138,14 @@ function useBusySlots() {
       }
 
       try {
-        const { data: classReqs, error } = await supabase
-          .from("class_requests")
-          .select("id, lesson_slot")
-          .eq("scheduled_date", date)
-          .eq("status", "scheduled")
+        const response = await fetch(
+          `/api/class-requests?status=scheduled&scheduledDate=${encodeURIComponent(date)}`,
+          { headers: { Accept: "application/json" } }
+        )
 
-        if (!error && classReqs) {
-          classReqs.forEach((cr: { id: string; lesson_slot: number | null }) => {
+        if (response.ok) {
+          const payload = await response.json()
+          ;(payload.requests || []).forEach((cr: { id: string; lesson_slot: number | null }) => {
             if (cr.lesson_slot) allBusySlots.add(String(cr.lesson_slot))
           })
         }
@@ -199,8 +205,10 @@ export default function SinifRehberligiPage() {
   const [requestPlanDate, setRequestPlanDate] = useState('')
   const [requestPlanPeriod, setRequestPlanPeriod] = useState<number | null>(null)
   const [requestPlanTeacher, setRequestPlanTeacher] = useState('')
+  const [requestAdminCategory, setRequestAdminCategory] = useState('')
   const [requestPlanConflict, setRequestPlanConflict] = useState<string | null>(null)
   const [savingRequestPlan, setSavingRequestPlan] = useState(false)
+  const [categorySuggestions, setCategorySuggestions] = useState<string[]>([])
 
   const fetchTopics = useCallback(async () => {
     setLoading(true)
@@ -288,9 +296,24 @@ export default function SinifRehberligiPage() {
     }
   }, [requestsFilter])
 
+  const fetchCategorySuggestions = useCallback(async () => {
+    try {
+      const res = await fetch('/api/class-request-categories', {
+        headers: { Accept: 'application/json' }
+      })
+      const data = await res.json()
+      if (res.ok) setCategorySuggestions(data.categories || [])
+    } catch (err) {
+      console.error(err)
+    }
+  }, [])
+
   useEffect(() => {
-    if (activeTab === 'talepler') fetchClassRequests()
-  }, [activeTab, fetchClassRequests])
+    if (activeTab === 'talepler') {
+      fetchClassRequests()
+      fetchCategorySuggestions()
+    }
+  }, [activeTab, fetchCategorySuggestions, fetchClassRequests])
 
 
   useEffect(() => {
@@ -394,7 +417,8 @@ export default function SinifRehberligiPage() {
     const date = req.scheduled_date || todayStr
     setRequestPlanDate(date)
     setRequestPlanPeriod(req.lesson_slot || null)
-    setRequestPlanTeacher((req as any).lesson_teacher || '')
+    setRequestPlanTeacher(req.lesson_teacher || '')
+    setRequestAdminCategory(getClassRequestDisplayCategory(req))
     setRequestPlanConflict(null)
     setShowRequestPlanModal(true)
     fetchBusySlots(date)
@@ -408,6 +432,10 @@ export default function SinifRehberligiPage() {
 
   const handleScheduleRequest = async () => {
     if (!selectedRequest || !requestPlanDate || !requestPlanPeriod) return
+    if (!requestAdminCategory.trim()) {
+      toast.error('Teknik kategori girmeden planlama yapamazsınız')
+      return
+    }
     setSavingRequestPlan(true)
     try {
       const busy = await fetchBusySlots(requestPlanDate)
@@ -418,12 +446,20 @@ export default function SinifRehberligiPage() {
       const res = await fetch('/api/class-requests', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: selectedRequest.id, status: 'scheduled', scheduledDate: requestPlanDate, lessonSlot: requestPlanPeriod, lessonTeacher: requestPlanTeacher.trim() || null }),
+        body: JSON.stringify({
+          id: selectedRequest.id,
+          status: 'scheduled',
+          scheduledDate: requestPlanDate,
+          lessonSlot: requestPlanPeriod,
+          lessonTeacher: requestPlanTeacher.trim() || null,
+          adminCategory: requestAdminCategory,
+        }),
       })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
       toast.success('Talep planlandı')
       setShowRequestPlanModal(false)
       setSelectedRequest(null)
+      fetchCategorySuggestions()
       fetchClassRequests()
     } catch (err: any) {
       toast.error(err.message || 'Kaydedilemedi')
@@ -941,6 +977,8 @@ export default function SinifRehberligiPage() {
             <div className="space-y-3">
               {classRequests.map(req => {
                 const statusInfo = CLASS_REQUEST_STATUS[req.status]
+                const displayCategory = getClassRequestDisplayCategory(req)
+                const teacherNote = getClassRequestTeacherNote(req)
                 return (
                   <div key={req.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="p-4">
@@ -953,7 +991,7 @@ export default function SinifRehberligiPage() {
                         {/* Content */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className="font-bold text-slate-800 text-sm">{req.topic}</span>
+                            <span className="font-bold text-slate-800 text-sm">{displayCategory || 'Teknik kategori bekliyor'}</span>
                             <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${statusInfo.cls}`}>
                               {statusInfo.label}
                             </span>
@@ -962,8 +1000,11 @@ export default function SinifRehberligiPage() {
                             <span className="font-medium">{req.teacher_name}</span> —{' '}
                             {new Date(req.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
                           </p>
-                          {req.description && (
-                            <p className="text-xs text-slate-600 leading-relaxed">{req.description}</p>
+                          {teacherNote && (
+                            <div className="rounded-xl bg-slate-50 px-3 py-2">
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Öğretmen Notu</p>
+                              <p className="mt-1 text-xs leading-relaxed text-slate-600">{teacherNote}</p>
+                            </div>
                           )}
                           {req.status === 'scheduled' && req.scheduled_date && (
                             <div className="flex items-center gap-1.5 mt-2 text-xs text-blue-700 font-semibold">
@@ -1269,7 +1310,7 @@ export default function SinifRehberligiPage() {
       {/* Plan Modalı */}
       {showPlanModal && selectedPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
               <h3 className="text-base font-bold text-slate-800">{selectedPlan.class_display} — Plan</h3>
               <button onClick={() => setShowPlanModal(false)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors">
@@ -1470,6 +1511,20 @@ export default function SinifRehberligiPage() {
             </div>
 
             <div className="p-6 space-y-5">
+              <div className="rounded-xl bg-slate-50 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Öğretmen Notu</p>
+                <p className="mt-1 text-sm leading-relaxed text-slate-700">
+                  {getClassRequestTeacherNote(selectedRequest) || 'Not belirtilmemiş'}
+                </p>
+              </div>
+
+              <ClassRequestCategoryInput
+                value={requestAdminCategory}
+                onChange={setRequestAdminCategory}
+                suggestions={categorySuggestions}
+                hint="Önceki kategoriler öneri olarak listelenir. İsterseniz yeni bir kategori de yazabilirsiniz."
+              />
+
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700">Tarih</label>
                 <input
@@ -1515,13 +1570,13 @@ export default function SinifRehberligiPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700">
-                  Öğretmen Adı <span className="text-slate-400 font-normal">(isteğe bağlı)</span>
+                  Dersi Uygulayacak Öğretmen <span className="text-slate-400 font-normal">(isteğe bağlı)</span>
                 </label>
                 <input
                   type="text"
                   value={requestPlanTeacher}
                   onChange={e => setRequestPlanTeacher(e.target.value)}
-                  placeholder="örn: Ahmet Yılmaz"
+                  placeholder="Örn: Ahmet Yılmaz"
                   className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -1543,7 +1598,7 @@ export default function SinifRehberligiPage() {
               </button>
               <button
                 onClick={handleScheduleRequest}
-                disabled={!requestPlanDate || !requestPlanPeriod || !!requestPlanConflict || savingRequestPlan || busyLoading}
+                disabled={!requestPlanDate || !requestPlanPeriod || !requestAdminCategory.trim() || !!requestPlanConflict || savingRequestPlan || busyLoading}
                 className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:from-blue-600 hover:to-indigo-700 transition-all"
               >
                 {savingRequestPlan ? 'Kaydediliyor...' : 'Planla'}

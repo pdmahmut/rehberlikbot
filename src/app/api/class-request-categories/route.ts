@@ -1,0 +1,56 @@
+import { NextResponse } from "next/server";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { getSession, type SessionUser } from "@/lib/auth";
+
+export const dynamic = "force-dynamic";
+
+const getActorTeacherName = (session: SessionUser | null) =>
+  session?.teacherName || session?.username || null;
+
+const createRequestScopedSupabase = (session: SessionUser): SupabaseClient | null => {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+
+  const actorTeacherName = getActorTeacherName(session);
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    global: {
+      headers: {
+        "x-app-role": session.role,
+        ...(actorTeacherName ? { "x-teacher-name": actorTeacherName } : {}),
+        ...(session.classKey ? { "x-class-key": session.classKey } : {}),
+      },
+    },
+  });
+};
+
+export async function GET() {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
+  }
+
+  if (session.role !== "admin") {
+    return NextResponse.json({ error: "Bu alan sadece yonetici icindir" }, { status: 403 });
+  }
+
+  const supabase = createRequestScopedSupabase(session);
+  if (!supabase) {
+    return NextResponse.json({ error: "Supabase yapilandirilmamis" }, { status: 500 });
+  }
+
+  const { data, error } = await supabase
+    .from("class_request_categories")
+    .select("label")
+    .order("label", { ascending: true });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    categories: (data || []).map((item) => item.label).filter(Boolean),
+  });
+}

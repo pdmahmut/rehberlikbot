@@ -1,9 +1,10 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   GraduationCap, Users, History, BookOpen, Plus, Trash2,
   RefreshCw, UserCheck, ArrowRightLeft, ChevronDown, Award, AlertCircle,
-  MessageSquare, X, Calendar, Clock, CheckCircle2,
+  MessageSquare, X, Calendar, Clock, CheckCircle2, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -13,6 +14,10 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  getClassRequestDisplayCategory,
+  getClassRequestTeacherNote,
+} from "@/lib/classRequests";
 
 interface Referral {
   id: string;
@@ -55,11 +60,15 @@ interface GuidanceRequest {
   teacher_name: string;
   class_key: string;
   class_display: string;
-  topic: string;
+  teacher_description: string | null;
+  admin_category: string | null;
+  admin_category_normalized?: string | null;
+  topic: string | null;
   description: string | null;
   status: "pending" | "scheduled" | "completed" | "rejected";
   scheduled_date: string | null;
   lesson_slot: number | null;
+  lesson_teacher?: string | null;
   feedback: string | null;
   created_at: string;
   updated_at: string | null;
@@ -69,19 +78,6 @@ type TabId = "my-referrals" | "class-list" | "class-referrals" | "guidance-reque
 
 const CHART_COLORS = [
   "#6366f1","#8b5cf6","#a855f7","#ec4899","#f43f5e","#f97316","#eab308",
-];
-
-const GUIDANCE_TOPICS = [
-  "Kariyer ve Meslek Rehberliği",
-  "Sınav Kaygısı ve Stres Yönetimi",
-  "Zorbalık ve Akran İlişkileri",
-  "Uyum Sorunu ve Okula Devam",
-  "Aile ve Ev Ortamı Sorunları",
-  "Motivasyon ve Çalışma Alışkanlıkları",
-  "Kimlik Gelişimi ve Ergenlik",
-  "Sınıf İçi Davranış Sorunları",
-  "Sosyal Beceri Geliştirme",
-  "Diğer",
 ];
 
 const MONTHS_TR = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
@@ -120,9 +116,12 @@ export default function SinifimPage() {
   const [guidanceRequests, setGuidanceRequests] = useState<GuidanceRequest[]>([]);
   const [guidanceRequestsLoading, setGuidanceRequestsLoading] = useState(false);
   const [showNewGuidanceModal, setShowNewGuidanceModal] = useState(false);
-  const [newRequestTopic, setNewRequestTopic] = useState("");
-  const [newRequestDescription, setNewRequestDescription] = useState("");
+  const [newTeacherDescription, setNewTeacherDescription] = useState("");
   const [submittingGuidanceRequest, setSubmittingGuidanceRequest] = useState(false);
+  const [editingGuidanceRequest, setEditingGuidanceRequest] = useState<GuidanceRequest | null>(null);
+  const [editTeacherDescription, setEditTeacherDescription] = useState("");
+  const [savingGuidanceEdit, setSavingGuidanceEdit] = useState(false);
+  const [deletingGuidanceRequestId, setDeletingGuidanceRequestId] = useState<string | null>(null);
   const [feedbackInputs, setFeedbackInputs] = useState<Record<string, string>>({});
   const [submittingFeedback, setSubmittingFeedback] = useState<string | null>(null);
 
@@ -256,7 +255,7 @@ export default function SinifimPage() {
   };
 
   const submitGuidanceRequest = async () => {
-    if (!auth || !newRequestTopic) return;
+    if (!auth || !newTeacherDescription.trim()) return;
     setSubmittingGuidanceRequest(true);
     try {
       const res = await fetch("/api/class-requests", {
@@ -266,20 +265,76 @@ export default function SinifimPage() {
           teacherName: auth.teacherName,
           classKey: auth.classKey,
           classDisplay: auth.classDisplay || auth.classKey,
-          topic: newRequestTopic,
-          description: newRequestDescription.trim() || undefined,
+          teacherDescription: newTeacherDescription.trim(),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       toast.success("Talep gönderildi");
       setShowNewGuidanceModal(false);
-      setNewRequestTopic("");
-      setNewRequestDescription("");
+      setNewTeacherDescription("");
       loadGuidanceRequests(auth.teacherName);
     } catch (err: any) {
       toast.error(err.message || "Talep gönderilemedi");
     } finally { setSubmittingGuidanceRequest(false); }
+  };
+
+  const closeEditGuidanceModal = () => {
+    if (savingGuidanceEdit) return;
+    setEditingGuidanceRequest(null);
+    setEditTeacherDescription("");
+  };
+
+  const openEditGuidanceModal = (request: GuidanceRequest) => {
+    setEditingGuidanceRequest(request);
+    setEditTeacherDescription(getClassRequestTeacherNote(request));
+  };
+
+  const submitGuidanceEdit = async () => {
+    if (!auth || !editingGuidanceRequest || !editTeacherDescription.trim()) return;
+    setSavingGuidanceEdit(true);
+    try {
+      const res = await fetch("/api/class-requests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingGuidanceRequest.id,
+          teacherDescription: editTeacherDescription,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Talep güncellenemedi");
+      toast.success("Talep güncellendi");
+      closeEditGuidanceModal();
+      loadGuidanceRequests(auth.teacherName);
+    } catch (err: any) {
+      toast.error(err.message || "Talep güncellenemedi");
+    } finally {
+      setSavingGuidanceEdit(false);
+    }
+  };
+
+  const deleteGuidanceRequest = async (request: GuidanceRequest) => {
+    if (!auth) return;
+    if (request.status !== "pending") {
+      toast.error("Sadece bekleyen talepler iptal edilebilir");
+      return;
+    }
+    if (!confirm("Bu talebi iptal etmek istediğinizden emin misiniz?")) return;
+    setDeletingGuidanceRequestId(request.id);
+    try {
+      const res = await fetch(`/api/class-requests?id=${encodeURIComponent(request.id)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Talep iptal edilemedi");
+      toast.success("Talep iptal edildi");
+      loadGuidanceRequests(auth.teacherName);
+    } catch (err: any) {
+      toast.error(err.message || "Talep iptal edilemedi");
+    } finally {
+      setDeletingGuidanceRequestId(null);
+    }
   };
 
   const submitFeedback = async (requestId: string) => {
@@ -304,7 +359,12 @@ export default function SinifimPage() {
     pendingRequests.find(r => r.student_name === studentText);
 
   const toggleExpand = (name: string) =>
-    setExpandedStudents(prev => { const s = new Set(prev); s.has(name) ? s.delete(name) : s.add(name); return s; });
+    setExpandedStudents(prev => {
+      const s = new Set(prev);
+      if (s.has(name)) s.delete(name);
+      else s.add(name);
+      return s;
+    });
 
   if (!auth) return (
     <div className="flex items-center justify-center min-h-[300px]">
@@ -389,7 +449,6 @@ export default function SinifimPage() {
                     <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#94a3b8" }} />
                     <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11, fill: "#64748b" }} />
                     <Tooltip
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       formatter={((val: number, _: string, props: any) => [`${val} kez`, props.payload.fullName]) as any}
                       contentStyle={{ fontSize: 12, borderRadius: 8, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.1)" }}
                     />
@@ -633,18 +692,65 @@ export default function SinifimPage() {
               {guidanceRequests.map(req => {
                 const statusInfo = REQUEST_STATUS[req.status];
                 const showFeedbackBox = req.status === "completed" && !req.feedback;
+                const isPendingRequest = req.status === "pending";
+                const editDisabled = !isPendingRequest || savingGuidanceEdit;
+                const deleteDisabled = !isPendingRequest || deletingGuidanceRequestId === req.id;
+                const displayCategory = getClassRequestDisplayCategory(req);
+                const teacherNote = getClassRequestTeacherNote(req);
                 return (
                   <Card key={req.id} className="border-0 shadow-sm overflow-hidden">
                     <CardContent className="p-4 space-y-3">
                       {/* Top row */}
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className="font-semibold text-slate-800 text-sm">{req.topic}</span>
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusInfo.cls}`}>{statusInfo.label}</span>
+                          <div className="flex items-start justify-between gap-3 mb-1">
+                            <div className="flex items-center gap-2 flex-wrap min-w-0">
+                              <span className="font-semibold text-slate-800 text-sm">
+                                {displayCategory || "Çalışma konusu planlama sonrası belirlenecek"}
+                              </span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusInfo.cls}`}>{statusInfo.label}</span>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => openEditGuidanceModal(req)}
+                                disabled={editDisabled}
+                                title={isPendingRequest ? "Talebi düzenle" : "Sadece bekleyen talepler düzenlenebilir"}
+                                className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
+                                  editDisabled
+                                    ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-300"
+                                    : "border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100"
+                                }`}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteGuidanceRequest(req)}
+                                disabled={deleteDisabled}
+                                title={isPendingRequest ? "Talebi iptal et" : "Planlanan veya tamamlanan talepler iptal edilemez"}
+                                className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
+                                  deleteDisabled
+                                    ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-300"
+                                    : "border-red-200 bg-red-50 text-red-500 hover:bg-red-100"
+                                }`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           </div>
-                          {req.description && (
-                            <p className="text-xs text-slate-500 leading-relaxed">{req.description}</p>
+                          {!isPendingRequest && (
+                            <p className="text-[11px] text-slate-400 mb-1">
+                              Talep planlandıktan sonra içerik düzenleme ve iptal kapatılır.
+                            </p>
+                          )}
+                          {teacherNote && (
+                            <div className="rounded-xl bg-slate-50 px-3 py-2">
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                Öğretmen Notu
+                              </p>
+                              <p className="mt-1 text-xs leading-relaxed text-slate-600">{teacherNote}</p>
+                            </div>
                           )}
                           <p className="text-xs text-slate-400 mt-1">
                             {new Date(req.created_at).toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" })}
@@ -675,6 +781,9 @@ export default function SinifimPage() {
                             <p className="text-xs font-semibold text-emerald-700">Çalışma tamamlandı</p>
                             {req.scheduled_date && (
                               <p className="text-xs text-emerald-600">{formatDateShort(req.scheduled_date)}{req.lesson_slot ? ` — ${req.lesson_slot}. ders` : ""}</p>
+                            )}
+                            {displayCategory && (
+                              <p className="mt-1 text-xs text-slate-600">Çalışma Konusu: {displayCategory}</p>
                             )}
                             {req.feedback && (
                               <p className="text-xs text-slate-600 mt-1 italic">Geri bildiriminiz: {req.feedback}</p>
@@ -766,6 +875,64 @@ export default function SinifimPage() {
       )}
 
       {/* ── New Guidance Request Modal ── */}
+      {editingGuidanceRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/50" onClick={closeEditGuidanceModal} />
+          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden z-10">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-100">
+                  <Pencil className="h-4 w-4 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">Talebi Düzenle</h3>
+                  <p className="text-xs text-slate-500">Sadece bekleyen talepler güncellenebilir</p>
+                </div>
+              </div>
+              <button onClick={closeEditGuidanceModal} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="p-3 bg-slate-50 rounded-xl">
+                <p className="text-xs text-slate-500">Sınıf</p>
+                <p className="text-sm font-semibold text-slate-800 mt-0.5">{editingGuidanceRequest.class_display}</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-700">
+                  Çalışma Talebi / Sorun Açıklaması
+                </label>
+                <textarea
+                  rows={4}
+                  value={editTeacherDescription}
+                  onChange={e => setEditTeacherDescription(e.target.value)}
+                  placeholder="Sınıfınızdaki durumu doğal ifadelerle açıklayın..."
+                  className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 px-5 pb-5">
+              <button
+                onClick={closeEditGuidanceModal}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                İptal
+              </button>
+              <button
+                onClick={submitGuidanceEdit}
+                disabled={!editTeacherDescription.trim() || savingGuidanceEdit}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:from-amber-600 hover:to-orange-600 transition-all"
+              >
+                {savingGuidanceEdit ? "Kaydediliyor..." : "Değişiklikleri Kaydet"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showNewGuidanceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowNewGuidanceModal(false)} />
@@ -789,41 +956,32 @@ export default function SinifimPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-slate-700">Konu</label>
-                <select
-                  value={newRequestTopic}
-                  onChange={e => setNewRequestTopic(e.target.value)}
-                  className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400"
-                >
-                  <option value="">Konu seçin...</option>
-                  {GUIDANCE_TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-slate-700">
-                  Detaylı Açıklama <span className="text-slate-400 font-normal">(isteğe bağlı)</span>
+                  Çalışma Talebi / Sorun Açıklaması
                 </label>
                 <textarea
-                  rows={3}
-                  value={newRequestDescription}
-                  onChange={e => setNewRequestDescription(e.target.value)}
-                  placeholder="Neden bu çalışmaya ihtiyaç duyduğunuzu açıklayın..."
+                  rows={5}
+                  value={newTeacherDescription}
+                  onChange={e => setNewTeacherDescription(e.target.value)}
+                  placeholder="Örn: Çocuklar birbirine lakap takıyor, sınıf içinde gruplaşma arttı, derste birbirlerini çok bölüyorlar..."
                   className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 resize-none"
                 />
+                <p className="text-xs text-slate-500">
+                  Teknik terim kullanmanız gerekmiyor; durumu günlük dille anlatmanız yeterli.
+                </p>
               </div>
             </div>
 
             <div className="flex gap-3 px-5 pb-5">
               <button
-                onClick={() => { setShowNewGuidanceModal(false); setNewRequestTopic(""); setNewRequestDescription(""); }}
+                onClick={() => { setShowNewGuidanceModal(false); setNewTeacherDescription(""); }}
                 className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
               >
                 İptal
               </button>
               <button
                 onClick={submitGuidanceRequest}
-                disabled={!newRequestTopic || submittingGuidanceRequest}
+                disabled={!newTeacherDescription.trim() || submittingGuidanceRequest}
                 className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:from-emerald-600 hover:to-teal-700 transition-all"
               >
                 {submittingGuidanceRequest ? "Gönderiliyor..." : "Talep Gönder"}
