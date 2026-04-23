@@ -347,11 +347,12 @@ export default function SinifimPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: requestId, feedback }),
       });
-      if (!res.ok) throw new Error();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Kaydedilemedi");
       toast.success("Geri bildirim kaydedildi");
       setFeedbackInputs(prev => ({ ...prev, [requestId]: "" }));
       loadGuidanceRequests(auth.teacherName);
-    } catch { toast.error("Kaydedilemedi"); }
+    } catch (err: any) { toast.error(err.message || "Kaydedilemedi"); }
     finally { setSubmittingFeedback(null); }
   };
 

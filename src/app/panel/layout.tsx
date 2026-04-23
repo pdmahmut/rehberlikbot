@@ -52,10 +52,6 @@ const menuCategories = [
       { href: '/panel/ogretmen', label: 'Öğretmen ve Sınıf', icon: UserCheck },
     ],
   },
-  {
-    title: 'İşlemler',
-    items: [{ href: '/panel/kullanici-yonetimi', label: 'Kullanıcı Yönetimi', icon: Users }],
-  },
 ];
 
 const teacherMenuItems = [
@@ -81,7 +77,6 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
     'Sınıf Rehberliği',
     'Öğrenci Takip',
     'Analiz ve Raporlar',
-    'İşlemler',
   ]);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const [bannerDismissed, setBannerDismissed] = useState(false);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getSession, type SessionUser } from "@/lib/auth";
+import { normalizeClassRequestCategory } from "@/lib/classRequests";
 
 export const dynamic = "force-dynamic";
 
@@ -53,4 +54,37 @@ export async function GET() {
   return NextResponse.json({
     categories: (data || []).map((item) => item.label).filter(Boolean),
   });
+}
+
+export async function DELETE(request: Request) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
+  }
+
+  if (session.role !== "admin") {
+    return NextResponse.json({ error: "Bu alan sadece yönetici içindir" }, { status: 403 });
+  }
+
+  const supabase = createRequestScopedSupabase(session);
+  if (!supabase) {
+    return NextResponse.json({ error: "Supabase yapılandırılmamış" }, { status: 500 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const normalizedLabel = normalizeClassRequestCategory(body?.label);
+  if (!normalizedLabel) {
+    return NextResponse.json({ error: "Kategori adı gerekli" }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from("class_request_categories")
+    .delete()
+    .eq("normalized_label", normalizedLabel);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
 }

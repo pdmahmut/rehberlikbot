@@ -11,7 +11,7 @@ function encodeSession(user: object): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const { role, password, username } = await request.json();
+    const { role, password } = await request.json();
 
     if (role === 'admin') {
       if (password !== ADMIN_PASSWORD) {
@@ -36,47 +36,68 @@ export async function POST(request: NextRequest) {
       }
       const supabase = createClient(supabaseUrl, supabaseKey);
 
-      if (!username?.trim()) {
-        return NextResponse.json({ error: 'Kullanıcı adı gerekli' }, { status: 400 });
+      const enteredPassword = String(password || '').trim();
+      if (!enteredPassword) {
+        return NextResponse.json({ error: 'Şifre gerekli' }, { status: 400 });
+      }
+      if (enteredPassword.length < 4) {
+        return NextResponse.json({ error: 'Şifre en az 4 karakter olmalı' }, { status: 400 });
       }
 
-      const { data: teachers, error } = await supabase
+      const normalizedPassword = enteredPassword.toLocaleLowerCase('tr-TR');
+
+      const { data: teacher, error } = await supabase
         .from('teacher_users')
-        .select('*')
-        .ilike('teacher_name', `${username.trim()}%`);
+        .select('id, username, teacher_name, class_key, class_display, password_hash')
+        .not('password_hash', 'is', null)
+        .eq('password_hash', enteredPassword)
+        .maybeSingle();
 
       if (error) {
         return NextResponse.json({ error: 'Sunucu hatası' }, { status: 500 });
       }
 
-      if (!teachers || teachers.length === 0) {
-        return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 401 });
+      if (!teacher) {
+        const { data: maybeTeacher } = await supabase
+          .from('teacher_users')
+          .select('id, username, teacher_name, class_key, class_display, password_hash')
+          .not('password_hash', 'is', null)
+          .filter('password_hash', 'ilike', enteredPassword)
+          .maybeSingle();
+        if (!maybeTeacher) {
+          return NextResponse.json({ error: 'Şifre hatalı' }, { status: 401 });
+        }
+        const token = encodeSession({
+          role: 'teacher',
+          teacherId: maybeTeacher.id,
+          username: maybeTeacher.username,
+          teacherName: maybeTeacher.teacher_name,
+          classKey: maybeTeacher.class_key || null,
+          classDisplay: maybeTeacher.class_display || null,
+          isHomeroom: !!(maybeTeacher.class_key),
+        });
+        const response = NextResponse.json({ success: true, role: 'teacher' });
+        response.cookies.set(COOKIE_NAME, token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 8 * 60 * 60
+        });
+        return response;
       }
 
-      const enteredName = username.trim().toLocaleLowerCase('tr-TR');
-      const data = teachers.find(t => {
-        const firstName = (t.teacher_name ?? '').split(' ')[0].toLocaleLowerCase('tr-TR');
-        return firstName === enteredName;
-      }) ?? teachers[0];
-
-      const entered = password.trim().toLocaleLowerCase('tr-TR');
-      const storedHash = data.password_hash?.trim();
-      const firstName = (data.teacher_name ?? '').split(' ')[0].toLocaleLowerCase('tr-TR');
-      const isValid = storedHash
-        ? storedHash.toLocaleLowerCase('tr-TR') === entered
-        : firstName === entered;
-
-      if (!isValid) {
-        return NextResponse.json({ error: 'Yanlış şifre' }, { status: 401 });
+      if ((teacher.password_hash || '').toLocaleLowerCase('tr-TR') !== normalizedPassword) {
+        return NextResponse.json({ error: 'Şifre hatalı' }, { status: 401 });
       }
 
       const token = encodeSession({
         role: 'teacher',
-        username: data.username,
-        teacherName: data.teacher_name,
-        classKey: data.class_key || null,
-        classDisplay: data.class_display || null,
-        isHomeroom: !!(data.class_key),
+        teacherId: teacher.id,
+        username: teacher.username,
+        teacherName: teacher.teacher_name,
+        classKey: teacher.class_key || null,
+        classDisplay: teacher.class_display || null,
+        isHomeroom: !!(teacher.class_key),
       });
 
       const response = NextResponse.json({ success: true, role: 'teacher' });

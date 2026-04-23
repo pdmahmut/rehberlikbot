@@ -6,12 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Shield, GraduationCap, Loader2, Eye, EyeOff, User } from "lucide-react";
+import { Shield, GraduationCap, Loader2, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
   const [role, setRole] = useState<"admin" | "teacher" | null>(null);
-  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -19,8 +18,8 @@ export default function LoginPage() {
   const handleLogin = async () => {
     if (!role) return;
     if (role === "admin" && !password) { toast.error("Şifre gerekli"); return; }
-    if (role === "teacher" && (!username.trim() || !password)) {
-      toast.error("Kullanıcı adı ve şifre gerekli"); return;
+    if (role === "teacher" && !password) {
+      toast.error("Şifre gerekli"); return;
     }
 
     setLoading(true);
@@ -28,7 +27,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role, username: username.trim(), password })
+        body: JSON.stringify({ role, password })
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || "Giriş başarısız"); return; }
@@ -44,7 +43,6 @@ export default function LoginPage() {
 
   const handleBack = () => {
     setRole(null);
-    setUsername("");
     setPassword("");
     setShowPassword(false);
   };
@@ -108,28 +106,11 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                {/* Kullanıcı adı — sadece öğretmen */}
-                {role === "teacher" && (
-                  <div>
-                    <Label className="text-sm font-medium text-slate-700">Kullanıcı Adı</Label>
-                    <div className="relative mt-1">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                      <Input
-                        value={username}
-                        onChange={e => setUsername(e.target.value)}
-                        onKeyDown={e => e.key === "Enter" && handleLogin()}
-                        placeholder="Adınız"
-                        className="pl-9"
-                        autoComplete="username"
-                        autoFocus
-                      />
-                    </div>
-                  </div>
-                )}
-
                 {/* Şifre */}
                 <div>
-                  <Label className="text-sm font-medium text-slate-700">Şifre</Label>
+                  <Label className="text-sm font-medium text-slate-700">
+                    {role === "teacher" ? "Giriş Şifresi" : "Şifre"}
+                  </Label>
                   <div className="relative mt-1">
                     <Input
                       type={showPassword ? "text" : "password"}
@@ -139,7 +120,7 @@ export default function LoginPage() {
                       placeholder="••••••••"
                       className="pr-10"
                       autoComplete="current-password"
-                      autoFocus={role === "admin"}
+                      autoFocus
                     />
                     <button type="button" onClick={() => setShowPassword(v => !v)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -160,6 +141,9 @@ export default function LoginPage() {
                   {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                   Giriş Yap
                 </Button>
+                {role === "teacher" && (
+                  <p className="text-xs text-slate-500">Yönetici tarafından verilen giriş şifrenizi kullanın.</p>
+                )}
               </div>
             )}
           </CardContent>

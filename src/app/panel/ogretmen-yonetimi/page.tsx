@@ -12,6 +12,10 @@ import {
   Search,
   BookOpen,
   ChevronDown,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,12 +36,24 @@ interface Sinif {
 }
 
 type Tab = "ogretmenler" | "atamalar";
+interface TeacherUser {
+  id: string;
+  teacher_name: string;
+  class_key: string | null;
+  class_display: string | null;
+  password_hash: string | null;
+  created_at: string;
+}
+
+type Tab = "ogretmenler" | "atamalar" | "hesaplar";
 
 export default function OgretmenYonetimiPage() {
   const [tab, setTab] = useState<Tab>("ogretmenler");
   const [teachers, setTeachers] = useState<TeacherRecord[]>([]);
+  const [users, setUsers] = useState<TeacherUser[]>([]);
   const [sinifList, setSinifList] = useState<Sinif[]>([]);
   const [loading, setLoading] = useState(true);
+  const [usersLoading, setUsersLoading] = useState(true);
 
   // Öğretmen ekleme
   const [newName, setNewName] = useState("");
@@ -45,6 +61,7 @@ export default function OgretmenYonetimiPage() {
 
   // Silme
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   // Atama modal
   const [assigningClass, setAssigningClass] = useState<Sinif | null>(null);
@@ -53,6 +70,14 @@ export default function OgretmenYonetimiPage() {
 
   // Öğretmen listesi arama
   const [listSearch, setListSearch] = useState("");
+  const [accountSearch, setAccountSearch] = useState("");
+  const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountPassword, setNewAccountPassword] = useState("");
+  const [addingAccount, setAddingAccount] = useState(false);
+  const [changingPassId, setChangingPassId] = useState<string | null>(null);
+  const [newPassValue, setNewPassValue] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [isSavingPass, setIsSavingPass] = useState(false);
 
   useEffect(() => {
     loadAll();
@@ -69,10 +94,24 @@ export default function OgretmenYonetimiPage() {
       const sinifData = await sinifRes.json();
       setTeachers(teachersData.teachers || []);
       setSinifList(sinifData.sinifSubeList || []);
+      loadUsers();
     } catch {
       toast.error("Veriler yüklenemedi");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadUsers = async () => {
+    setUsersLoading(true);
+    try {
+      const res = await fetch("/api/teacher-accounts");
+      const data = await res.json();
+      setUsers(data.users || []);
+    } catch {
+      toast.error("Kullanıcı hesapları yüklenemedi");
+    } finally {
+      setUsersLoading(false);
     }
   };
 
@@ -163,6 +202,80 @@ export default function OgretmenYonetimiPage() {
     }
   };
 
+  const handleAddAccount = async () => {
+    if (!newAccountName.trim() || !newAccountPassword.trim()) {
+      toast.error("Ad ve şifre zorunlu");
+      return;
+    }
+    setAddingAccount(true);
+    try {
+      const res = await fetch("/api/teacher-accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacher_name: newAccountName.trim(),
+          password: newAccountPassword.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Hesap eklenemedi");
+      setUsers((prev) => [...prev, data.user]);
+      setNewAccountName("");
+      setNewAccountPassword("");
+      toast.success("Öğretmen hesabı eklendi");
+    } catch (err: any) {
+      toast.error(err.message || "Hesap eklenemedi");
+    } finally {
+      setAddingAccount(false);
+    }
+  };
+
+  const handleDeleteAccount = async (id: string) => {
+    setDeletingUserId(id);
+    try {
+      const res = await fetch("/api/teacher-accounts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Hesap silinemedi");
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+      toast.success("Öğretmen hesabı silindi");
+    } catch (err: any) {
+      toast.error(err.message || "Hesap silinemedi");
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
+  const handleChangePassword = async (id: string) => {
+    if (!newPassValue.trim()) {
+      toast.error("Yeni şifre boş olamaz");
+      return;
+    }
+    setIsSavingPass(true);
+    try {
+      const res = await fetch("/api/teacher-accounts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, password: newPassValue.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Şifre güncellenemedi");
+      setUsers((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, password_hash: newPassValue.trim() } : u))
+      );
+      toast.success("Şifre güncellendi");
+      setChangingPassId(null);
+      setNewPassValue("");
+    } catch (err: any) {
+      toast.error(err.message || "Şifre güncellenemedi");
+    } finally {
+      setIsSavingPass(false);
+    }
+  };
+
   // Sınıf rehber öğretmenlerinin haritası: sinifSubeKey → teacher
   const assignmentMap = useMemo(() => {
     const map: Record<string, TeacherRecord> = {};
@@ -183,6 +296,14 @@ export default function OgretmenYonetimiPage() {
   );
 
   const assignedCount = teachers.filter(t => t.sinifSubeKey).length;
+  const filteredUsers = useMemo(
+    () =>
+      users.filter(
+        (u) =>
+          u.teacher_name.toLowerCase().includes(accountSearch.toLowerCase())
+      ),
+    [users, accountSearch]
+  );
 
   return (
     <div className="space-y-6">
@@ -245,6 +366,19 @@ export default function OgretmenYonetimiPage() {
           <span className="flex items-center gap-2">
             <UserCheck className="h-4 w-4" />
             Sınıf Rehber Atamaları
+          </span>
+        </button>
+        <button
+          onClick={() => setTab("hesaplar")}
+          className={`px-5 py-2.5 text-sm font-medium rounded-t-lg transition-all ${
+            tab === "hesaplar"
+              ? "bg-white border border-b-white border-slate-200 text-violet-700 -mb-px"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <KeyRound className="h-4 w-4" />
+            Hesaplar
           </span>
         </button>
       </div>
@@ -420,6 +554,120 @@ export default function OgretmenYonetimiPage() {
                 )}
               </CardContent>
             </Card>
+          )}
+
+          {tab === "hesaplar" && (
+            <div className="space-y-4">
+              <Card className="border-0 shadow-md">
+                <CardHeader className="pb-3 bg-gradient-to-r from-violet-50 to-purple-50 rounded-t-xl">
+                  <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                    <Plus className="h-4 w-4 text-violet-600" />
+                    Öğretmen Hesabı Ekle
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                    <Input placeholder="Ad soyad" value={newAccountName} onChange={e => setNewAccountName(e.target.value)} />
+                    <Input placeholder="Giriş şifresi (en az 4 karakter)" value={newAccountPassword} onChange={e => setNewAccountPassword(e.target.value)} />
+                  </div>
+                  <div className="mt-3 flex justify-end">
+                    <Button onClick={handleAddAccount} disabled={addingAccount} className="bg-violet-600 hover:bg-violet-700 text-white">
+                      {addingAccount ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+                      Hesap Ekle
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-0 shadow-md">
+                <CardHeader className="pb-3 border-b bg-gradient-to-r from-slate-50 to-slate-100 rounded-t-xl">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                      <KeyRound className="h-4 w-4 text-slate-500" />
+                      Kullanıcı Hesapları
+                      <Badge className="bg-violet-100 text-violet-700 border-0 ml-1">{filteredUsers.length}</Badge>
+                    </CardTitle>
+                    <div className="relative w-52">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                      <Input placeholder="Ara..." className="pl-8 h-8 text-sm" value={accountSearch} onChange={e => setAccountSearch(e.target.value)} />
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {usersLoading ? (
+                    <div className="py-10 text-center text-slate-400">
+                      <RefreshCw className="h-5 w-5 mx-auto mb-2 animate-spin" />
+                      Yükleniyor...
+                    </div>
+                  ) : filteredUsers.length === 0 ? (
+                    <div className="py-10 text-center text-slate-400">Kullanıcı hesabı bulunamadı</div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {filteredUsers.map((user) => (
+                        <div key={user.id} className="px-4 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-slate-800 truncate">{user.teacher_name}</p>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setChangingPassId(changingPassId === user.id ? null : user.id);
+                                  setNewPassValue("");
+                                }}
+                                className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                              >
+                                <KeyRound className="h-3.5 w-3.5" /> Şifre
+                              </button>
+                              <button
+                                onClick={() => handleDeleteAccount(user.id)}
+                                disabled={deletingUserId === user.id}
+                                className="rounded-lg border border-red-200 p-1.5 text-red-500 hover:bg-red-50 disabled:opacity-50"
+                              >
+                                {deletingUserId === user.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                              </button>
+                            </div>
+                          </div>
+                          {changingPassId === user.id && (
+                            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                              <div className="mb-2 flex items-center gap-2 text-xs text-slate-600">
+                                <span>Mevcut şifre:</span>
+                                <span className="font-mono font-semibold text-slate-800">
+                                  {user.password_hash?.trim()
+                                    ? user.password_hash.trim()
+                                    : user.teacher_name.split(" ")[0].toLocaleLowerCase("tr-TR")}
+                                </span>
+                              </div>
+                              <div className="flex flex-col gap-2 sm:flex-row">
+                                <div className="relative flex-1">
+                                  <Input
+                                    type={showPass ? "text" : "password"}
+                                    placeholder="Yeni şifre"
+                                    value={newPassValue}
+                                    onChange={e => setNewPassValue(e.target.value)}
+                                    className="pr-10"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowPass(v => !v)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"
+                                  >
+                                    {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                  </button>
+                                </div>
+                                <Button onClick={() => handleChangePassword(user.id)} disabled={isSavingPass} className="bg-violet-600 hover:bg-violet-700 text-white">
+                                  {isSavingPass ? <Loader2 className="h-4 w-4 animate-spin" /> : "Kaydet"}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           )}
         </>
       )}

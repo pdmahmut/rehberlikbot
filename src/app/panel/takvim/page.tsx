@@ -356,6 +356,23 @@ export default function TakvimPage() {
     }
   };
 
+  const handleDeleteClassRequestCategory = async (label: string) => {
+    if (!confirm(`"${label}" kategorisini silmek istiyor musunuz?`)) return;
+    try {
+      const res = await fetch('/api/class-request-categories', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Kategori silinemedi');
+      setClassRequestCategorySuggestions(prev => prev.filter(item => item !== label));
+      toast.success('Kategori silindi');
+    } catch (err: any) {
+      toast.error(err.message || 'Kategori silinemedi');
+    }
+  };
+
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
       setUserRole(d.role || null);
@@ -1284,6 +1301,7 @@ export default function TakvimPage() {
                 value={crEditCategory}
                 onChange={setCrEditCategory}
                 suggestions={classRequestCategorySuggestions}
+                onDeleteSuggestion={handleDeleteClassRequestCategory}
                 hint="Yazdığınız ifade daha önce yoksa yeni kategori olarak kaydedilir."
               />
 
@@ -1338,13 +1356,22 @@ export default function TakvimPage() {
               </div>
               {/* Öğretmen */}
               <div>
-                <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 block">Dersin Öğretmeni</Label>
-                <Input
-                  placeholder="Hangi öğretmenin dersine girilecek?"
+                <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 block">Dersi Alınan Öğretmen</Label>
+                <select
                   value={crEditTeacher}
                   onChange={e => setCrEditTeacher(e.target.value)}
-                  className="w-full rounded-xl border-slate-200"
-                />
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400"
+                >
+                  <option value="">Öğretmen seçin (isteğe bağlı)</option>
+                  {crEditTeacher && !teachers.some(t => t.value === crEditTeacher) && (
+                    <option value={crEditTeacher}>{crEditTeacher}</option>
+                  )}
+                  {teachers.map((teacher) => (
+                    <option key={teacher.value} value={teacher.value}>
+                      {teacher.label}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="flex gap-2 border-t border-slate-100 px-5 py-4 bg-slate-50">

@@ -4,6 +4,7 @@ export type UserRole = 'admin' | 'teacher';
 
 export interface SessionUser {
   role: UserRole;
+  teacherId?: string;
   username?: string;
   teacherName?: string;
   classKey?: string | null;

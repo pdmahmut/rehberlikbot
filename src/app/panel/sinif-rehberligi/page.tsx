@@ -209,6 +209,7 @@ export default function SinifRehberligiPage() {
   const [requestPlanConflict, setRequestPlanConflict] = useState<string | null>(null)
   const [savingRequestPlan, setSavingRequestPlan] = useState(false)
   const [categorySuggestions, setCategorySuggestions] = useState<string[]>([])
+  const [teacherOptions, setTeacherOptions] = useState<string[]>([])
 
   const fetchTopics = useCallback(async () => {
     setLoading(true)
@@ -308,12 +309,46 @@ export default function SinifRehberligiPage() {
     }
   }, [])
 
+  const fetchTeacherOptions = useCallback(async () => {
+    try {
+      const res = await fetch('/api/teachers', {
+        headers: { Accept: 'application/json' }
+      })
+      const data = await res.json()
+      if (!res.ok) return
+      const names = (data.teachers || [])
+        .map((teacher: any) => teacher?.label || teacher?.teacherName || '')
+        .filter((name: string) => !!name)
+      setTeacherOptions(Array.from(new Set(names)))
+    } catch (err) {
+      console.error(err)
+    }
+  }, [])
+
+  const handleDeleteCategorySuggestion = async (label: string) => {
+    if (!confirm(`"${label}" kategorisini silmek istiyor musunuz?`)) return
+    try {
+      const res = await fetch('/api/class-request-categories', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Kategori silinemedi')
+      setCategorySuggestions(prev => prev.filter(item => item !== label))
+      toast.success('Kategori silindi')
+    } catch (err: any) {
+      toast.error(err.message || 'Kategori silinemedi')
+    }
+  }
+
   useEffect(() => {
     if (activeTab === 'talepler') {
       fetchClassRequests()
       fetchCategorySuggestions()
+      fetchTeacherOptions()
     }
-  }, [activeTab, fetchCategorySuggestions, fetchClassRequests])
+  }, [activeTab, fetchCategorySuggestions, fetchClassRequests, fetchTeacherOptions])
 
 
   useEffect(() => {
@@ -1522,6 +1557,7 @@ export default function SinifRehberligiPage() {
                 value={requestAdminCategory}
                 onChange={setRequestAdminCategory}
                 suggestions={categorySuggestions}
+                onDeleteSuggestion={handleDeleteCategorySuggestion}
                 hint="Önceki kategoriler öneri olarak listelenir. İsterseniz yeni bir kategori de yazabilirsiniz."
               />
 
@@ -1570,15 +1606,23 @@ export default function SinifRehberligiPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700">
-                  Dersi Uygulayacak Öğretmen <span className="text-slate-400 font-normal">(isteğe bağlı)</span>
+                  Dersi Alınan Öğretmen <span className="text-slate-400 font-normal">(isteğe bağlı)</span>
                 </label>
-                <input
-                  type="text"
+                <select
                   value={requestPlanTeacher}
                   onChange={e => setRequestPlanTeacher(e.target.value)}
-                  placeholder="Örn: Ahmet Yılmaz"
                   className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                >
+                  <option value="">Öğretmen seçin (isteğe bağlı)</option>
+                  {requestPlanTeacher && !teacherOptions.includes(requestPlanTeacher) && (
+                    <option value={requestPlanTeacher}>{requestPlanTeacher}</option>
+                  )}
+                  {teacherOptions.map((teacherName) => (
+                    <option key={teacherName} value={teacherName}>
+                      {teacherName}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {requestPlanConflict && (
