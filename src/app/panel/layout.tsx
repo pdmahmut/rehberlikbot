@@ -27,7 +27,6 @@ const menuCategories = [
     title: 'Genel',
     items: [
       { href: '/panel/takvim', label: 'Programım', icon: Calendar },
-      { href: '/panel/hesabim', label: 'Hesabım', icon: KeyRound },
     ],
   },
   {
@@ -333,17 +332,25 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
         </nav>
 
         <div className="space-y-2 border-t border-slate-800/50 bg-slate-950/50 p-3">
-          {(!sidebarCollapsed || role === 'teacher') && (
-            <div className="mb-1 flex items-center gap-3 rounded-xl bg-slate-800/30 px-3 py-2.5">
-              <div
-                className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold text-white ${
-                  role === 'admin'
-                    ? 'bg-gradient-to-br from-cyan-500 to-teal-600'
-                    : 'bg-gradient-to-br from-violet-500 to-purple-600'
-                }`}
-              >
-                {role === 'admin' ? 'Y' : teacherName ? teacherName.charAt(0).toUpperCase() : 'Ö'}
-              </div>
+          <Link
+            href="/panel/hesabim"
+            onClick={() => setSidebarOpen(false)}
+            className={`group mb-1 flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all ${
+              isActive('/panel/hesabim')
+                ? 'bg-slate-700/60 ring-1 ring-slate-600/50'
+                : 'bg-slate-800/30 hover:bg-slate-800/60'
+            } ${sidebarCollapsed && role !== 'teacher' ? 'justify-center' : ''}`}
+          >
+            <div
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white ${
+                role === 'admin'
+                  ? 'bg-gradient-to-br from-cyan-500 to-teal-600'
+                  : 'bg-gradient-to-br from-violet-500 to-purple-600'
+              }`}
+            >
+              {role === 'admin' ? 'Y' : teacherName ? teacherName.charAt(0).toUpperCase() : 'Ö'}
+            </div>
+            {(!sidebarCollapsed || role === 'teacher') && (
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-medium text-white">
                   {role === 'admin' ? 'Yönetici' : teacherName || 'Öğretmen'}
@@ -356,12 +363,14 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
                       : 'Öğretmen'}
                 </p>
               </div>
-            </div>
-          )}
+            )}
+          </Link>
 
           <button
             onClick={handleLogout}
-            className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-400 transition-all hover:bg-red-500/10 hover:text-red-400"
+            className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-400 transition-all hover:bg-red-500/10 hover:text-red-400 ${
+              sidebarCollapsed && role !== 'teacher' ? 'justify-center' : ''
+            }`}
           >
             <div className="rounded-lg bg-slate-800 p-1.5 group-hover:bg-red-500/20">
               <LogOut className="h-4 w-4" />
