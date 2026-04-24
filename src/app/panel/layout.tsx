@@ -26,7 +26,7 @@ const menuCategories = [
   {
     title: 'Genel',
     items: [
-      { href: '/panel/takvim', label: 'Takvim', icon: Calendar },
+      { href: '/panel/takvim', label: 'Programım', icon: Calendar },
       { href: '/panel/hesabim', label: 'Hesabım', icon: KeyRound },
     ],
   },

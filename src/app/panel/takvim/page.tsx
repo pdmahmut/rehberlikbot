@@ -51,6 +51,161 @@ const formatLessonSlotLabel = (slot: string) => {
   return match ? `${match[0]}. Ders` : slot;
 };
 
+const LESSON_TIMELINE = [
+  { value: "1", timeLabel: "08:30 - 09:10", start: "08:30", end: "09:10" },
+  { value: "2", timeLabel: "09:20 - 10:00", start: "09:20", end: "10:00" },
+  { value: "3", timeLabel: "10:10 - 10:50", start: "10:10", end: "10:50" },
+  { value: "4", timeLabel: "11:00 - 11:40", start: "11:00", end: "11:40" },
+  { value: "5", timeLabel: "11:50 - 12:30", start: "11:50", end: "12:30" },
+  { value: "6", timeLabel: "13:30 - 14:10", start: "13:30", end: "14:10" },
+  { value: "7", timeLabel: "14:20 - 15:00", start: "14:20", end: "15:00" },
+] as const;
+
+const toMinutes = (time: string) => {
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+};
+
+const getLessonTimelineMeta = (slot: string) =>
+  LESSON_TIMELINE.find((item) => item.value === slot);
+
+const getCurrentLessonSlot = (date: Date) => {
+  if (new Date().toDateString() !== date.toDateString()) return null;
+
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const currentSlot = LESSON_TIMELINE.find((item) => {
+    const start = toMinutes(item.start);
+    const end = toMinutes(item.end);
+    return currentMinutes >= start && currentMinutes <= end;
+  });
+
+  return currentSlot?.value ?? null;
+};
+
+const isCompletedCalendarStatus = (status?: string | null) =>
+  status === "attended" || status === "completed";
+
+const getLessonEventPresentation = (event: CalendarEvent) => {
+  const isAppointment = event.type === "appointment";
+  const isClassRequest = event.type === "class_request";
+  const isCompleted = isCompletedCalendarStatus(event.status);
+  const kindLabel = isAppointment
+    ? "Görüşme"
+    : isClassRequest
+      ? "Sınıf Talebi"
+      : "Sınıf Rehberliği";
+
+  if (isCompleted) {
+    return {
+      kindLabel,
+      badgeLabel: "Tamamlandı",
+      containerClass: "border-green-200 bg-green-50 opacity-70 shadow-sm",
+      kindClass: "text-green-700",
+      badgeClass: "border-green-200 bg-white text-green-700",
+      titleClass: "text-slate-600 line-through",
+    };
+  }
+
+  if (isAppointment) {
+    return {
+      kindLabel,
+      badgeLabel: "Randevu",
+      containerClass: "border-blue-200 bg-blue-50 shadow-sm",
+      kindClass: "text-blue-700",
+      badgeClass: "border-blue-200 bg-white text-blue-700",
+      titleClass: "text-slate-900",
+    };
+  }
+
+  return {
+    kindLabel,
+    badgeLabel: isClassRequest ? "Sınıf Talebi" : "Planlı",
+    containerClass: "border-violet-200 bg-violet-50 shadow-sm",
+    kindClass: "text-violet-700",
+    badgeClass: "border-violet-200 bg-white text-violet-700",
+    titleClass: "text-slate-900",
+  };
+};
+
+const getTimelineStatusMeta = (event: CalendarEvent) => {
+  if (isCompletedCalendarStatus(event.status)) {
+    return {
+      label: "Tamamlandı",
+      icon: "check" as const,
+      borderClass: "border-l-emerald-500",
+      badgeClass: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200",
+      dotClass: "bg-emerald-500",
+      cardClass: "border-emerald-100 bg-white",
+    };
+  }
+
+  if (event.type === "class_request" || event.status === "pending" || event.status === "postponed") {
+    return {
+      label: "Beklemede",
+      icon: "alert" as const,
+      borderClass: "border-l-amber-500",
+      badgeClass: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
+      dotClass: "bg-amber-500",
+      cardClass: "border-amber-100 bg-white",
+    };
+  }
+
+  return {
+    label: "Planlandı",
+    icon: "clock" as const,
+    borderClass: "border-l-sky-500",
+    badgeClass: "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200",
+    dotClass: "bg-sky-500",
+    cardClass: "border-sky-100 bg-white",
+  };
+};
+
+const getTimelineTitle = (event: CalendarEvent) =>
+  event.title.replace(/\s*\((Öğrenci|Veli|Öğretmen)\)\s*$/i, "").trim();
+
+const getTimelineSubtitle = (event: CalendarEvent) => {
+  if (event.type === "appointment") {
+    const participantType =
+      event.data?.participant_type === "student"
+        ? "Öğrenci görüşmesi"
+        : event.data?.participant_type === "parent"
+          ? "Veli görüşmesi"
+          : "Öğretmen görüşmesi";
+    return participantType;
+  }
+
+  if (event.type === "class_request") {
+    return event.data?.lesson_teacher
+      ? `${event.data.lesson_teacher} ile planlandı`
+      : "Sınıf talebi";
+  }
+
+  return event.data?.teacher_name
+    ? `${event.data.teacher_name} ile rehberlik`
+    : "Sınıf rehberliği";
+};
+
+const getOtherTaskPresentation = (event: CalendarEvent) => {
+  const isCompleted = event.status === "completed";
+
+  if (isCompleted) {
+    return {
+      containerClass: "border-green-200 bg-green-50 opacity-70",
+      checkboxClass: "border-green-500 bg-green-500 text-white",
+      titleClass: "text-slate-500 line-through",
+      badgeClass: "border-green-200 bg-white text-green-700",
+    };
+  }
+
+  return {
+    containerClass: "border-slate-200 bg-slate-50",
+    checkboxClass: "border-slate-300 bg-white text-slate-400 hover:border-slate-400 hover:text-slate-600",
+    titleClass: "text-slate-800",
+    badgeClass: "border-slate-200 bg-white text-slate-500",
+  };
+};
+
 const normalizeClassValue = (value?: string | null) =>
   (value || "")
     .toLocaleLowerCase("tr-TR")
@@ -227,6 +382,7 @@ export default function TakvimPage() {
   const [pendingApplicationsLoading, setPendingApplicationsLoading] = useState(false);
   const [pendingApplications, setPendingApplications] = useState<PendingApplicationRecord[]>([]);
   const [pendingSelectionSlot, setPendingSelectionSlot] = useState<{ date: string; start_time: string } | null>(null);
+  const [expandedEmptySlots, setExpandedEmptySlots] = useState<Record<string, boolean>>({});
 
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [taskSaving, setTaskSaving] = useState(false);
@@ -409,6 +565,10 @@ export default function TakvimPage() {
     loadData();
   }, [currentDate]);
 
+  useEffect(() => {
+    setExpandedEmptySlots({});
+  }, [currentDate]);
+
   const loadData = async () => {
     setIsLoading(true);
     try {
@@ -556,6 +716,25 @@ export default function TakvimPage() {
     setEditingAppointment(null);
     resetAppointmentForm(getLocalDateString(currentDate));
     setShowAppointmentModal(true);
+  };
+
+  const openAppointmentModalForSlot = (date: string, startTime: string) => {
+    setEditingAppointment(null);
+    resetAppointmentForm(date);
+    setFormData((prev) => ({
+      ...prev,
+      appointment_date: date,
+      start_time: startTime,
+    }));
+    setShowAppointmentModal(true);
+  };
+
+  const toggleEmptySlotDetails = (date: Date, slot: string) => {
+    const key = `${getLocalDateString(date)}-${slot}`;
+    setExpandedEmptySlots((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
   };
 
   const openAppointmentEditModal = (appointment: Appointment) => {
@@ -1207,8 +1386,14 @@ export default function TakvimPage() {
     return `${currentDate.getDate()} ${MONTHS_TR[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
   };
 
+  const currentLessonSlot = getCurrentLessonSlot(currentDate);
+  const pendingIndicatorCount = notifications.pendingRequests.length;
+  const dayOtherTasks = getEventsForDate(currentDate).filter(
+    (event) => event.type === "follow_up" || (event.type === "task" && !event.data.related_guidance_plan_id)
+  );
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-2.5">
 
       {/* Admin Bildirim Paneli */}
       {userRole === 'admin' && (notifications.pendingRequests.length > 0 || notifications.recentReferrals.length > 0) && (
@@ -1424,7 +1609,7 @@ export default function TakvimPage() {
             </div>
             
             <div className="p-6 overflow-y-auto">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
                 {/* Sol Kolon: Dersler */}
                 <div className="space-y-4">
                   <h3 className="font-bold text-slate-700 flex items-center gap-2 mb-2">
@@ -1440,67 +1625,94 @@ export default function TakvimPage() {
                     });
 
                     return (
-                      <div key={lesson} className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-all hover:shadow-md">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-200 shadow-inner">
-                          <span className="text-sm font-black text-slate-600">{lesson}</span>
-                        </div>
-                        <div className="flex-1 min-w-0 space-y-1.5">
-                          {lessonEvents.length === 0 ? (
-                            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-2.5 py-1.5">
-                              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Boş</p>
+                      <div key={lesson} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-slate-300">
+                        <div className="flex items-start gap-4">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-sm font-bold text-slate-700">
+                            {lesson}
+                          </div>
+                          <div className="min-w-0 flex-1 space-y-3">
+                            <div className="space-y-1">
+                              <p className="text-sm font-semibold text-slate-900">{formatLessonSlotLabel(periodStr)}</p>
+                              <p className="text-xs text-slate-500">Günün bu ders saati için planlanan içerik</p>
                             </div>
+                          {lessonEvents.length === 0 ? (
+                              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-3">
+                                <p className="text-sm font-medium text-slate-900">Bu saat boş</p>
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => openAppointmentModalForSlot(getLocalDateString(dayModalDate), periodStr)}
+                                    className="h-8 rounded-md border-slate-200 px-3 text-xs font-semibold text-slate-700"
+                                  >
+                                    <Plus className="mr-1 h-3.5 w-3.5" />
+                                    Randevu ekle
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => openPendingApplicationsModal(getLocalDateString(dayModalDate), periodStr)}
+                                    className="h-8 rounded-md px-2 text-xs font-medium text-slate-500 hover:text-slate-700"
+                                  >
+                                    Bekleyen başvurular
+                                  </Button>
+                                </div>
+                              </div>
                           ) : lessonEvents.map(e => {
-                            const isCompleted = e.status === 'attended' || e.status === 'completed';
-                            const isApt = e.type === 'appointment';
+                            const isCompleted = isCompletedCalendarStatus(e.status);
                             const isClassReq = e.type === 'class_request';
-
-                            let containerClass = isCompleted ? "border-slate-200 bg-slate-50 opacity-75" : isApt ? "border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-50" : isClassReq ? "border-violet-200 bg-gradient-to-r from-violet-50 to-purple-50" : "border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50";
-                            let typeText = isCompleted ? "text-slate-500" : isApt ? "text-blue-700" : isClassReq ? "text-violet-700" : "text-emerald-700";
-                            let typeLabel = isCompleted ? "Tamamlandı" : isApt ? "Randevu" : isClassReq ? "Sınıf Talebi" : "Etkinlik";
+                            const presentation = getLessonEventPresentation(e);
 
                             return (
-                              <div key={e.id} className={`relative rounded-lg border px-2.5 py-2 transition-colors ${containerClass}`}>
-                                <div className="flex items-start justify-between gap-2">
+                              <div key={e.id} className={`relative rounded-lg border p-4 transition-colors ${presentation.containerClass}`}>
+                                <div className="flex items-start justify-between gap-4">
                                   <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                                      <p className={`text-[10px] font-black uppercase tracking-wider ${typeText}`}>
-                                        {isApt ? 'Görüşme' : isClassReq ? 'Sınıf Talebi' : 'Rehberlik'}
+                                    <div className="mb-2 flex items-center gap-2 flex-wrap">
+                                      <p className={`text-[11px] font-black uppercase tracking-[0.12em] ${presentation.kindClass}`}>
+                                        {presentation.kindLabel}
                                       </p>
-                                      <span className={`rounded-full px-1.5 py-0 text-[9px] font-bold border ${isCompleted ? 'bg-slate-100 text-slate-600 border-slate-200' : 'bg-white/80 border-white/50 ' + typeText}`}>
-                                        {typeLabel}
+                                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${presentation.badgeClass}`}>
+                                        {presentation.badgeLabel}
                                       </span>
+                                      {e.type === "appointment" && (
+                                        <span className="rounded-full border border-blue-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                                          Görüşme
+                                        </span>
+                                      )}
                                     </div>
-                                    <p className={`text-xs font-semibold truncate ${isCompleted ? 'text-slate-600 line-through' : 'text-slate-800'}`}>
+                                    <p className={`text-sm font-semibold ${presentation.titleClass}`}>
                                       {e.title}
                                     </p>
                                   </div>
-                                  <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                                  <div className="mt-0.5 flex items-center gap-2 shrink-0">
                                     <button
                                       onClick={() => {
                                         if (e.type === 'appointment') openAttendanceChoiceModal(e.data);
                                         else if (e.type === 'guidance_plan') toggleGuidancePlanStatus(e.id, e.status);
                                         else if (e.type === 'class_request') toggleClassRequestStatus(e.id, e.status);
                                       }}
-                                      className={`flex h-7 w-7 items-center justify-center rounded-full border-2 transition-all ${isCompleted ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white text-slate-400 hover:border-emerald-400 hover:text-emerald-500'}`}
+                                      className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all ${isCompleted ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-slate-300 bg-white text-slate-400 hover:border-emerald-400 hover:text-emerald-500'}`}
                                       title={isCompleted ? 'Tamamlandı' : 'Tamamla'}
                                     >
-                                      {isCompleted && <CheckCircle2 className="h-4 w-4" />}
+                                      {isCompleted && <CheckCircle2 className="h-7 w-7" />}
                                     </button>
                                     {isClassReq ? (
                                     <button
                                       onClick={() => handleResetClassRequest(e.id)}
-                                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-transparent text-slate-300 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-transparent text-slate-300 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
                                       title="Planlamayı İptal Et (Bekliyor'a Al)"
                                     >
-                                      <Trash2 className="h-3.5 w-3.5" />
+                                      <Trash2 className="h-4 w-4" />
                                     </button>
                                     ) : (
                                     <button
                                       onClick={() => e.type === 'appointment' ? handleDeleteAppointment(e.id) : handleDeleteGuidancePlan(e.id)}
-                                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-transparent text-slate-300 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-transparent text-slate-300 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
                                       title="Sil"
                                     >
-                                      <Trash2 className="h-3.5 w-3.5" />
+                                      <Trash2 className="h-4 w-4" />
                                     </button>
                                     )}
                                   </div>
@@ -1508,6 +1720,7 @@ export default function TakvimPage() {
                               </div>
                             );
                           })}
+                          </div>
                         </div>
                       </div>
                     );
@@ -1515,29 +1728,41 @@ export default function TakvimPage() {
                 </div>
 
                 {/* Sağ Kolon: Görevler */}
-                <div className="space-y-4">
+                <div className="w-full max-w-sm space-y-4 justify-self-end">
                   <h3 className="font-bold text-slate-700 flex items-center gap-2 mb-2">
                     <ListTodo className="h-4 w-4 text-orange-500"/> Diğer Görevler
                   </h3>
-                  <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm h-full min-h-[300px]">
+                  <div className="flex h-full min-h-[300px] flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                     {getEventsForDate(dayModalDate).filter(e => e.type === 'follow_up' || (e.type === 'task' && !e.data.related_guidance_plan_id)).length === 0 ? (
-                      <div className="text-center py-12 text-slate-400">
-                        <CheckCircle2 className="h-10 w-10 mx-auto mb-2 opacity-20" />
-                        <p className="text-sm font-medium">Bu gün için görev yok</p>
+                      <div className="flex flex-1 flex-col items-center justify-center text-center text-slate-400">
+                        <div className="mb-3 rounded-full bg-slate-100 p-3 text-slate-400">
+                          <ListTodo className="h-6 w-6" />
+                        </div>
+                        <p className="text-sm font-medium text-slate-600">Bugün görev yok</p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={openTaskModal}
+                          className="mt-4 h-9 rounded-md border-slate-200 px-3 text-xs font-semibold text-slate-700"
+                        >
+                          <Plus className="mr-1 h-3.5 w-3.5" />
+                          Görev ekle
+                        </Button>
                       </div>
                     ) : (
-                      <div className="space-y-2.5">
+                      <div className="space-y-3">
                         {getEventsForDate(dayModalDate).filter(e => e.type === 'follow_up' || (e.type === 'task' && !e.data.related_guidance_plan_id)).map(t => (
-                          <div key={t.id} className={`p-2.5 rounded-xl border transition-all ${t.status === 'completed' ? 'bg-slate-50 opacity-60 border-slate-200' : 'bg-slate-50/50 border-slate-200 hover:border-orange-200'}`}>
-                            <div className="flex items-start gap-2.5">
-                              <button onClick={() => toggleTaskStatus(t.id, t.type, t.status)} className={`mt-0.5 h-6 w-6 shrink-0 rounded-md border-2 flex items-center justify-center transition-colors ${t.status === 'completed' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 hover:border-orange-500'}`}>
+                          <div key={t.id} className={`rounded-lg border p-4 shadow-sm transition-all ${getOtherTaskPresentation(t).containerClass}`}>
+                            <div className="flex items-start gap-3">
+                              <button onClick={() => toggleTaskStatus(t.id, t.type, t.status)} className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${getOtherTaskPresentation(t).checkboxClass}`}>
                                 {t.status === 'completed' && <CheckCircle2 className="h-4 w-4" />}
                               </button>
                               <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-semibold ${t.status === 'completed' ? 'line-through text-slate-500' : 'text-slate-800'}`}>{t.title}</p>
-                                <div className="flex items-center justify-between mt-1">
-                                  <span className={`text-[9px] font-bold tracking-wider uppercase ${t.type === 'task' ? 'text-orange-500' : 'text-teal-500'}`}>
-                                    {t.type === 'task' ? 'GÖREV' : 'TAKİP'}
+                                <p className={`text-sm font-semibold ${getOtherTaskPresentation(t).titleClass}`}>{t.title}</p>
+                                <div className="mt-2 flex items-center justify-between">
+                                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${getOtherTaskPresentation(t).badgeClass}`}>
+                                    {t.type === 'task' ? 'Görev' : 'Takip'}
                                   </span>
                                   <button onClick={() => handleDeleteTask(t.id)} className="text-slate-300 hover:text-red-500 transition-all p-1">
                                     <Trash2 className="h-3.5 w-3.5" />
@@ -1986,55 +2211,91 @@ export default function TakvimPage() {
       )}
 
       {/* Başlık ve Üst Butonlar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-br from-teal-500 to-emerald-600 rounded-xl shadow-lg">
-            <Calendar className="h-6 w-6 text-white" />
+      <div className="rounded-[10px] border border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-white px-4 py-2.5 shadow-sm">
+        <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="rounded-lg bg-emerald-500 p-2 shadow-sm">
+              <Calendar className="h-4 w-4 text-white" />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-lg font-bold text-slate-900">Programım</h1>
+              {currentLessonSlot && viewType === "day" && (
+                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                  Şu an {currentLessonSlot}. ders
+                </span>
+              )}
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">Takvim</h1>
-            <p className="text-sm text-slate-500">Günlük Ders Programı ve Görevler</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={openAppointmentModal}
+              className="h-8 rounded-lg bg-green-600 px-3 text-sm text-white shadow-sm hover:bg-green-700"
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> Yeni Randevu
+            </Button>
+            <Button
+              variant="outline"
+              onClick={openTaskModal}
+              className="h-8 rounded-lg border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              <Plus className="mr-2 h-4 w-4" /> Yeni Görev
+            </Button>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={openTaskModal}
-            className="bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white"
-          >
-            <Plus className="h-4 w-4 mr-2" /> Yeni Görev
-          </Button>
-          <Button 
-            onClick={openAppointmentModal}
-            className="bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white"
-          >
-            <Plus className="h-4 w-4 mr-2" /> Yeni Randevu
-          </Button>
         </div>
       </div>
 
       {/* Navigasyon */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={navigatePrev}><ChevronLeft className="h-4 w-4" /></Button>
-              <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date())}>Bugün</Button>
-              <Button variant="outline" size="sm" onClick={navigateNext}><ChevronRight className="h-4 w-4" /></Button>
-              <h2 className="text-lg font-semibold text-slate-800 ml-4">{getHeaderText()}</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex bg-slate-100 rounded-lg p-1">
-                {[{ v: 'day', l: 'Gün', i: Clock }, { v: 'week', l: 'Hafta', i: CalendarCheck }, { v: 'month', l: 'Ay', i: CalendarDays }].map(v => (
-                  <button key={v.v} onClick={() => setViewType(v.v as ViewType)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewType === v.v ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>
-                    <v.i className="h-4 w-4" /> {v.l}
-                  </button>
-                ))}
-              </div>
-              <Button variant="outline" size="sm" onClick={loadData}><RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} /></Button>
-            </div>
+      <div className="flex flex-col gap-3 rounded-[10px] border border-slate-200 bg-white px-4 py-2.5 shadow-sm xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-0.5">
+            <button
+              type="button"
+              onClick={navigatePrev}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <Button
+              onClick={() => setCurrentDate(new Date())}
+              className="h-8 rounded-md bg-emerald-600 px-3 text-sm text-white shadow-sm hover:bg-emerald-700"
+            >
+              Bugün
+            </Button>
+            <button
+              type="button"
+              onClick={navigateNext}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
-        </CardContent>
-      </Card>
+          <h2 className="text-base font-semibold text-slate-900">{getHeaderText()}</h2>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-lg bg-slate-100 p-0.5">
+            {[{ v: 'day', l: 'Gün', i: Clock }, { v: 'week', l: 'Hafta', i: CalendarCheck }, { v: 'month', l: 'Ay', i: CalendarDays }].map(v => (
+              <button
+                key={v.v}
+                onClick={() => setViewType(v.v as ViewType)}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                  viewType === v.v
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-white/60'
+                }`}
+              >
+                <v.i className="h-3.5 w-3.5" /> {v.l}
+              </button>
+            ))}
+          </div>
+          <Button
+            variant="outline"
+            onClick={loadData}
+            className="h-8 rounded-lg border-slate-200 bg-white px-2.5 shadow-sm hover:bg-slate-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
+      </div>
 
       {isLoading ? (
         <Card><CardContent className="py-12 flex items-center justify-center"><Loader2 className="h-8 w-8 text-teal-500 animate-spin" /><span className="ml-3">Yükleniyor...</span></CardContent></Card>
@@ -2234,133 +2495,189 @@ export default function TakvimPage() {
           )}
 
           {viewType === 'day' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card className="lg:col-span-2 shadow-lg shadow-slate-200/50">
-                <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-emerald-50/50 pb-4">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <CalendarCheck className="h-5 w-5 text-emerald-600" />
-                    Günlük Program
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 bg-slate-50/50">
-                  <div className="space-y-3">
-                    {Array.from({ length: 7 }, (_, i) => i + 1).map(lesson => {
-                      const periodStr = String(lesson);
-                      const lessonEvents = getEventsForDate(currentDate).filter(e => {
-                        if (e.type === 'appointment' || e.type === 'guidance_plan' || e.type === 'class_request') {
-                          return normalizeLessonSlot(e.time) === periodStr;
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
+              <Card className="overflow-hidden border-slate-200 shadow-sm">
+                <CardContent className="p-0">
+                  <div className="divide-y divide-slate-100">
+                    {LESSON_SLOTS.map((slot) => {
+                      const periodStr = slot.value;
+                      const timelineMeta = getLessonTimelineMeta(periodStr);
+                      const slotKey = `${getLocalDateString(currentDate)}-${periodStr}`;
+                      const isExpandedEmpty = Boolean(expandedEmptySlots[slotKey]);
+                      const isCurrentSlot = currentLessonSlot === periodStr && isToday(currentDate);
+                      const lessonEvents = getEventsForDate(currentDate).filter((event) => {
+                        if (event.type === "appointment" || event.type === "guidance_plan" || event.type === "class_request") {
+                          return normalizeLessonSlot(event.time) === periodStr;
                         }
                         return false;
                       });
 
                       return (
-                        <div key={lesson} className="group flex items-center gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-200 shadow-inner">
-                            <span className="text-base font-black text-slate-600">{lesson}</span>
+                        <div
+                          key={periodStr}
+                          className={`grid grid-cols-[62px_minmax(0,1fr)] transition-colors ${
+                            isCurrentSlot ? "bg-emerald-50/50" : "bg-white hover:bg-slate-50/40"
+                          }`}
+                        >
+                          <div
+                            className={`relative flex flex-col items-center justify-center gap-0 border-r border-slate-100 px-1.5 py-1.5 text-center ${
+                              isCurrentSlot ? "bg-emerald-50" : "bg-slate-50/70"
+                            }`}
+                          >
+                            {isCurrentSlot && <div className="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-emerald-500" />}
+                            <span className="text-xs font-bold text-slate-700">
+                              {periodStr}
+                            </span>
+                            <span className="text-[8px] font-semibold uppercase tracking-[0.1em] text-slate-400">{slot.label}</span>
+                            <span className="text-[8px] text-slate-400">{timelineMeta?.timeLabel}</span>
+                            {isCurrentSlot && (
+                              <span className="flex items-center gap-0.5">
+                                <span className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />
+                                <span className="text-[8px] font-semibold text-emerald-700">Şimdi</span>
+                              </span>
+                            )}
                           </div>
-                          <div className="flex-1 min-w-0 space-y-2">
+
+                          <div className="px-2 py-1.5 sm:px-3">
                             {lessonEvents.length === 0 ? (
-                              <button
-                                type="button"
-                                onClick={() => openPendingApplicationsModal(getLocalDateString(currentDate), periodStr)}
-                                className="w-full rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition hover:border-teal-300 hover:bg-teal-50"
-                              >
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Boş</p>
-                                <p className="mt-0.5 text-sm text-slate-500">Bu saat açık</p>
-                                <p className="mt-2 text-xs font-medium text-teal-600">Bekleyen başvuruları göster</p>
-                              </button>
-                            ) : lessonEvents.map(e => {
-                              const isCompleted = e.status === 'attended' || e.status === 'completed';
-                              const isApt = e.type === 'appointment';
-                              const isClassReq = e.type === 'class_request';
-
-                              let containerClass = "";
-                              let typeText = "";
-                              let typeLabel = "";
-
-                              if (isCompleted) {
-                                containerClass = "border-slate-200 bg-slate-50 opacity-75";
-                                typeText = "text-slate-500";
-                                typeLabel = "Tamamlandı";
-                              } else if (isApt) {
-                                containerClass = "border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-50";
-                                typeText = "text-blue-700";
-                                typeLabel = "Randevu";
-                              } else if (isClassReq) {
-                                containerClass = "border-violet-200 bg-gradient-to-r from-violet-50 to-purple-50";
-                                typeText = "text-violet-700";
-                                typeLabel = "Sınıf Talebi";
-                              } else {
-                                containerClass = "border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50";
-                                typeText = "text-emerald-700";
-                                typeLabel = "Sınıf Rehberliği";
-                              }
-
-                              return (
-                                <div
-                                  key={e.id}
-                                  onClick={() => {
-                                    if (e.type === 'appointment') {
-                                      openAppointmentEditModal(e.data as Appointment);
-                                    } else if (e.type === 'class_request' && !isCompleted) {
-                                      openCrEditModal(e.data);
-                                    }
-                                  }}
-                                  className={`relative rounded-xl border px-3 py-2.5 transition-colors ${containerClass} ${(e.type === 'appointment' || (e.type === 'class_request' && !isCompleted)) ? 'cursor-pointer hover:shadow-sm' : ''}`}
+                              <div className="rounded-[10px] border border-slate-200 bg-slate-50/60">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleEmptySlotDetails(currentDate, periodStr)}
+                                  className="flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left transition-colors hover:bg-white/80"
                                 >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <p className={`text-[11px] font-black uppercase tracking-[0.12em] ${typeText}`}>
-                                          {isApt ? 'Görüşme' : isClassReq ? 'Sınıf Talebi' : 'Sınıf Rehberliği'}
-                                        </p>
-                                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${isCompleted ? 'bg-slate-100 text-slate-600 border-slate-200' : 'bg-white/80 border-white/50 ' + typeText}`}>
-                                          {typeLabel}
-                                        </span>
-                                      </div>
-                                      <p className={`mt-1 text-sm font-semibold truncate ${isCompleted ? 'text-slate-600 line-through' : 'text-slate-800'}`}>
-                                        {e.title}
-                                      </p>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0 mt-0.5">
-                                      <button
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          if (e.type === 'appointment') openAttendanceChoiceModal(e.data);
-                                          else if (e.type === 'guidance_plan') toggleGuidancePlanStatus(e.id, e.status);
-                                          else if (e.type === 'class_request') toggleClassRequestStatus(e.id, e.status);
-                                        }}
-                                        className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all ${isCompleted ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white text-slate-400 hover:border-emerald-400 hover:text-emerald-500'}`}
-                                        title={isCompleted ? 'Tamamlandı' : 'Tamamla'}
+                                  <p className="text-xs text-slate-400">Bu saat boş</p>
+                                  <div className="flex items-center gap-2">
+                                    {pendingIndicatorCount > 0 && (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-600 ring-1 ring-inset ring-red-200">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                                        {pendingIndicatorCount}
+                                      </span>
+                                    )}
+                                    <Plus className={`h-3.5 w-3.5 text-slate-300 transition-transform duration-200 ${isExpandedEmpty ? "rotate-45" : ""}`} />
+                                  </div>
+                                </button>
+                                <div className={`grid transition-all duration-300 ease-out ${isExpandedEmpty ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+                                  <div className="overflow-hidden">
+                                    <div className="flex flex-wrap gap-2 border-t border-slate-200/80 px-3 pb-3 pt-2">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => openAppointmentModalForSlot(getLocalDateString(currentDate), periodStr)}
+                                        className="h-8 rounded-[10px] border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition-transform duration-200 hover:scale-[1.02] hover:bg-slate-50"
                                       >
-                                        {isCompleted && <CheckCircle2 className="h-5 w-5" />}
-                                      </button>
-                                      {isClassReq ? (
-                                      <button
-                                        onClick={(event) => { event.stopPropagation(); handleResetClassRequest(e.id); }}
-                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-transparent text-slate-300 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
-                                        title="Planlamayı İptal Et (Bekliyor'a Al)"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </button>
-                                      ) : (
-                                      <button
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          if (e.type === 'appointment') handleDeleteAppointment(e.id);
-                                          else handleDeleteGuidancePlan(e.id);
-                                        }}
-                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-transparent text-slate-300 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
-                                        title="Sil"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </button>
+                                        <Plus className="mr-1 h-3.5 w-3.5" />
+                                        Randevu ekle
+                                      </Button>
+                                      {pendingIndicatorCount > 0 && (
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => openPendingApplicationsModal(getLocalDateString(currentDate), periodStr)}
+                                          className="h-8 rounded-[10px] px-2 text-xs font-medium text-slate-500 transition-transform duration-200 hover:scale-[1.02] hover:text-slate-700"
+                                        >
+                                          <span className="mr-1.5 h-2 w-2 rounded-full bg-red-500" />
+                                          {pendingIndicatorCount} başvuru
+                                        </Button>
                                       )}
                                     </div>
                                   </div>
                                 </div>
-                              );
-                            })}
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {lessonEvents.map((event) => {
+                                  const isCompleted = isCompletedCalendarStatus(event.status);
+                                  const isClassReq = event.type === "class_request";
+                                  const statusMeta = getTimelineStatusMeta(event);
+                                  const title = getTimelineTitle(event);
+                                  const subtitle = getTimelineSubtitle(event);
+
+                                  return (
+                                    <div
+                                      key={event.id}
+                                      onClick={() => {
+                                        if (event.type === "appointment") {
+                                          openAppointmentEditModal(event.data as Appointment);
+                                        } else if (event.type === "class_request" && !isCompleted) {
+                                          openCrEditModal(event.data);
+                                        }
+                                      }}
+                                      className={`animate-in fade-in-50 slide-in-from-bottom-1 relative rounded-lg border border-l-[4px] px-3 py-2 shadow-sm transition-all duration-200 ${
+                                        statusMeta.cardClass
+                                      } ${statusMeta.borderClass} ${
+                                        event.type === "appointment" || (event.type === "class_request" && !isCompleted)
+                                          ? "cursor-pointer hover:-translate-y-[1px] hover:shadow-md"
+                                          : ""
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between gap-3">
+                                        <div className="min-w-0 flex-1">
+                                          <div className="flex flex-wrap items-center gap-1.5">
+                                            <p className="truncate text-sm font-semibold text-slate-900">{title}</p>
+                                            {event.type === "appointment" && (
+                                              <span className="rounded-full bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 ring-1 ring-inset ring-sky-200">
+                                                Görüşme
+                                              </span>
+                                            )}
+                                            <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${statusMeta.badgeClass}`}>
+                                              <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dotClass}`} />
+                                              {statusMeta.label}
+                                            </span>
+                                          </div>
+                                          <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
+                                        </div>
+
+                                        <div className="flex items-center gap-1.5 pl-2">
+                                          <button
+                                            onClick={(eventClick) => {
+                                              eventClick.stopPropagation();
+                                              if (event.type === "appointment") openAttendanceChoiceModal(event.data);
+                                              else if (event.type === "guidance_plan") toggleGuidancePlanStatus(event.id, event.status);
+                                              else if (event.type === "class_request") toggleClassRequestStatus(event.id, event.status);
+                                            }}
+                                            className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all duration-200 ${
+                                              isCompleted
+                                                ? "border-emerald-500 bg-emerald-500 text-white shadow-sm"
+                                                : "border-slate-300 bg-white text-slate-400 hover:border-emerald-400 hover:text-emerald-500"
+                                            }`}
+                                            title={isCompleted ? "Tamamlandı" : "Tamamla"}
+                                          >
+                                            {isCompleted && <CheckCircle2 className="h-5 w-5" />}
+                                          </button>
+                                          {isClassReq ? (
+                                            <button
+                                              onClick={(eventClick) => {
+                                                eventClick.stopPropagation();
+                                                handleResetClassRequest(event.id);
+                                              }}
+                                              className="flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-slate-300 transition-all duration-200 hover:border-red-200 hover:bg-red-50 hover:text-red-500"
+                                              title="Planlamayı İptal Et (Bekliyor'a Al)"
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                          ) : (
+                                            <button
+                                              onClick={(eventClick) => {
+                                                eventClick.stopPropagation();
+                                                if (event.type === "appointment") handleDeleteAppointment(event.id);
+                                                else handleDeleteGuidancePlan(event.id);
+                                              }}
+                                              className="flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-slate-300 transition-all duration-200 hover:border-red-200 hover:bg-red-50 hover:text-red-500"
+                                              title="Sil"
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -2369,41 +2686,63 @@ export default function TakvimPage() {
                 </CardContent>
               </Card>
 
-              <Card className="shadow-lg shadow-slate-200/50">
-                <CardHeader className="border-b bg-gradient-to-r from-orange-50 to-amber-50/50 pb-4">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <ListTodo className="h-5 w-5 text-orange-500" />
-                    Diğer Görevler
-                  </CardTitle>
+              <Card className="w-full border-slate-200 shadow-sm xl:sticky xl:top-20 xl:self-start">
+                <CardHeader className="border-b border-slate-100 bg-white px-4 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-sm flex items-center gap-1.5">
+                      <ListTodo className="h-4 w-4 text-orange-500" />
+                      Diğer Görevler
+                    </CardTitle>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={openTaskModal}
+                      className="h-7 rounded-lg border-slate-200 bg-white px-2.5 text-[11px] font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+                    >
+                      <Plus className="mr-1 h-3 w-3" />
+                      Ekle
+                    </Button>
+                  </div>
                 </CardHeader>
-                <CardContent className="p-4 bg-slate-50/50 h-full min-h-[300px]">
-                  {getEventsForDate(currentDate).filter(e => e.type === 'follow_up' || (e.type === 'task' && !e.data.related_guidance_plan_id)).length === 0 ? (
-                    <div className="text-center py-12 text-slate-400">
-                      <CheckCircle2 className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                      <p className="text-sm font-medium">Bugün için görev yok</p>
+                <CardContent className="p-3">
+                  {dayOtherTasks.length === 0 ? (
+                    <div className="flex min-h-[160px] flex-col items-center justify-center text-center">
+                      <div className="mb-2 rounded-full bg-slate-100 p-2 text-slate-400">
+                        <ListTodo className="h-4 w-4" />
+                      </div>
+                      <p className="text-xs font-medium text-slate-500">Bugün görev yok</p>
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      {getEventsForDate(currentDate).filter(e => e.type === 'follow_up' || (e.type === 'task' && !e.data.related_guidance_plan_id)).map(t => (
-                        <div key={t.id} className={`p-3.5 rounded-xl border transition-all shadow-sm ${t.status === 'completed' ? 'bg-slate-50 opacity-60 border-slate-200' : 'bg-white border-slate-200 hover:border-orange-200 hover:shadow-md'}`}>
-                          <div className="flex items-start gap-3">
-                            <button onClick={() => toggleTaskStatus(t.id, t.type, t.status)} className={`mt-0.5 h-6 w-6 shrink-0 rounded-md border-2 flex items-center justify-center transition-colors ${t.status === 'completed' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 hover:border-orange-500'}`}>
-                              {t.status === 'completed' && <CheckCircle2 className="h-4 w-4" />}
-                            </button>
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-sm font-semibold ${t.status === 'completed' ? 'line-through text-slate-500' : 'text-slate-800'}`}>{t.title}</p>
-                              <div className="flex items-center justify-between mt-1.5">
-                                <span className={`text-[10px] font-bold tracking-wider uppercase ${t.type === 'task' ? 'text-orange-500' : 'text-teal-500'}`}>
-                                  {t.type === 'task' ? 'GÖREV' : 'TAKİP'}
-                                </span>
-                                <button onClick={() => handleDeleteTask(t.id)} className="text-slate-300 hover:text-red-500 transition-all p-1">
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
+                    <div className="space-y-2 xl:max-h-[calc(100vh-12rem)] xl:overflow-y-auto xl:pr-1">
+                      {dayOtherTasks.map((task) => {
+                        const taskUi = getOtherTaskPresentation(task);
+                        return (
+                          <div key={task.id} className={`rounded-[10px] border p-2.5 shadow-sm transition-all hover:shadow-md ${taskUi.containerClass}`}>
+                            <div className="flex items-start gap-2.5">
+                              <button
+                                onClick={() => toggleTaskStatus(task.id, task.type, task.status)}
+                                className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-200 ${taskUi.checkboxClass}`}
+                              >
+                                {task.status === "completed" && <CheckCircle2 className="h-3.5 w-3.5" />}
+                              </button>
+                              <div className="min-w-0 flex-1">
+                                <p className={`text-xs font-semibold ${taskUi.titleClass}`}>{task.title}</p>
+                                <div className="mt-1.5 flex items-center justify-between gap-2">
+                                  <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${taskUi.badgeClass}`}>
+                                    {task.type === "task" ? "Görev" : "Takip"}
+                                  </span>
+                                  <button
+                                    onClick={() => handleDeleteTask(task.id)}
+                                    className="rounded-full p-1 text-slate-300 transition-all duration-200 hover:scale-[1.02] hover:bg-red-50 hover:text-red-500"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
