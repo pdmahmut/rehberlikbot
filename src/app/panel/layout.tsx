@@ -18,6 +18,7 @@ import {
   Search,
   Users,
   X,
+  History,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
