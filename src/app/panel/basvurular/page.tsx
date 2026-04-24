@@ -395,19 +395,20 @@ export default function BasvurularPage() {
       let response;
 
       if (entryFormSource === "Gözlem Havuzu") {
-        const { error } = await supabase.from("observation_pool").insert({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, note: topicNote, observation_type: "behavior", priority: "medium", status: "pending", observed_at: today });
-        if (error) throw new Error(error.message || "Gözlem kaydı veritabanına yazılamadı.");
+        response = await fetch("/api/gozlem-havuzu", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, note: topicNote, observation_type: "behavior", priority: "medium", status: "pending", observed_at: today })
+        });
       } else if (entryFormSource === "Bireysel Başvuru") {
-        // Bireysel başvuru için doğrudan supabase'e yazıyoruz (eski sistemde böyleydi)
-        const { error } = await supabase.from("individual_requests").insert({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, note: topicNote, request_date: today, status: "pending" });
-        if (error) throw new Error(error.message || "Bireysel başvuru veritabanına yazılamadı.");
+        response = await fetch("/api/individual-requests", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, note: topicNote, request_date: today, status: "pending" })
+        });
       } else if (entryFormSource === "Veli Talepleri") {
         response = await fetch("/api/parent-meeting-requests", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, parent_name: entryForm.referrer, detail: topicNote, request_date: today, status: "pending" })
         });
       } else if (entryFormSource === "Öğrenci Bildirimleri") {
         response = await fetch("/api/student-incidents", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ target_student_name: entryForm.student_name, target_class_display: entryForm.class_display, target_class_key: entryForm.class_key, reporter_student_name: entryForm.referrer, description: topicNote, incident_date: today, wants_meeting: true })
+          body: JSON.stringify({ target_student_name: entryForm.student_name, target_class_display: entryForm.class_display, target_class_key: entryForm.class_key, reporter_student_name: entryForm.referrer, description: topicNote, incident_date: today })
         });
       }
 

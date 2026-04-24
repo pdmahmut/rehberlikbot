@@ -8,19 +8,14 @@ import {
   BookOpen,
   Brain,
   Calendar,
-  CalendarDays,
   ChevronDown,
   ChevronRight,
-  FolderOpen,
   GraduationCap,
-  History,
   LogOut,
   Menu,
   MessageSquare,
   KeyRound,
   Search,
-  Target,
-  UserCheck,
   Users,
   X,
 } from 'lucide-react';
@@ -46,19 +41,9 @@ const menuCategories = [
     items: [
       { href: '/panel/basvurular', label: 'Başvurular', icon: MessageSquare },
       { href: '/panel/ogrenci-listesi', label: 'Öğrenci Listesi', icon: GraduationCap },
-      { href: '/panel/ogrenci-gecmisi', label: 'Öğrenci Geçmişi', icon: History },
-      { href: '/panel/vaka-dosyalari', label: 'Vaka Dosyaları', icon: FolderOpen },
-      { href: '/panel/ogrenciler', label: 'Öğrenci Yönetimi', icon: Users },
     ],
   },
-  {
-    title: 'Analiz ve Raporlar',
-    items: [
-      { href: '/panel/nedenler', label: 'Yönlendirme Nedenleri', icon: Target },
-      { href: '/panel/zaman', label: 'Zaman İstatistikleri', icon: CalendarDays },
-      { href: '/panel/ogretmen', label: 'Öğretmen ve Sınıf', icon: UserCheck },
-    ],
-  },
+
 ];
 
 const teacherMenuItems = [
@@ -85,7 +70,6 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
     'Genel',
     'Sınıf Rehberliği',
     'Öğrenci Takip',
-    'Analiz ve Raporlar',
   ]);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const [bannerDismissed, setBannerDismissed] = useState(false);

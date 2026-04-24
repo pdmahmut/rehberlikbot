@@ -46,7 +46,8 @@ export async function POST(request: NextRequest) {
         class_key: class_key || null,
         class_display: class_display || null,
         note: note || null,
-        status: 'Bekliyor'
+        status: body.status || 'pending',
+        request_date: body.request_date || new Date().toISOString().slice(0, 10)
       })
       .select()
       .single();
