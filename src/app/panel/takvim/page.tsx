@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { 
   Appointment, 
+  ApplicationSourceType,
   PARTICIPANT_TYPES, 
   APPOINTMENT_LOCATIONS,
   LESSON_SLOTS,
@@ -39,6 +40,15 @@ import {
   getClassRequestDisplayCategory,
   getClassRequestTeacherNote,
 } from "@/lib/classRequests";
+import {
+  buildSourceRecordKey,
+  getObservationProxyMeta,
+  getPanelSourceLabel,
+  getSourceTypeFromPanelLabel,
+  isAppointmentLinkedToSource,
+  isPendingStatus,
+  normalizeSourceTypeOrNull,
+} from "@/lib/guidanceApplications";
 
 const normalizeLessonSlot = (timeStr?: string | null) => {
   if (!timeStr) return '';
@@ -215,6 +225,37 @@ const normalizeClassValue = (value?: string | null) =>
     .replace(/[\/\-_.()]/g, "")
     .trim();
 
+const stripStudentNumberPrefix = (value?: string | null) =>
+  String(value || "").replace(/^\s*\d+\s+/, "").trim();
+
+const formatCompactClassDisplay = (value?: string | null) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const normalized = raw
+    .replace(/\s*\/\s*/g, "/")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const fullMatch = normalized.match(/^(\d+)\.?\s*Sınıf\s*\/?\s*([A-ZÇĞİÖŞÜ])\s*Şubesi$/i);
+  if (fullMatch) {
+    return `${fullMatch[1]}/${fullMatch[2].toLocaleUpperCase("tr-TR")}`;
+  }
+
+  const shortMatch = normalized.match(/^(\d+)\s*[-/]?\s*([A-ZÇĞİÖŞÜ])$/i);
+  if (shortMatch) {
+    return `${shortMatch[1]}/${shortMatch[2].toLocaleUpperCase("tr-TR")}`;
+  }
+
+  return raw;
+};
+
+const getAppointmentDisplayTitle = (appointment: Partial<Appointment>) => {
+  const participantName = stripStudentNumberPrefix(appointment.participant_name);
+  const participantClass = formatCompactClassDisplay(appointment.participant_class);
+  return participantClass ? `${participantClass} ${participantName}`.trim() : participantName;
+};
+
 const parseApplicationNote = (rawValue?: string | null) => {
   if (!rawValue) return { purpose: "", preparationNote: "" };
   const trimmed = rawValue.trim();
@@ -292,9 +333,17 @@ type PendingApplicationRecord = {
   class_display?: string | null;
   class_key?: string | null;
   source: "Veli Talepleri" | "Öğretmen Yönlendirmeleri" | "Öğrenci Bildirimleri" | "Gözlem Havuzu" | "Bireysel Başvuru";
+  source_type: ApplicationSourceType;
+  source_record_id: string;
+  legacy_observation_id?: string | null;
   referrer?: string;
   date: string;
   note?: string | null;
+};
+
+type WeekSlotSelection = {
+  date: Date;
+  slot: string;
 };
 
 const normalizeStudentName = (value?: string | null) =>
@@ -332,9 +381,41 @@ const matchesApplicationToAppointment = (
   );
 };
 
-const isPendingApplicationStatus = (status?: string | null) => {
-  if (!status) return true;
-  return ["pending", "new", "reviewing", "Bekliyor"].includes(String(status));
+const matchesPendingRecordToAppointment = (
+  appointment: Partial<Appointment>,
+  record: PendingApplicationRecord
+) => {
+  // Önce kesin kaynak bağlantısı kontrolü
+  if (isAppointmentLinkedToSource(appointment, record.source_type, record.source_record_id)) {
+    return true;
+  }
+
+  // Eğer randevunun kendi kaynak bilgisi varsa ama yukarıdaki eşleşme sağlanamadıysa,
+  // bu randevu başka bir başvuruya aittir. İsim benzerliği ile diğer başvuruları gizlememeli.
+  const hasSourceInfo =
+    appointment.source_application_type ||
+    appointment.source_application_id ||
+    appointment.source_individual_request_id;
+  
+  if (hasSourceInfo) return false;
+
+  // Randevu tarihini ve başvuru tarihini al (YYYY-MM-DD)
+  const recordDateStr = (record.date || "").slice(0, 10);
+  const aptDateStr = appointment.appointment_date || "";
+
+  // Eski bir randevu, KENDİSİNDEN SONRA yapılan yeni bir başvuruyu kapatmamalı!
+  // Başvurular sayfasındaki mantığın aynısı: appointment_date >= recordDate olmalı.
+  if (aptDateStr && aptDateStr < recordDateStr) {
+    return false;
+  }
+
+  // Sadece kaynak bağlantısı olmayan ve başvurudan sonraki/aynı günkü randevular için isim eşleşmesi yap
+  return matchesApplicationToAppointment(
+    appointment,
+    record.student_name,
+    record.class_display,
+    record.class_key
+  );
 };
 
 export default function TakvimPage() {
@@ -365,6 +446,7 @@ export default function TakvimPage() {
 
   // Modallar
   const [dayModalDate, setDayModalDate] = useState<Date | null>(null);
+  const [weekSlotModal, setWeekSlotModal] = useState<WeekSlotSelection | null>(null);
 
   // Sınıf Talebi Düzenleme Modal State'leri
   const [showCrEditModal, setShowCrEditModal] = useState(false);
@@ -438,24 +520,17 @@ export default function TakvimPage() {
       const preparationNoteParam = params.get("preparationNote");
 
       if (sName && sId && sType) {
+        const normalizedSourceType =
+          normalizeSourceTypeOrNull(sType) || getSourceTypeFromPanelLabel(sType);
         let appType = "";
         let indId = "";
         let appId = "";
 
-        if (sType === "Bireysel Başvuru") {
-          indId = sId.includes('-') ? sId.split('-')[1] : sId;
-        } else if (sType === "Öğretmen Yönlendirmeleri") {
-          appType = "teacher_referral";
-          appId = sId.includes('-') ? sId.split('-')[1] : sId;
-        } else if (sType === "Öğrenci Bildirimleri") {
-          appType = "student_incident";
-          appId = sId.includes('-') ? sId.split('-')[1] : sId;
-        } else if (sType === "Veli Talepleri") {
-          appType = "parent_meeting";
-          appId = sId.includes('-') ? sId.split('-')[1] : sId;
-        } else if (sType === "Gözlem Havuzu") {
-          appType = "observation";
-          appId = sId.includes('-') ? sId.split('-')[1] : sId;
+        if (normalizedSourceType === "self_application") {
+          indId = sId;
+        } else if (normalizedSourceType) {
+          appType = normalizedSourceType;
+          appId = sId;
         }
 
         // Find matching class from the loaded classes list
@@ -776,6 +851,14 @@ export default function TakvimPage() {
     setShowAppointmentModal(true);
   };
 
+  const openWeekSlotModal = (date: Date, slot: string) => {
+    setWeekSlotModal({ date, slot });
+  };
+
+  const closeWeekSlotModal = () => {
+    setWeekSlotModal(null);
+  };
+
   const toggleEmptySlotDetails = (date: Date, slot: string) => {
     const key = `${getLocalDateString(date)}-${slot}`;
     setExpandedEmptySlots((prev) => ({
@@ -814,41 +897,17 @@ export default function TakvimPage() {
   };
 
   const getApplicationSourceMeta = (record: PendingApplicationRecord) => {
-    if (record.source === "Bireysel Başvuru") {
+    if (record.source_type === "self_application") {
       return {
         source_application_id: "",
         source_application_type: "",
-        source_individual_request_id: record.id.replace("individual-", "")
-      };
-    }
-
-    const sourceId = record.id.includes("-") ? record.id.split("-").slice(1).join("-") : record.id;
-
-    if (record.source === "Öğretmen Yönlendirmeleri") {
-      return {
-        source_application_id: sourceId,
-        source_application_type: "teacher_referral",
-        source_individual_request_id: ""
-      };
-    }
-    if (record.source === "Öğrenci Bildirimleri") {
-      return {
-        source_application_id: sourceId,
-        source_application_type: "student_incident",
-        source_individual_request_id: ""
-      };
-    }
-    if (record.source === "Veli Talepleri") {
-      return {
-        source_application_id: sourceId,
-        source_application_type: "parent_meeting",
-        source_individual_request_id: ""
+        source_individual_request_id: record.source_record_id
       };
     }
 
     return {
-      source_application_id: sourceId,
-      source_application_type: "observation",
+      source_application_id: record.source_record_id,
+      source_application_type: record.source_type,
       source_individual_request_id: ""
     };
   };
@@ -909,30 +968,52 @@ export default function TakvimPage() {
 
       const activeAppointments = appointmentResult.data || [];
       const records: PendingApplicationRecord[] = [];
+      const seenSourceKeys = new Set<string>();
+      const actualSourceKeys = new Set<string>();
 
       const pushIfPending = (record: PendingApplicationRecord) => {
+        const sourceKey = buildSourceRecordKey(record.source_type, record.source_record_id);
+        if (sourceKey && seenSourceKeys.has(sourceKey)) return;
+
         const hasAppointment = activeAppointments.some((appointment) =>
-          matchesApplicationToAppointment(
-            appointment,
-            record.student_name,
-            record.class_display,
-            record.class_key
-          )
+          matchesPendingRecordToAppointment(appointment, record)
         );
 
         if (!hasAppointment) {
+          if (sourceKey) {
+            seenSourceKeys.add(sourceKey);
+          }
           records.push(record);
         }
       };
 
+      (referralResult.data || []).forEach((item: any) => {
+        const key = buildSourceRecordKey("teacher_referral", item.id);
+        if (key) actualSourceKeys.add(key);
+      });
+      (requestResult.data || []).forEach((item: any) => {
+        const key = buildSourceRecordKey("parent_request", item.id);
+        if (key) actualSourceKeys.add(key);
+      });
+      (individualRequestResult.data || []).forEach((item: any) => {
+        const key = buildSourceRecordKey("self_application", item.id);
+        if (key) actualSourceKeys.add(key);
+      });
       (incidentResult.data || []).forEach((item: any) => {
-        if (!isPendingApplicationStatus(item.status)) return;
+        const key = buildSourceRecordKey("student_report", item.id);
+        if (key) actualSourceKeys.add(key);
+      });
+
+      (incidentResult.data || []).forEach((item: any) => {
+        if (!isPendingStatus(item.status) && item.status !== "converted" && item.status !== "scheduled") return;
         pushIfPending({
           id: `incident-${item.id}`,
           student_name: item.target_student_name,
           class_display: item.target_class_display,
           class_key: item.target_class_key,
           source: "Öğrenci Bildirimleri",
+          source_type: "student_report",
+          source_record_id: item.id,
           referrer: item.record_role === "linked_reporter" ? item.reporter_student_name || undefined : undefined,
           date: item.created_at || item.incident_date || new Date().toISOString(),
           note: item.description
@@ -940,26 +1021,40 @@ export default function TakvimPage() {
       });
 
       (observationResult.data || []).forEach((item: any) => {
-        if (!isPendingApplicationStatus(item.status)) return;
+        if (!isPendingStatus(item.status) && item.status !== "converted" && item.status !== "scheduled") return;
+        const proxyMeta = getObservationProxyMeta(item);
+
+        if (proxyMeta.isProxy) {
+          const proxyKey = buildSourceRecordKey(proxyMeta.sourceType, proxyMeta.sourceRecordId);
+          if (proxyKey && actualSourceKeys.has(proxyKey)) return;
+        }
+
         pushIfPending({
-          id: `observation-${item.id}`,
+          id: proxyMeta.isProxy
+            ? `${proxyMeta.sourceType}-${proxyMeta.sourceRecordId || item.id}`
+            : `observation-${item.id}`,
           student_name: item.student_name,
           class_display: item.class_display,
           class_key: item.class_key,
-          source: "Gözlem Havuzu",
+          source: getPanelSourceLabel(proxyMeta.sourceType),
+          source_type: proxyMeta.sourceType,
+          source_record_id: proxyMeta.sourceRecordId || item.id,
+          legacy_observation_id: proxyMeta.isProxy ? proxyMeta.legacyObservationId : null,
           date: item.created_at || item.observed_at || new Date().toISOString(),
           note: item.note
         });
       });
 
       (referralResult.data || []).forEach((item: any) => {
-        if (!isPendingApplicationStatus(item.status)) return;
+        if (!isPendingStatus(item.status) && item.status !== "converted" && item.status !== "scheduled") return;
         pushIfPending({
           id: `referral-${item.id}`,
           student_name: item.student_name,
           class_display: item.class_display,
           class_key: item.class_key,
           source: "Öğretmen Yönlendirmeleri",
+          source_type: "teacher_referral",
+          source_record_id: item.id,
           referrer: item.teacher_name,
           date: item.created_at || new Date().toISOString(),
           note: item.note || item.reason
@@ -967,13 +1062,15 @@ export default function TakvimPage() {
       });
 
       (requestResult.data || []).forEach((item: any) => {
-        if (!isPendingApplicationStatus(item.status)) return;
+        if (!isPendingStatus(item.status) && item.status !== "converted" && item.status !== "scheduled") return;
         pushIfPending({
           id: `request-${item.id}`,
           student_name: item.student_name,
           class_display: item.class_display,
           class_key: item.class_key,
           source: "Veli Talepleri",
+          source_type: "parent_request",
+          source_record_id: item.id,
           referrer: item.parent_name || undefined,
           date: item.created_at || new Date().toISOString(),
           note: item.detail || item.subject
@@ -981,13 +1078,15 @@ export default function TakvimPage() {
       });
 
       (individualRequestResult.data || []).forEach((item: any) => {
-        if (!isPendingApplicationStatus(item.status)) return;
+        if (!isPendingStatus(item.status) && item.status !== "converted" && item.status !== "scheduled") return;
         pushIfPending({
           id: `individual-${item.id}`,
           student_name: item.student_name,
           class_display: item.class_display,
           class_key: item.class_key,
           source: "Bireysel Başvuru",
+          source_type: "self_application",
+          source_record_id: item.id,
           date: item.created_at || new Date().toISOString(),
           note: item.note
         });
@@ -1329,7 +1428,7 @@ export default function TakvimPage() {
       appointments.forEach(app => {
         const colors: any = { planned: 'blue', attended: 'green', not_attended: 'red', postponed: 'amber', cancelled: 'slate' };
         const pType = app.participant_type === 'student' ? 'Öğrenci' : app.participant_type === 'parent' ? 'Veli' : 'Öğretmen';
-        allEvents.push({ id: app.id, date: app.appointment_date, time: app.start_time, title: app.participant_class ? `${app.participant_class} ${app.participant_name}` : app.participant_name, type: 'appointment', status: app.status, color: colors[app.status] || 'blue', data: app });
+        allEvents.push({ id: app.id, date: app.appointment_date, time: app.start_time, title: getAppointmentDisplayTitle(app), type: 'appointment', status: app.status, color: colors[app.status] || 'blue', data: app });
       });
     }
     if (showActivities) {
@@ -1641,6 +1740,70 @@ export default function TakvimPage() {
       />
 
       {/* Ay Görünümü Gününe Tıklayınca Açılan Gün Detay Modalı */}
+      {weekSlotModal && (
+        <div className="fixed inset-0 z-[105] flex items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
+          <div className="absolute inset-0" onClick={closeWeekSlotModal} aria-hidden="true" />
+          <div className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl bg-teal-50 p-2.5">
+                  <CalendarCheck className="h-5 w-5 text-teal-600" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-800">Boş Ders Saati</h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {weekSlotModal.date.getDate()} {MONTHS_TR[weekSlotModal.date.getMonth()]} {weekSlotModal.date.getFullYear()}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    {DAYS_FULL_TR[weekSlotModal.date.getDay() === 0 ? 6 : weekSlotModal.date.getDay() - 1]} · {formatLessonSlotLabel(weekSlotModal.slot)}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeWeekSlotModal}
+                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 p-5">
+              <p className="text-sm text-slate-500">
+                Ders saati zaten seçili. Bu kutu için doğrudan işlem yapabilirsiniz.
+              </p>
+              <Button
+                type="button"
+                onClick={() => {
+                  const selectedDate = getLocalDateString(weekSlotModal.date);
+                  const selectedSlot = weekSlotModal.slot;
+                  closeWeekSlotModal();
+                  openAppointmentModalForSlot(selectedDate, selectedSlot);
+                }}
+                className="h-10 w-full rounded-xl bg-teal-600 text-sm font-semibold text-white hover:bg-teal-700"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Randevu ekle
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const selectedDate = getLocalDateString(weekSlotModal.date);
+                  const selectedSlot = weekSlotModal.slot;
+                  closeWeekSlotModal();
+                  openPendingApplicationsModal(selectedDate, selectedSlot);
+                }}
+                className="h-10 w-full rounded-xl border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                <Users className="mr-2 h-4 w-4" />
+                Bekleyen başvurular
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {dayModalDate && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
           <div className="absolute inset-0" onClick={() => setDayModalDate(null)} aria-hidden="true" />
@@ -2402,7 +2565,7 @@ export default function TakvimPage() {
           {viewType === 'week' && (
             <Card className="border-slate-200 overflow-hidden shadow-sm">
               <CardContent className="p-0">
-                <table className="w-full border-collapse">
+                <table className="w-full table-fixed border-collapse">
                   <thead>
                     <tr>
                       <th className="w-[52px] border-b border-r border-slate-200 bg-slate-50 p-1" />
@@ -2438,14 +2601,18 @@ export default function TakvimPage() {
                             return (
                               <td
                                 key={dayIdx}
-                                className={`border-b border-r border-slate-100 p-1 align-top last:border-r-0 ${
+                                className={`h-[76px] border-b border-r border-slate-100 p-1 align-middle last:border-r-0 ${
                                   isTodayCol ? 'bg-teal-50/30' : ''
                                 }`}
                               >
                                 {periodEvents.length === 0 ? (
-                                  <div className="flex h-[56px] items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50">
-                                    <p className="text-[10px] text-slate-300">Bu saat boş</p>
-                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => openWeekSlotModal(date, String(lessonNum))}
+                                    className="flex h-[64px] w-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 transition-colors hover:border-teal-300 hover:bg-teal-50/60"
+                                  >
+                                    <p className="text-[10px] font-medium text-slate-400">Bu saat boş</p>
+                                  </button>
                                 ) : (
                                   <div className="space-y-1">
                                     {periodEvents.map(e => {
@@ -2461,26 +2628,26 @@ export default function TakvimPage() {
                                       const guidanceTeacher = e.data?.lesson_teacher || e.data?.teacher_name || '';
 
                                       return (
-                                        <div key={e.id} className={`min-h-[56px] rounded-lg border p-1.5 ${cardBg} ${isCompleted ? 'opacity-60' : ''}`}>
+                                        <div key={e.id} className={`flex h-[64px] w-full items-center justify-center overflow-hidden rounded-lg border px-1.5 py-2 ${cardBg} ${isCompleted ? 'opacity-60' : ''}`}>
                                           {isAppointment ? (
-                                            <div className="flex h-full flex-col items-center justify-center text-center">
-                                              <p className={`text-[11px] font-bold leading-tight ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-800'}`} title={titleText}>
+                                            <div className="flex h-full w-full flex-col items-center justify-center text-center">
+                                              <p className={`line-clamp-2 px-1 text-[11px] font-bold leading-tight ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-800'}`} title={titleText}>
                                                 {titleText}
                                               </p>
                                               {isCompleted && <p className="text-[9px] text-emerald-600 mt-0.5">✓ Tamamlandı</p>}
                                             </div>
                                           ) : (
-                                            <div className="flex h-full flex-col justify-center text-center">
-                                              <p className={`text-[12px] font-extrabold leading-tight ${isCompleted ? 'text-slate-400 line-through' : isClassReq ? 'text-violet-900' : 'text-amber-900'}`}>
+                                            <div className="flex h-full w-full flex-col items-center justify-center text-center">
+                                              <p className={`line-clamp-2 px-1 text-[12px] font-extrabold leading-tight ${isCompleted ? 'text-slate-400 line-through' : isClassReq ? 'text-violet-900' : 'text-amber-900'}`}>
                                                 {guidanceClass}
                                               </p>
                                               {guidanceTopic && (
-                                                <p className={`text-[9px] mt-0.5 leading-tight truncate ${isCompleted ? 'text-slate-400' : isClassReq ? 'text-violet-600' : 'text-amber-700'}`} title={guidanceTopic}>
+                                                <p className={`line-clamp-1 px-1 text-[9px] leading-tight ${isCompleted ? 'text-slate-400' : isClassReq ? 'text-violet-600' : 'text-amber-700'}`} title={guidanceTopic}>
                                                   {guidanceTopic}
                                                 </p>
                                               )}
                                               {guidanceTeacher && (
-                                                <p className="text-[8px] text-slate-400 mt-0.5 truncate">{guidanceTeacher}</p>
+                                                <p className="line-clamp-1 px-1 text-[8px] leading-tight text-slate-400">{guidanceTeacher}</p>
                                               )}
                                             </div>
                                           )}

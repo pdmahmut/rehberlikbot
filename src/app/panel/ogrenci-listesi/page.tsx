@@ -32,6 +32,12 @@ import {
   TeacherDistributionChart,
   ReferralTimeline,
 } from "@/components/charts/StudentCharts";
+import {
+  buildSourceRecordKey,
+  getObservationProxyMeta,
+  isAppointmentLinkedToSource,
+  isPendingStatus,
+} from "@/lib/guidanceApplications";
 
 interface Student {
   value: string;
@@ -64,6 +70,51 @@ interface StudentHistory {
     topReason: { name: string; count: number } | null;
   };
 }
+
+const normalizeClassValue = (value?: string | null) =>
+  (value || "")
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/[\/\-_.()]/g, "")
+    .trim();
+
+const matchesApplicationToAppointment = (
+  appointment: any,
+  studentName?: string | null,
+  classDisplay?: string | null,
+  classKey?: string | null
+) => {
+  const appointmentName = (appointment?.participant_name || "")
+    .replace(/^\d+\s+/, "")
+    .trim()
+    .toLowerCase();
+  const normalizedStudentName = (studentName || "")
+    .replace(/^\d+\s+/, "")
+    .trim()
+    .toLowerCase();
+
+  if (!appointmentName || !normalizedStudentName) return false;
+
+  const nameMatch =
+    appointmentName === normalizedStudentName ||
+    appointmentName.includes(normalizedStudentName) ||
+    normalizedStudentName.includes(appointmentName);
+
+  if (!nameMatch) return false;
+
+  const appointmentClass = normalizeClassValue(appointment?.participant_class);
+  const applicationClass = normalizeClassValue(classDisplay || classKey);
+
+  if (!appointmentClass || !applicationClass) return true;
+
+  return (
+    appointmentClass === applicationClass ||
+    appointmentClass.includes(applicationClass) ||
+    applicationClass.includes(appointmentClass)
+  );
+};
 
 export default function OgrenciListesiPage() {
   const searchParams = useSearchParams();
@@ -181,10 +232,12 @@ export default function OgrenciListesiPage() {
       const appRes = await fetch(
         `/api/appointments?search=${encodeURIComponent(cleanName)}&status=planned&from=${today}`
       );
+      let plannedAppointments: any[] = [];
       if (appRes.ok) {
         const data = await appRes.json();
         const allApps = Array.isArray(data) ? data : data.appointments || [];
-        setActiveAppointments(allApps.filter((a: any) => matchName(a.participant_name)));
+        plannedAppointments = allApps.filter((a: any) => matchName(a.participant_name));
+        setActiveAppointments(plannedAppointments);
       } else {
         setActiveAppointments([]);
       }
@@ -192,15 +245,105 @@ export default function OgrenciListesiPage() {
       // 2. Bekleyen başvurular — tüm tablolardan çek
       if (supabase) {
         const pending: any[] = [];
+        const seenSourceKeys = new Set<string>();
+        const actualSourceKeys = new Set<string>();
+
+        // Randevu eşleşme: SADECE kaynak bağlantısı (source link) üzerinden kontrol et.
+        // İsim bazlı eşleşmeyi yalnızca randevuda kaynak bilgisi varken kullan,
+        // aksi halde aynı öğrencinin farklı başvuruları yanlışlıkla filtrelenir.
+        const hasMatchingAppointment = (record: {
+          source_type: string;
+          source_record_id: string;
+          student_name: string;
+          class_display?: string | null;
+          class_key?: string | null;
+        }) =>
+          plannedAppointments.some((appointment) => {
+            // Önce kaynak bağlantısı ile kontrol et (kesin eşleşme)
+            if (
+              isAppointmentLinkedToSource(
+                appointment,
+                record.source_type,
+                record.source_record_id
+              )
+            ) {
+              return true;
+            }
+
+            // İsim bazlı eşleşme: SADECE randevuda kaynak bilgisi YOKSA kullan.
+            // Randevuda kaynak bilgisi varsa (source_application_type veya
+            // source_application_id doluysa) bu randevu zaten belirli bir başvuruya
+            // bağlıdır, diğer başvuruları gizlememeli.
+            const hasSourceInfo =
+              appointment.source_application_type ||
+              appointment.source_application_id ||
+              appointment.source_individual_request_id;
+            if (hasSourceInfo) return false;
+
+            return matchesApplicationToAppointment(
+              appointment,
+              record.student_name,
+              record.class_display,
+              record.class_key
+            );
+          });
+
+        const pushPending = (record: any) => {
+          const sourceKey = buildSourceRecordKey(record.source_type, record.source_record_id);
+          if (sourceKey && seenSourceKeys.has(sourceKey)) return;
+          if (hasMatchingAppointment(record)) return;
+          if (sourceKey) seenSourceKeys.add(sourceKey);
+          pending.push(record);
+        };
+        const [refKeyData, indKeyData, incKeyData, parKeyData] = await Promise.all([
+          supabase.from("referrals").select("id").ilike("student_name", `%${cleanName}%`),
+          supabase.from("individual_requests").select("id").ilike("student_name", `%${cleanName}%`),
+          supabase.from("student_incidents").select("id").ilike("target_student_name", `%${cleanName}%`),
+          supabase.from("parent_meeting_requests").select("id").ilike("student_name", `%${cleanName}%`),
+        ]);
+
+        (refKeyData.data || []).forEach((r: any) => {
+          const key = buildSourceRecordKey("teacher_referral", r.id);
+          if (key) actualSourceKeys.add(key);
+        });
+        (indKeyData.data || []).forEach((r: any) => {
+          const key = buildSourceRecordKey("self_application", r.id);
+          if (key) actualSourceKeys.add(key);
+        });
+        (incKeyData.data || []).forEach((r: any) => {
+          const key = buildSourceRecordKey("student_report", r.id);
+          if (key) actualSourceKeys.add(key);
+        });
+        (parKeyData.data || []).forEach((r: any) => {
+          const key = buildSourceRecordKey("parent_request", r.id);
+          if (key) actualSourceKeys.add(key);
+        });
 
         // observation_pool (merkezi havuz + gözlemler)
         const { data: obsData } = await supabase
           .from("observation_pool")
           .select("*")
           .ilike("student_name", `%${cleanName}%`)
-          .eq("status", "pending");
+          .order("created_at", { ascending: false });
         (obsData || []).filter((r: any) => matchName(r.student_name)).forEach((r: any) => {
-          pending.push({ ...r, _source: r.source_type || "observation", _note: r.note || "" });
+          if (!isPendingStatus(r.status) && r.status !== "converted" && r.status !== "scheduled") return;
+          const proxyMeta = getObservationProxyMeta(r);
+          if (proxyMeta.isProxy) {
+            const proxyKey = buildSourceRecordKey(proxyMeta.sourceType, proxyMeta.sourceRecordId);
+            if (proxyKey && actualSourceKeys.has(proxyKey)) return;
+          }
+
+          pushPending({
+            id: proxyMeta.isProxy ? `${proxyMeta.sourceType}-${proxyMeta.sourceRecordId || r.id}` : r.id,
+            student_name: r.student_name,
+            class_display: r.class_display,
+            class_key: r.class_key,
+            source_type: proxyMeta.sourceType,
+            source_record_id: proxyMeta.sourceRecordId || r.id,
+            _source: proxyMeta.sourceType,
+            _note: r.note || "",
+            created_at: r.created_at || r.observed_at,
+          });
         });
 
         // referrals — randevu verilmemiş olanlar
@@ -210,8 +353,9 @@ export default function OgrenciListesiPage() {
           .ilike("student_name", `%${cleanName}%`);
         (refData || []).filter((r: any) => matchName(r.student_name)).forEach((r: any) => {
           // referrals'ta status yok, observation_pool'da zaten varsa tekrar ekleme
+          // Sadece aynı source_record_id ile kontrol et (tür bazlı değil)
           const alreadyInPool = pending.some(
-            (p) => p.source_record_id === r.id || p._source === "teacher_referral"
+            (p) => p.source_record_id === r.id && (p._source === "teacher_referral" || p.source_type === "teacher_referral")
           );
           if (!alreadyInPool) {
             // Bu yönlendirme için randevu var mı kontrol et
@@ -219,7 +363,7 @@ export default function OgrenciListesiPage() {
             const refDate = new Date(r.created_at);
             const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
             if (refDate > thirtyDaysAgo) {
-              pending.push({ id: r.id, student_name: r.student_name, _source: "teacher_referral", _note: r.reason || "", created_at: r.created_at });
+              pushPending({ id: r.id, student_name: r.student_name, source_type: "teacher_referral", source_record_id: r.id, _source: "teacher_referral", _note: r.reason || "", created_at: r.created_at });
             }
           }
         });
@@ -228,12 +372,11 @@ export default function OgrenciListesiPage() {
         const { data: indData } = await supabase
           .from("individual_requests")
           .select("*")
-          .ilike("student_name", `%${cleanName}%`)
-          .eq("status", "pending");
-        (indData || []).filter((r: any) => matchName(r.student_name)).forEach((r: any) => {
+          .ilike("student_name", `%${cleanName}%`);
+        (indData || []).filter((r: any) => matchName(r.student_name) && (isPendingStatus(r.status) || r.status === "converted" || r.status === "scheduled")).forEach((r: any) => {
           const alreadyInPool = pending.some((p) => p.source_record_id === r.id);
           if (!alreadyInPool) {
-            pending.push({ id: r.id, student_name: r.student_name, _source: "self_application", _note: r.note || "", created_at: r.created_at });
+            pushPending({ id: r.id, student_name: r.student_name, source_type: "self_application", source_record_id: r.id, _source: "self_application", _note: r.note || "", created_at: r.created_at });
           }
         });
 
@@ -241,12 +384,11 @@ export default function OgrenciListesiPage() {
         const { data: incData } = await supabase
           .from("student_incidents")
           .select("*")
-          .ilike("student_name", `%${cleanName}%`)
-          .in("status", ["new", "reviewing"]);
-        (incData || []).filter((r: any) => matchName(r.student_name)).forEach((r: any) => {
+          .ilike("target_student_name", `%${cleanName}%`);
+        (incData || []).filter((r: any) => matchName(r.target_student_name) && (isPendingStatus(r.status) || r.status === "converted" || r.status === "scheduled")).forEach((r: any) => {
           const alreadyInPool = pending.some((p) => p.source_record_id === r.id);
           if (!alreadyInPool) {
-            pending.push({ id: r.id, student_name: r.student_name, _source: "student_report", _note: r.description || r.note || "", created_at: r.created_at || r.incident_date });
+            pushPending({ id: r.id, student_name: r.target_student_name, class_display: r.target_class_display, class_key: r.target_class_key, source_type: "student_report", source_record_id: r.id, _source: "student_report", _note: r.description || r.note || "", created_at: r.created_at || r.incident_date });
           }
         });
 
@@ -256,19 +398,53 @@ export default function OgrenciListesiPage() {
           .select("*")
           .ilike("student_name", `%${cleanName}%`);
         (parData || []).filter((r: any) => matchName(r.student_name)).forEach((r: any) => {
-          const status = (r.status || "").toLowerCase();
-          if (status === "pending" || status === "new" || !status) {
+          // isPendingStatus: "pending", "new", "bekliyor", "reviewing", boş değer hepsini kapsar
+          if (isPendingStatus(r.status) || r.status === "converted" || r.status === "scheduled") {
             const alreadyInPool = pending.some((p) => p.source_record_id === r.id);
             if (!alreadyInPool) {
-              pending.push({ id: r.id, student_name: r.student_name, _source: "parent_request", _note: r.note || r.reason || "", created_at: r.created_at });
+              pushPending({ id: r.id, student_name: r.student_name, source_type: "parent_request", source_record_id: r.id, _source: "parent_request", _note: r.note || r.reason || "", created_at: r.created_at });
             }
           }
         });
 
         // ID bazlı tekrar kaldır
         const uniqueMap = new Map();
-        pending.forEach((p) => {
-          if (!uniqueMap.has(p.id)) uniqueMap.set(p.id, p);
+        pending.forEach((raw) => {
+          const normalized = {
+            ...raw,
+            student_name: raw.student_name || raw.target_student_name,
+            class_display: raw.class_display || raw.target_class_display || null,
+            class_key: raw.class_key || raw.target_class_key || null,
+            source_type: raw.source_type || raw._source || "observation",
+            source_record_id: raw.source_record_id || raw.id,
+            _source: raw._source || raw.source_type || "observation",
+            _note:
+              raw._note ||
+              raw.note ||
+              raw.reason ||
+              raw.description ||
+              raw.detail ||
+              raw.subject ||
+              "",
+            created_at: raw.created_at || raw.incident_date || raw.observed_at,
+          };
+
+          const sourceKey = buildSourceRecordKey(
+            normalized.source_type,
+            normalized.source_record_id
+          );
+          if (!sourceKey) return;
+
+          if (
+            normalized.source_type !== "observation" &&
+            raw.source_type === "observation" &&
+            actualSourceKeys.has(sourceKey)
+          ) {
+            return;
+          }
+
+          if (hasMatchingAppointment(normalized)) return;
+          if (!uniqueMap.has(sourceKey)) uniqueMap.set(sourceKey, normalized);
         });
         setPendingApplications(Array.from(uniqueMap.values()));
       } else {

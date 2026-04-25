@@ -12,11 +12,19 @@ import { toast } from "sonner";
 import { AppointmentOutcomeModal, type AppointmentOutcomeChoice } from "@/components/AppointmentOutcomeModal";
 import {
   ReferralRecord,
+  ApplicationSourceType,
   ObservationPoolRecord,
   StudentIncidentRecord,
   ParentMeetingRequestRecord,
   IndividualRequestRecord
 } from "@/types";
+import {
+  buildSourceRecordKey,
+  getObservationProxyMeta,
+  getPanelSourceLabel,
+  getSourceTypeFromPanelLabel,
+  isAppointmentLinkedToSource,
+} from "@/lib/guidanceApplications";
 
 type ApplicationRecord = {
   id: string;
@@ -24,6 +32,9 @@ type ApplicationRecord = {
   class_display?: string | null;
   class_key?: string | null;
   source: "Veli Talepleri" | "Öğretmen Yönlendirmeleri" | "Öğrenci Bildirimleri" | "Gözlem Havuzu" | "Bireysel Başvuru";
+  source_type: ApplicationSourceType;
+  source_record_id: string;
+  legacy_observation_id?: string | null;
   referrer?: string;
   date: string;
   status: "Görüşüldü" | "Randevu verildi" | "Bekliyor";
@@ -137,6 +148,19 @@ const findMatchedAppointment = (
   ) || null;
 };
 
+const findMatchedAppointmentBySource = (
+  appointments: any[],
+  sourceType: ApplicationSourceType,
+  sourceRecordId: string,
+  studentName?: string | null,
+  classDisplay?: string | null,
+  classKey?: string | null
+) =>
+  appointments.find((apt) =>
+    isAppointmentLinkedToSource(apt, sourceType, sourceRecordId) ||
+    matchesAppointment(apt, studentName, classDisplay, classKey)
+  ) || null;
+
 const getLatestTimestamp = (...values: Array<string | null | undefined>) => {
   const validValues = values
     .filter((value): value is string => Boolean(value))
@@ -211,8 +235,8 @@ export default function BasvurularPage() {
     params.set("studentName", record.student_name);
     if (record.class_display) params.set("classDisplay", record.class_display);
     if (record.class_key) params.set("classKey", record.class_key);
-    params.set("sourceId", record.id);
-    params.set("sourceType", record.source);
+    params.set("sourceId", record.source_record_id);
+    params.set("sourceType", record.source_type);
     if (parsedNote.topic) params.set("purpose", parsedNote.topic);
     if (parsedNote.note) params.set("preparationNote", parsedNote.note);
     window.location.href = `/panel/takvim?${params.toString()}`;
@@ -319,20 +343,23 @@ export default function BasvurularPage() {
     if (!confirm(`${application.student_name} adlı öğrencinin ${application.source} başvurusunu silmek istediğinizden emin misiniz?`)) return;
     setDeletingId(application.id);
     try {
-      const dashIndex = application.id.indexOf('-');
-      const type = application.id.slice(0, dashIndex);
-      const id = application.id.slice(dashIndex + 1);
+      const type = application.source_type;
+      const id = application.source_record_id;
+      const deleteObservationId =
+        application.source_type === "observation"
+          ? application.source_record_id
+          : application.legacy_observation_id;
       let endpoint = '';
       switch (type) {
-        case 'incident': endpoint = '/api/student-incidents'; break;
-        case 'referral': endpoint = '/api/referrals'; break;
+        case 'student_report': endpoint = '/api/student-incidents'; break;
+        case 'teacher_referral': endpoint = '/api/referrals'; break;
         case 'observation': endpoint = '/api/gozlem-havuzu'; break;
-        case 'request': endpoint = '/api/parent-meeting-requests'; break;
-        case 'individual': endpoint = '/api/individual-requests'; break;
+        case 'parent_request': endpoint = '/api/parent-meeting-requests'; break;
+        case 'self_application': endpoint = '/api/individual-requests'; break;
         default: throw new Error('Geçersiz başvuru türü');
       }
-      if (type === 'observation') {
-        const { error } = await supabase.from("observation_pool").delete().eq("id", id);
+      if (deleteObservationId) {
+        const { error } = await supabase.from("observation_pool").delete().eq("id", deleteObservationId);
         if (error) throw new Error(error.message);
         toast.success('Gözlem kaydı silindi');
       } else {
@@ -510,12 +537,57 @@ export default function BasvurularPage() {
       class_display: string | null | undefined,
       class_key: string | null | undefined,
       source: ApplicationRecord["source"],
-      referrer: string | undefined,
-      date: string,
-      note: string | null | undefined
+      arg1?: string,
+      arg2?: string,
+      arg3?: string | null,
+      arg4?: string,
+      arg5?: string | null,
+      arg6?: string | null
     ): ApplicationRecord => {
-      const matchedApt = findMatchedAppointment(attendedAppointments, student_name, class_display, class_key);
-      const matchedScheduledApt = scheduledAppointments.find((apt) => matchesAppointment(apt, student_name, class_display, class_key));
+      const inferredSourceType =
+        getSourceTypeFromPanelLabel(source) || "observation";
+      const sourceTypeValues = ["observation", "self_application", "teacher_referral", "parent_request", "student_report"];
+      const explicitSourceType = arg1 && sourceTypeValues.includes(arg1)
+        ? (arg1 as ApplicationSourceType)
+        : null;
+      const referrerFirstSourceType = arg2 && sourceTypeValues.includes(arg2)
+        ? (arg2 as ApplicationSourceType)
+        : null;
+      const source_type = explicitSourceType || referrerFirstSourceType || inferredSourceType;
+      const source_record_id = explicitSourceType
+        ? (arg2 || (id.includes("-") ? id.split("-").slice(1).join("-") : id))
+        : referrerFirstSourceType
+          ? (arg3 || (id.includes("-") ? id.split("-").slice(1).join("-") : id))
+          : (id.includes("-") ? id.split("-").slice(1).join("-") : id);
+      const referrer = explicitSourceType
+        ? (arg3 || undefined)
+        : referrerFirstSourceType
+          ? (arg1 || undefined)
+          : (arg1 || undefined);
+      const date = explicitSourceType
+        ? (arg4 || record.created_at || new Date().toISOString())
+        : referrerFirstSourceType
+          ? (arg4 || record.created_at || new Date().toISOString())
+          : (arg2 || record.created_at || new Date().toISOString());
+      const note = explicitSourceType ? arg5 : referrerFirstSourceType ? arg5 : arg3;
+      const legacy_observation_id = explicitSourceType ? (arg6 || null) : null;
+      const matchedApt = findMatchedAppointmentBySource(
+        attendedAppointments,
+        source_type,
+        source_record_id,
+        student_name,
+        class_display,
+        class_key
+      );
+      const matchedScheduledApt =
+        findMatchedAppointmentBySource(
+          scheduledAppointments,
+          source_type,
+          source_record_id,
+          student_name,
+          class_display,
+          class_key
+        );
       const isAttended = !!matchedApt;
       const outcomeLabel = isAttended ? getOutcomeLabel(matchedApt?.outcome_decision) : null;
       const statusMap: Record<string, string> = {
@@ -549,6 +621,9 @@ export default function BasvurularPage() {
         class_display,
         class_key,
         source,
+        source_type,
+        source_record_id,
+        legacy_observation_id: legacy_observation_id || null,
         referrer,
         date,
         status,
@@ -559,9 +634,29 @@ export default function BasvurularPage() {
       };
     };
 
+    const actualSourceKeys = new Set<string>();
+    incidents.forEach((i) => {
+      const key = buildSourceRecordKey("student_report", i.id);
+      if (key) actualSourceKeys.add(key);
+    });
+    referrals.forEach((r) => {
+      const key = buildSourceRecordKey("teacher_referral", r.id);
+      if (key) actualSourceKeys.add(key);
+    });
+    requests.forEach((r) => {
+      const key = buildSourceRecordKey("parent_request", r.id);
+      if (key) actualSourceKeys.add(key);
+    });
+    individualRequests.forEach((r) => {
+      const key = buildSourceRecordKey("self_application", r.id);
+      if (key) actualSourceKeys.add(key);
+    });
+
     incidents.forEach((i) => records.push(buildRecord(
       i, `incident-${i.id}`, i.target_student_name, i.target_class_display, i.target_class_key,
       "Öğrenci Bildirimleri",
+      "student_report",
+      i.id || "",
       i.record_role === "linked_reporter" ? i.reporter_student_name || undefined : undefined,
       i.created_at || i.incident_date || new Date().toISOString(), i.description
     )));
@@ -575,6 +670,8 @@ export default function BasvurularPage() {
     referrals.forEach((r) => records.push(buildRecord(
       r, `referral-${r.id}`, r.student_name, r.class_display, r.class_key,
       "Öğretmen Yönlendirmeleri", r.teacher_name,
+      "teacher_referral",
+      r.id || "",
       r.created_at || new Date().toISOString(), r.note || r.reason
     )));
 
@@ -590,7 +687,47 @@ export default function BasvurularPage() {
       r.created_at || new Date().toISOString(), r.note
     )));
 
+    const observationById = new Map(
+      observations.map((observation) => [observation.id, observation])
+    );
+
     return records
+      .flatMap((record) => {
+        if (!record.id.startsWith("observation-")) {
+          return [record];
+        }
+
+        const observationId = record.id.replace("observation-", "");
+        const observationRecord = observationById.get(observationId);
+        if (!observationRecord) {
+          return [record];
+        }
+
+        const proxyMeta = getObservationProxyMeta(observationRecord);
+        const proxyKey = buildSourceRecordKey(proxyMeta.sourceType, proxyMeta.sourceRecordId);
+        if (proxyMeta.isProxy && proxyKey && actualSourceKeys.has(proxyKey)) {
+          return [];
+        }
+
+        return [
+          buildRecord(
+            observationRecord,
+            proxyMeta.isProxy
+              ? `${proxyMeta.sourceType}-${proxyMeta.sourceRecordId || observationRecord.id}`
+              : record.id,
+            observationRecord.student_name,
+            observationRecord.class_display,
+            observationRecord.class_key,
+            getPanelSourceLabel(proxyMeta.sourceType) as ApplicationRecord["source"],
+            proxyMeta.sourceType,
+            proxyMeta.sourceRecordId || observationRecord.id,
+            undefined,
+            observationRecord.created_at || observationRecord.observed_at || new Date().toISOString(),
+            observationRecord.note,
+            proxyMeta.isProxy ? proxyMeta.legacyObservationId : null
+          ),
+        ];
+      })
       .filter((r) => r.student_name)
       .sort((a, b) => new Date(b.last_activity_at || b.date).getTime() - new Date(a.last_activity_at || a.date).getTime());
   }, [incidents, referrals, observations, requests, individualRequests, attendedAppointments, scheduledAppointments]);

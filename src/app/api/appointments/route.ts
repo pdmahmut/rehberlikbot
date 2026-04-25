@@ -1,11 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { normalizeLessonSlot } from "@/lib/lessonSlots";
-import { normalizeSourceType } from "@/lib/guidanceApplications";
+import {
+  getSourceTable,
+  getStatusCandidatesForSource,
+  normalizeSourceTypeOrNull,
+} from "@/lib/guidanceApplications";
 
 const isMissingColumnError = (error: { message?: string } | null | undefined, columnName: string) => {
   const message = error?.message || "";
   return message.toLowerCase().includes("column") && message.toLowerCase().includes(columnName.toLowerCase());
+};
+
+const isUnsupportedValueError = (error: { message?: string } | null | undefined) => {
+  const message = (error?.message || "").toLowerCase();
+  return (
+    message.includes("check constraint") ||
+    message.includes("violates check constraint") ||
+    message.includes("invalid input value")
+  );
 };
 
 const normalizeLocationValue = (value?: string | null) => {
@@ -41,39 +54,95 @@ const syncApplicationStatus = async (
   status?: string,
   appointmentId?: string | null
 ) => {
-  if (!supabase || !sourceApplicationType || !sourceApplicationId) return;
+  if (!supabase || !sourceApplicationId || !status) return;
 
   try {
-    const normalizedType = normalizeSourceType(sourceApplicationType);
-    const effectiveStatus = status;
-    const updatePayload: Record<string, unknown> = {
-      status: effectiveStatus,
-      appointment_id: appointmentId || null
-    };
+    const normalizedType = normalizeSourceTypeOrNull(sourceApplicationType);
 
-    if (status === "scheduled") {
-      updatePayload.converted_at = new Date().toISOString();
-    }
+    if (!normalizedType) return;
 
-    if (effectiveStatus === "completed") {
-      updatePayload.completed_at = new Date().toISOString();
-    }
-
-    let query = supabase
-      .from("observation_pool")
-      .update(updatePayload);
+    const statusCandidates = getStatusCandidatesForSource(normalizedType, status as Parameters<typeof getStatusCandidatesForSource>[1]);
+    const tableName = getSourceTable(normalizedType);
+    const basePayload: Record<string, unknown> = {};
 
     if (normalizedType === "observation") {
-      // For observation type, match by id if source_record_id is null
-      query = query.or(`and(source_type.eq.${normalizedType},source_record_id.eq.${sourceApplicationId}),and(source_type.eq.${normalizedType},id.eq.${sourceApplicationId})`);
-    } else {
-      query = query.eq("source_type", normalizedType).eq("source_record_id", sourceApplicationId);
+      basePayload.appointment_id = appointmentId || null;
+      if (status === "scheduled") {
+        basePayload.converted_at = new Date().toISOString();
+      }
+      if (status === "completed" || status === "active_follow") {
+        basePayload.completed_at = new Date().toISOString();
+      }
     }
 
-    const { error } = await query;
+    let lastError: { message?: string } | null = null;
 
-    if (error) {
-      console.error("syncApplicationStatus error:", error);
+    for (const candidateStatus of statusCandidates) {
+      const updatePayload: Record<string, unknown> = {
+        ...basePayload,
+        status: candidateStatus,
+      };
+
+      let query = supabase.from(tableName).update(updatePayload);
+
+      if (normalizedType === "observation") {
+        query = query.or(
+          `and(source_type.eq.${normalizedType},source_record_id.eq.${sourceApplicationId}),and(source_type.eq.${normalizedType},id.eq.${sourceApplicationId})`
+        );
+      } else {
+        query = query.eq("id", sourceApplicationId);
+      }
+
+      const { error } = await query;
+
+      if (!error) {
+        return;
+      }
+
+      lastError = error;
+
+      const canFallbackColumns =
+        normalizedType === "observation" &&
+        (isMissingColumnError(error, "appointment_id") ||
+          isMissingColumnError(error, "converted_at") ||
+          isMissingColumnError(error, "completed_at"));
+
+      if (canFallbackColumns) {
+        const fallbackPayload = { ...updatePayload };
+        delete fallbackPayload.appointment_id;
+        delete fallbackPayload.converted_at;
+        delete fallbackPayload.completed_at;
+
+        let fallbackQuery = supabase.from(tableName).update(fallbackPayload);
+
+        fallbackQuery =
+          normalizedType === "observation"
+            ? fallbackQuery.or(
+                `and(source_type.eq.${normalizedType},source_record_id.eq.${sourceApplicationId}),and(source_type.eq.${normalizedType},id.eq.${sourceApplicationId})`
+              )
+            : fallbackQuery.eq("id", sourceApplicationId);
+
+        const fallbackResult = await fallbackQuery;
+        if (!fallbackResult.error) {
+          return;
+        }
+
+        lastError = fallbackResult.error;
+      }
+
+      if (!isUnsupportedValueError(error) && !canFallbackColumns) {
+        break;
+      }
+    }
+
+    if (lastError) {
+      console.error("syncApplicationStatus error:", {
+        sourceApplicationType,
+        sourceApplicationId,
+        status,
+        normalizedType,
+        message: lastError.message,
+      });
     }
   } catch (error) {
     console.error("syncApplicationStatus exception:", error);
@@ -183,7 +252,9 @@ export async function POST(request: NextRequest) {
       source_application_type
     } = body;
     const resolvedSourceApplicationId = source_application_id || source_individual_request_id || null;
-    const resolvedSourceApplicationType = source_application_type || (source_individual_request_id ? "self_application" : null);
+    const resolvedSourceApplicationType =
+      normalizeSourceTypeOrNull(source_application_type) ||
+      (source_individual_request_id ? "self_application" : null);
 
     if (!appointment_date || !start_time || !participant_type || !participant_name) {
       return NextResponse.json(
@@ -292,12 +363,10 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      const {
-        source_individual_request_id: _ignoredRequestId,
-        source_application_id: _ignoredApplicationId,
-        source_application_type: _ignoredApplicationType,
-        ...fallbackPayload
-      } = insertPayload;
+      const fallbackPayload: Record<string, unknown> = { ...insertPayload };
+      delete fallbackPayload.source_individual_request_id;
+      delete fallbackPayload.source_application_id;
+      delete fallbackPayload.source_application_type;
       const fallbackResult = await supabase
         .from("appointments")
         .insert(fallbackPayload)
@@ -460,12 +529,12 @@ export async function PUT(request: NextRequest) {
       .single();
 
     if (error) {
-      const {
-        source_individual_request_id: _ignoredRequestId,
-        source_application_id: _ignoredApplicationId,
-        source_application_type: _ignoredApplicationType,
-        ...fallbackUpdate
-      } = normalizedUpdateData as Record<string, unknown>;
+      const fallbackUpdate: Record<string, unknown> = {
+        ...(normalizedUpdateData as Record<string, unknown>)
+      };
+      delete fallbackUpdate.source_individual_request_id;
+      delete fallbackUpdate.source_application_id;
+      delete fallbackUpdate.source_application_type;
       const fallbackResult = await supabase
         .from("appointments")
         .update(fallbackUpdate)
@@ -491,8 +560,8 @@ export async function PUT(request: NextRequest) {
       data?.source_individual_request_id ||
       null;
     const resolvedSourceApplicationType =
-      source_application_type ||
-      data?.source_application_type ||
+      normalizeSourceTypeOrNull(source_application_type) ||
+      normalizeSourceTypeOrNull(data?.source_application_type) ||
       (source_individual_request_id ? "self_application" : null);
 
     if (source_application_status) {
