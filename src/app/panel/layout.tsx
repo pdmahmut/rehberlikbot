@@ -24,26 +24,30 @@ import { toast } from 'sonner';
 
 const menuCategories = [
   {
-    title: 'Genel',
+    title: '',
     items: [
       { href: '/panel/takvim', label: 'Programım', icon: Calendar },
     ],
   },
   {
-    title: 'Sınıf Rehberliği',
+    title: 'Takip',
     items: [
-      { href: '/panel/sinif-rehberligi', label: 'Sınıf Rehberliği', icon: BookOpen },
-      { href: '/panel/ogretmen-yonetimi', label: 'Öğretmen Yönetimi', icon: Users },
+      { href: '/panel/basvurular', label: 'Başvurular', icon: MessageSquare },
+      { href: '/panel/ogrenci-listesi', label: 'Öğrenciler', icon: GraduationCap },
     ],
   },
   {
-    title: 'Öğrenci Takip',
+    title: 'Sınıf',
     items: [
-      { href: '/panel/basvurular', label: 'Başvurular', icon: MessageSquare },
-      { href: '/panel/ogrenci-listesi', label: 'Öğrenci Listesi', icon: GraduationCap },
+      { href: '/panel/sinif-rehberligi', label: 'Sınıf Rehberliği', icon: BookOpen },
     ],
   },
-
+  {
+    title: 'Yönetim',
+    items: [
+      { href: '/panel/ogretmen-yonetimi', label: 'Öğretmen Yönetimi', icon: Users },
+    ],
+  },
 ];
 
 const teacherMenuItems = [
@@ -67,9 +71,10 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<string[]>([
-    'Genel',
-    'Sınıf Rehberliği',
-    'Öğrenci Takip',
+    '',
+    'Takip',
+    'Sınıf',
+    'Yönetim',
   ]);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -279,8 +284,8 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
             </div>
           ) : (
             menuCategories.map((category) => (
-              <div key={category.title} className="mb-2">
-                {!sidebarCollapsed && (
+              <div key={category.title || '_top'} className="mb-2">
+                {!sidebarCollapsed && category.title && (
                   <button
                     onClick={() => toggleCategory(category.title)}
                     className="flex w-full items-center justify-between px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500"
@@ -294,7 +299,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
                   </button>
                 )}
 
-                {(sidebarCollapsed || expandedCategories.includes(category.title)) && (
+                {(sidebarCollapsed || !category.title || expandedCategories.includes(category.title)) && (
                   <div className="space-y-1">
                     {category.items.map((item) => {
                       const Icon = item.icon;

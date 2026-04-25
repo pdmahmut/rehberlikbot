@@ -359,6 +359,9 @@ export default function TakvimPage() {
   const [showAppointments, setShowAppointments] = useState(true);
   const [showActivities, setShowActivities] = useState(true);
   const [showTasks, setShowTasks] = useState(true);
+  const [taskFilter, setTaskFilter] = useState<'today' | 'all'>('today');
+  const [selectedTaskDetail, setSelectedTaskDetail] = useState<any>(null);
+  const [allTasks, setAllTasks] = useState<any[]>([]);
 
   // Modallar
   const [dayModalDate, setDayModalDate] = useState<Date | null>(null);
@@ -586,7 +589,7 @@ export default function TakvimPage() {
       const [appResult, planResult, taskResult, followResult, topicResult, classReqResponse] = await Promise.all([
         supabase.from('appointments').select('*').gte('appointment_date', startStr).lte('appointment_date', endStr),
         supabase.from('guidance_plans').select('*').gte('plan_date', startStr).lte('plan_date', endStr),
-        supabase.from('tasks').select('*').gte('due_date', startStr).lte('due_date', endStr),
+        supabase.from('tasks').select('*'),
         supabase.from('follow_ups').select('*').gte('follow_up_date', startStr).lte('follow_up_date', endStr),
         supabase.from('guidance_topics').select('id, title'),
         fetch(`/api/class-requests?status=all&scheduledFrom=${encodeURIComponent(startStr)}&scheduledTo=${encodeURIComponent(endStr)}`, {
@@ -601,7 +604,9 @@ export default function TakvimPage() {
 
       setAppointments(appResult.data || []);
       setGuidancePlans(planResult.data || []);
-      setTasks(taskResult.data || []);
+      const allTaskData = taskResult.data || [];
+      setAllTasks(allTaskData);
+      setTasks(allTaskData.filter((t: any) => t.due_date >= startStr && t.due_date <= endStr));
       setFollowUps(followResult.data || []);
       setClassRequests(filteredClassRequests);
       setGuidanceTopicMap(
@@ -1282,7 +1287,9 @@ export default function TakvimPage() {
       appointments.forEach(app => {
         const colors: any = { planned: 'blue', attended: 'green', not_attended: 'red', postponed: 'amber', cancelled: 'slate' };
         const pType = app.participant_type === 'student' ? 'Öğrenci' : app.participant_type === 'parent' ? 'Veli' : 'Öğretmen';
-        allEvents.push({ id: app.id, date: app.appointment_date, time: app.start_time, title: `${app.participant_name} (${pType})`, type: 'appointment', status: app.status, color: colors[app.status] || 'blue', data: app });
+        const shortClass = (app.participant_class || '').replace(/\.\s*sınıf\s*/i, '/').replace(/\s*şubesi/i, '').replace(/\s+/g, '').trim();
+        const shortName = (app.participant_name || '').replace(/^\d+\s*/, '');
+        allEvents.push({ id: app.id, date: app.appointment_date, time: app.start_time, title: shortClass ? `${shortClass} ${shortName}` : shortName, type: 'appointment', status: app.status, color: colors[app.status] || 'blue', data: app });
       });
     }
     if (showActivities) {
@@ -1297,7 +1304,7 @@ export default function TakvimPage() {
           status: plan.status,
           data: {
             ...plan,
-            topic_title: guidanceTopicMap[plan.topic_id] || ''
+            topic_title: guidanceTopicMap[plan.topic_id] || plan.topic_title || plan.title || plan.topic || ''
           }
         });
       });
@@ -1383,14 +1390,24 @@ export default function TakvimPage() {
   const getHeaderText = () => {
     if (viewType === 'month') return `${MONTHS_TR[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
     if (viewType === 'week') return `${weekDays[0].getDate()} - ${weekDays[4].getDate()} ${MONTHS_TR[weekDays[0].getMonth()]} ${weekDays[0].getFullYear()}`;
-    return `${currentDate.getDate()} ${MONTHS_TR[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+    const dayIndex = currentDate.getDay() === 0 ? 6 : currentDate.getDay() - 1;
+    return `${currentDate.getDate()} ${MONTHS_TR[currentDate.getMonth()]} ${currentDate.getFullYear()}, ${DAYS_FULL_TR[dayIndex]}`;
   };
 
   const currentLessonSlot = getCurrentLessonSlot(currentDate);
   const pendingIndicatorCount = notifications.pendingRequests.length;
-  const dayOtherTasks = getEventsForDate(currentDate).filter(
-    (event) => event.type === "follow_up" || (event.type === "task" && !event.data.related_guidance_plan_id)
-  );
+  const dayOtherTasks = useMemo(() => {
+    if (taskFilter === 'all') {
+      return allTasks
+        .filter((t: any) => !t.related_guidance_plan_id)
+        .sort((a: any, b: any) => (a.status === 'completed' ? 1 : 0) - (b.status === 'completed' ? 1 : 0))
+        .map((t: any) => ({ id: t.id, date: t.due_date, title: t.title, type: 'task' as const, status: t.status, color: 'orange', data: t }));
+    }
+    return getEventsForDate(currentDate).filter(
+      (event) => event.type === "follow_up" || (event.type === "task" && !event.data.related_guidance_plan_id)
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskFilter, allTasks, currentDate]);
 
   return (
     <div className="space-y-2.5">
@@ -1755,7 +1772,7 @@ export default function TakvimPage() {
                         {getEventsForDate(dayModalDate).filter(e => e.type === 'follow_up' || (e.type === 'task' && !e.data.related_guidance_plan_id)).map(t => (
                           <div key={t.id} className={`rounded-lg border p-4 shadow-sm transition-all ${getOtherTaskPresentation(t).containerClass}`}>
                             <div className="flex items-start gap-3">
-                              <button onClick={() => toggleTaskStatus(t.id, t.type, t.status)} className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${getOtherTaskPresentation(t).checkboxClass}`}>
+                              <button onClick={() => toggleTaskStatus(t.id, t.type, t.status)} className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${getOtherTaskPresentation(t).checkboxClass}`}>
                                 {t.status === 'completed' && <CheckCircle2 className="h-4 w-4" />}
                               </button>
                               <div className="flex-1 min-w-0">
@@ -2210,7 +2227,8 @@ export default function TakvimPage() {
         </div>
       )}
 
-      {/* Başlık ve Üst Butonlar */}
+      {/* Başlık ve Üst Butonlar - sadece gün modunda göster */}
+      {viewType === 'day' && (
       <div className="rounded-[10px] border border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-white px-4 py-2.5 shadow-sm">
         <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-2.5">
@@ -2219,7 +2237,7 @@ export default function TakvimPage() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-lg font-bold text-slate-900">Programım</h1>
-              {currentLessonSlot && viewType === "day" && (
+              {currentLessonSlot && (
                 <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
                   Şu an {currentLessonSlot}. ders
                 </span>
@@ -2243,6 +2261,7 @@ export default function TakvimPage() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Navigasyon */}
       <div className="flex flex-col gap-3 rounded-[10px] border border-slate-200 bg-white px-4 py-2.5 shadow-sm xl:flex-row xl:items-center xl:justify-between">
@@ -2255,12 +2274,19 @@ export default function TakvimPage() {
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <Button
-              onClick={() => setCurrentDate(new Date())}
-              className="h-8 rounded-md bg-emerald-600 px-3 text-sm text-white shadow-sm hover:bg-emerald-700"
-            >
-              Bugün
-            </Button>
+            {isToday(currentDate) && viewType === 'day' ? (
+              <span className="flex h-8 items-center rounded-md bg-emerald-600 px-3 text-sm font-semibold text-white shadow-sm">
+                Bugün
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCurrentDate(new Date())}
+                className="flex h-8 items-center rounded-md bg-white px-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                {getHeaderText()}
+              </button>
+            )}
             <button
               type="button"
               onClick={navigateNext}
@@ -2269,7 +2295,15 @@ export default function TakvimPage() {
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-          <h2 className="text-base font-semibold text-slate-900">{getHeaderText()}</h2>
+          {!isToday(currentDate) && viewType === 'day' && (
+            <Button
+              onClick={() => setCurrentDate(new Date())}
+              variant="ghost"
+              className="h-7 rounded-md px-2.5 text-xs font-medium text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+            >
+              Bugüne dön
+            </Button>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-lg bg-slate-100 p-0.5">
@@ -2287,13 +2321,6 @@ export default function TakvimPage() {
               </button>
             ))}
           </div>
-          <Button
-            variant="outline"
-            onClick={loadData}
-            className="h-8 rounded-lg border-slate-200 bg-white px-2.5 shadow-sm hover:bg-slate-50"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-          </Button>
         </div>
       </div>
 
@@ -2302,9 +2329,9 @@ export default function TakvimPage() {
       ) : (
         <>
           {viewType === 'month' && (
-            <Card><CardContent className="p-4">
-              <div className="grid grid-cols-7 gap-1 mb-2">{DAYS_TR.map(d => <div key={d} className="text-center text-sm font-medium text-slate-500 py-2">{d}</div>)}</div>
-              <div className="grid grid-cols-7 gap-1">{calendarDays.map(({ date, isCurrentMonth }, i) => { 
+            <div className="rounded-[10px] border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">{DAYS_TR.map(d => <div key={d} className="text-center text-[11px] font-semibold text-slate-500 py-2">{d}</div>)}</div>
+              <div className="grid grid-cols-7">{calendarDays.map(({ date, isCurrentMonth }, i) => { 
                 const evs = getEventsForDate(date).filter(e => e.status !== 'cancelled'); 
                 const displayedEvs = evs.slice(0, 3);
                 const extraCount = evs.length - 3;
@@ -2313,189 +2340,129 @@ export default function TakvimPage() {
                 <div 
                   key={i} 
                   onClick={() => setDayModalDate(date)}
-                  className={`min-h-[100px] p-2 rounded-lg border transition-all cursor-pointer ${isCurrentMonth ? 'bg-white' : 'bg-slate-50'} ${isToday(date) ? 'border-teal-500 border-2' : 'border-slate-200'} hover:border-teal-400 hover:shadow-md`}
+                  className={`min-h-[90px] p-1.5 border-b border-r border-slate-100 transition-all cursor-pointer ${isCurrentMonth ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/50'} ${isToday(date) ? 'ring-2 ring-inset ring-teal-500 bg-teal-50/30' : ''}`}
                 >
-                  <div className={`text-sm font-medium ${isCurrentMonth ? 'text-slate-800' : 'text-slate-400'} ${isToday(date) ? 'text-teal-600' : ''}`}>{date.getDate()}</div>
-                  <div className="mt-1 space-y-1">
+                  <div className={`text-xs font-semibold mb-1 ${isCurrentMonth ? 'text-slate-800' : 'text-slate-400'} ${isToday(date) ? 'text-teal-600' : ''}`}>{date.getDate()}</div>
+                  <div className="space-y-0.5">
                     {displayedEvs.map(e => (
-                      <div key={e.id} className={`text-[10px] px-1.5 py-0.5 rounded truncate ${colorMap[e.color]?.bg || 'bg-slate-50'} ${colorMap[e.color]?.text || 'text-slate-700'}`}>
-                        {e.time && <span className="font-medium">{normalizeLessonSlot(e.time)}.Drs </span>}
-                        {e.title}
+                      <div key={e.id} className={`text-[9px] px-1 py-0.5 rounded truncate ${colorMap[e.color]?.bg || 'bg-slate-50'} ${colorMap[e.color]?.text || 'text-slate-700'}`}>
+                        {e.time && <span className="font-bold">{normalizeLessonSlot(e.time)}.</span>}{' '}
+                        {e.title.replace(/\s*\((Öğrenci|Veli|Öğretmen)\)\s*$/i, "")}
                       </div>
                     ))}
                     {extraCount > 0 && (
-                      <div className="text-[10px] text-slate-400 font-medium text-center mt-1">+{extraCount} daha</div>
+                      <div className="text-[9px] text-slate-400 font-medium text-center">+{extraCount}</div>
                     )}
                   </div>
                 </div>
               );})}</div>
-            </CardContent></Card>
+            </div>
           )}
 
           {viewType === 'week' && (
-            <Card className="shadow-lg border-slate-200 overflow-hidden">
+            <Card className="border-slate-200 overflow-hidden shadow-sm">
               <CardContent className="p-0">
-                <div className="grid grid-cols-5 divide-x divide-slate-200">
-                  {weekDays.map((date, i) => {
-                    const dayEvents = getEventsForDate(date).filter(e => e.status !== 'cancelled');
-                    const isPastDate = getLocalDateString(date) < getLocalDateString(new Date());
-                    const otherWeekTasks = dayEvents.filter(
-                      e => e.type === 'follow_up' || (e.type === 'task' && !e.data.related_guidance_plan_id)
-                    );
-                    return (
-                      <div key={i} className={`flex flex-col min-h-[650px] ${isToday(date) ? 'bg-teal-50/30' : 'bg-white'}`}>
-                        <div className={`p-3 text-center border-b ${isToday(date) ? 'bg-teal-500 text-white' : 'bg-slate-50 text-slate-700'}`}>
-                          <div className="text-[10px] uppercase font-bold tracking-wider opacity-80">{DAYS_TR[i]}</div>
-                          <div className="text-xl font-black">{date.getDate()}</div>
-                        </div>
-                        <div className="flex-1 divide-y divide-slate-100">
-                          {Array.from({ length: 7 }, (_, idx) => {
-                            const lessonNum = idx + 1;
+                <table className="w-full border-collapse table-fixed">
+                  <thead>
+                    <tr>
+                      <th className="w-[52px] border-b border-r border-slate-200 bg-slate-50 p-1" />
+                      {weekDays.map((date, i) => (
+                        <th
+                          key={i}
+                          className={`border-b border-r border-slate-200 px-1 py-2 text-center last:border-r-0 ${
+                            isToday(date) ? 'bg-teal-500 text-white' : 'bg-slate-50 text-slate-700'
+                          }`}
+                        >
+                          <div className="text-[9px] uppercase font-bold tracking-wider opacity-80">{DAYS_TR[i]}</div>
+                          <div className="text-lg font-black">{date.getDate()}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: 7 }, (_, idx) => {
+                      const lessonNum = idx + 1;
+                      return (
+                        <tr key={lessonNum}>
+                          <td className="border-b border-r border-slate-200 bg-slate-50/70 px-1 py-2 text-center align-middle">
+                            <span className="text-[10px] font-bold text-slate-500">{lessonNum}. Ders</span>
+                          </td>
+                          {weekDays.map((date, dayIdx) => {
+                            const dayEvents = getEventsForDate(date).filter(e => e.status !== 'cancelled');
                             const periodEvents = dayEvents.filter(e =>
                               (e.type === 'appointment' || e.type === 'guidance_plan' || e.type === 'class_request') &&
                               normalizeLessonSlot(e.time) === String(lessonNum)
                             );
+                            const isTodayCol = isToday(date);
 
                             return (
-                              <div
-                                key={lessonNum}
-                                className={`p-2 min-h-[104px] transition-colors ${periodEvents.length === 0 ? 'bg-rose-50/40 hover:bg-rose-50/70' : 'hover:bg-slate-50/80'}`}
+                              <td
+                                key={dayIdx}
+                                className={`border-b border-r border-slate-100 p-1 align-top last:border-r-0 ${
+                                  isTodayCol ? 'bg-teal-50/30' : ''
+                                }`}
                               >
-                                <div className="mb-2 flex items-center justify-between">
-                                  <div className="text-[10px] font-bold tracking-[0.14em] text-slate-400">{lessonNum}. DERS</div>
-                                </div>
-                                <div className="space-y-2">
-                                  {periodEvents.length === 0 ? (
-                                    isPastDate ? (
-                                      <div className="min-h-[68px] rounded-xl border border-slate-200 bg-slate-50/70" />
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => openPendingApplicationsModal(getLocalDateString(date), String(lessonNum))}
-                                        className="flex min-h-[68px] w-full items-center justify-center rounded-xl border border-dashed border-rose-300 bg-white px-3 text-center transition hover:border-teal-300 hover:bg-teal-50 focus:outline-none focus:ring-2 focus:ring-teal-500/40"
-                                      >
-                                        <div>
-                                          <p className="text-sm font-extrabold tracking-[0.12em] text-rose-600">BOŞ SAAT</p>
-                                          <p className="mt-2 text-[11px] font-semibold text-teal-600">Bekleyen başvuruları göster</p>
-                                        </div>
-                                      </button>
-                                    )
-                                  ) : periodEvents.map(e => {
-                                    const isAppointment = e.type === 'appointment';
-                                    const isClassReq = e.type === 'class_request';
-                                    const isCompleted = e.status === 'attended' || e.status === 'completed';
-                                    const cardClasses = isAppointment
-                                      ? isCompleted
-                                        ? "border-slate-200 bg-slate-50"
-                                        : "border-sky-200 bg-sky-50"
-                                      : isClassReq
-                                        ? "border-violet-200 bg-violet-50"
-                                        : "border-amber-200 bg-amber-50";
-                                    const titleText = e.title.replace(/\s*\((Öğrenci|Veli|Öğretmen)\)\s*$/i, "");
-                                    const guidanceClass = e.data?.class_display || titleText;
-                                    const guidanceTopic =
-                                      e.data?.topic_title ||
-                                      e.data?.admin_category ||
-                                      e.data?.topic ||
-                                      e.data?.subject ||
-                                      e.data?.detail ||
-                                      e.data?.note ||
-                                      "";
-                                    const guidanceTeacher = e.data?.lesson_teacher || e.data?.teacher_name || "";
+                                {periodEvents.length === 0 ? (
+                                  <div className="flex h-[56px] items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50">
+                                    <p className="text-[10px] text-slate-300">Bu saat boş</p>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-1">
+                                    {periodEvents.map(e => {
+                                      const isAppointment = e.type === 'appointment';
+                                      const isClassReq = e.type === 'class_request';
+                                      const isCompleted = e.status === 'attended' || e.status === 'completed';
+                                      const cardBg = isAppointment
+                                        ? isCompleted ? 'border-slate-200 bg-slate-50' : 'border-sky-200 bg-sky-50'
+                                        : isClassReq ? 'border-violet-200 bg-violet-50' : 'border-amber-200 bg-amber-50';
+                                      const titleText = e.title.replace(/\s*\((Öğrenci|Veli|Öğretmen)\)\s*$/i, '');
+                                      const guidanceClass = e.data?.class_display || titleText;
+                                      const guidanceTopic = e.data?.topic_title || e.data?.admin_category || e.data?.topic || '';
+                                      const guidanceTeacher = e.data?.lesson_teacher || e.data?.teacher_name || '';
 
-                                    return (
-                                      <div
-                                        key={e.id}
-                                        className={`rounded-xl border p-3 shadow-sm ${cardClasses}`}
-                                      >
-                                        <div className={`space-y-2 ${isAppointment ? '' : 'flex min-h-[68px] flex-col items-center justify-center text-center'}`}>
-                                          {isAppointment && (
-                                            <div className="flex items-center justify-between gap-2">
-                                              <p className="text-[10px] font-semibold text-sky-700">
-                                                Öğrenci randevusu
-                                              </p>
-                                              <span className="rounded-md bg-white px-1.5 py-0.5 text-[9px] font-semibold text-sky-700">
-                                                {lessonNum}. ders
-                                              </span>
-                                            </div>
-                                          )}
+                                      return (
+                                        <div key={e.id} className={`min-h-[56px] rounded-lg border px-1.5 ${cardBg} ${isCompleted ? 'opacity-60' : ''} flex items-center justify-center`}>
                                           {isAppointment ? (
-                                            <>
-                                              <p className={`line-clamp-3 text-[13px] font-semibold leading-5 ${isCompleted ? 'text-slate-500 line-through' : 'text-slate-800'}`} title={titleText}>
+                                            <div className="flex h-full flex-col items-center justify-center text-center">
+                                              <p className={`text-[11px] font-bold leading-tight ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-800'}`} title={titleText}>
                                                 {titleText}
                                               </p>
-                                              <div className="flex items-center justify-between text-[10px]">
-                                                <span className={`${isCompleted ? 'text-slate-500' : 'text-slate-600'}`}>
-                                                  {isCompleted ? 'Görüşme tamamlandı' : 'Planlı görüşme'}
-                                                </span>
-                                                <span className="font-medium text-slate-500">
-                                                  {formatLessonSlotLabel(String(lessonNum))}
-                                                </span>
-                                              </div>
-                                            </>
+                                              {isCompleted && <p className="text-[9px] text-emerald-600 mt-0.5">✓ Tamamlandı</p>}
+                                            </div>
                                           ) : (
-                                            <>
-                                              <p
-                                                className={`line-clamp-2 text-center text-[20px] font-extrabold leading-6 ${isCompleted ? 'text-slate-500 line-through' : isClassReq ? 'text-violet-900' : 'text-amber-900'}`}
-                                                title={guidanceTopic ? `${guidanceClass} · ${guidanceTopic}` : guidanceClass}
-                                              >
+                                            <div className="flex h-full flex-col justify-center text-center">
+                                              <p className={`text-[12px] font-extrabold leading-tight ${isCompleted ? 'text-slate-400 line-through' : isClassReq ? 'text-violet-900' : 'text-amber-900'}`}>
                                                 {guidanceClass}
                                               </p>
                                               {guidanceTopic && (
-                                                <p
-                                                  className={`line-clamp-2 text-center text-[14px] font-semibold leading-5 ${isCompleted ? 'text-slate-400' : isClassReq ? 'text-violet-700' : 'text-amber-700'}`}
-                                                  title={guidanceTopic}
-                                                >
+                                                <p className={`text-[9px] mt-0.5 leading-tight truncate ${isCompleted ? 'text-slate-400' : isClassReq ? 'text-violet-600' : 'text-amber-700'}`} title={guidanceTopic}>
                                                   {guidanceTopic}
                                                 </p>
                                               )}
                                               {guidanceTeacher && (
-                                                <p className="text-center text-[11px] text-slate-500">
-                                                  Öğretmen: {guidanceTeacher}
-                                                </p>
+                                                <p className="text-[8px] text-slate-400 mt-0.5 truncate">{guidanceTeacher}</p>
                                               )}
-                                              {isClassReq && (
-                                                <p className={`text-center text-[10px] font-bold ${isCompleted ? 'text-slate-400' : 'text-violet-600'}`}>
-                                                  {isCompleted ? 'Tamamlandı' : 'Sınıf Talebi'}
-                                                </p>
-                                              )}
-                                            </>
+                                            </div>
                                           )}
                                         </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </td>
                             );
                           })}
-                        </div>
-                        <div className="p-2 border-t-2 border-slate-200 bg-slate-50/50 min-h-[120px]">
-                          <div className="flex items-center gap-1 text-[9px] font-black text-slate-500 uppercase tracking-tighter mb-2">
-                            <ListTodo className="h-3.5 w-3.5" /> Diğer Görevler
-                          </div>
-                          <div className="space-y-1">
-                            {otherWeekTasks.map(t => (
-                              <div 
-                                key={t.id} 
-                                className={`p-1.5 rounded-lg border text-[9px] font-semibold flex items-center gap-1.5 transition-all ${t.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100 opacity-60' : 'bg-white border-slate-200 text-slate-700 shadow-sm'}`}
-                              >
-                                <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${t.status === 'completed' ? 'bg-emerald-500' : 'bg-orange-400'}`} />
-                                <span className="truncate" title={t.title}>{t.title}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </CardContent>
             </Card>
           )}
 
           {viewType === 'day' && (
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
               <Card className="overflow-hidden border-slate-200 shadow-sm">
                 <CardContent className="p-0">
                   <div className="divide-y divide-slate-100">
@@ -2520,15 +2487,14 @@ export default function TakvimPage() {
                           }`}
                         >
                           <div
-                            className={`relative flex flex-col items-center justify-center gap-0 border-r border-slate-100 px-1.5 py-1.5 text-center ${
+                            className={`relative flex flex-col items-center justify-center gap-0.5 border-r border-slate-100 px-1.5 py-1.5 text-center ${
                               isCurrentSlot ? "bg-emerald-50" : "bg-slate-50/70"
                             }`}
                           >
                             {isCurrentSlot && <div className="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-emerald-500" />}
-                            <span className="text-xs font-bold text-slate-700">
-                              {periodStr}
+                            <span className="text-[10px] font-bold text-slate-600">
+                              {periodStr}. Ders
                             </span>
-                            <span className="text-[8px] font-semibold uppercase tracking-[0.1em] text-slate-400">{slot.label}</span>
                             <span className="text-[8px] text-slate-400">{timelineMeta?.timeLabel}</span>
                             {isCurrentSlot && (
                               <span className="flex items-center gap-0.5">
@@ -2687,12 +2653,29 @@ export default function TakvimPage() {
               </Card>
 
               <Card className="w-full border-slate-200 shadow-sm xl:sticky xl:top-20 xl:self-start">
-                <CardHeader className="border-b border-slate-100 bg-white px-4 py-3">
+                <CardHeader className="border-b border-slate-100 bg-white px-3 py-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <CardTitle className="text-sm flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5">
                       <ListTodo className="h-4 w-4 text-orange-500" />
-                      Diğer Görevler
-                    </CardTitle>
+                      <div className="flex rounded-md bg-slate-100 p-0.5">
+                        <button
+                          onClick={() => setTaskFilter('today')}
+                          className={`rounded px-2 py-1 text-[10px] font-semibold transition-all ${
+                            taskFilter === 'today' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          Bugün
+                        </button>
+                        <button
+                          onClick={() => setTaskFilter('all')}
+                          className={`rounded px-2 py-1 text-[10px] font-semibold transition-all ${
+                            taskFilter === 'all' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          Tümü
+                        </button>
+                      </div>
+                    </div>
                     <Button
                       type="button"
                       variant="outline"
@@ -2710,20 +2693,24 @@ export default function TakvimPage() {
                       <div className="mb-2 rounded-full bg-slate-100 p-2 text-slate-400">
                         <ListTodo className="h-4 w-4" />
                       </div>
-                      <p className="text-xs font-medium text-slate-500">Bugün görev yok</p>
+                      <p className="text-xs font-medium text-slate-500">{taskFilter === 'today' ? 'Bugün görev yok' : 'Görev bulunamadı'}</p>
                     </div>
                   ) : (
                     <div className="space-y-2 xl:max-h-[calc(100vh-12rem)] xl:overflow-y-auto xl:pr-1">
                       {dayOtherTasks.map((task) => {
                         const taskUi = getOtherTaskPresentation(task);
                         return (
-                          <div key={task.id} className={`rounded-[10px] border p-2.5 shadow-sm transition-all hover:shadow-md ${taskUi.containerClass}`}>
+                          <div
+                            key={task.id}
+                            onClick={() => setSelectedTaskDetail(task.data)}
+                            className={`cursor-pointer rounded-[10px] border p-2.5 shadow-sm transition-all hover:shadow-md ${taskUi.containerClass}`}
+                          >
                             <div className="flex items-start gap-2.5">
                               <button
-                                onClick={() => toggleTaskStatus(task.id, task.type, task.status)}
-                                className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-200 ${taskUi.checkboxClass}`}
+                                onClick={(e) => { e.stopPropagation(); toggleTaskStatus(task.id, task.type, task.status); }}
+                                className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-200 ${taskUi.checkboxClass}`}
                               >
-                                {task.status === "completed" && <CheckCircle2 className="h-3.5 w-3.5" />}
+                                {task.status === "completed" && <CheckCircle2 className="h-4 w-4" />}
                               </button>
                               <div className="min-w-0 flex-1">
                                 <p className={`text-xs font-semibold ${taskUi.titleClass}`}>{task.title}</p>
@@ -2731,8 +2718,13 @@ export default function TakvimPage() {
                                   <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${taskUi.badgeClass}`}>
                                     {task.type === "task" ? "Görev" : "Takip"}
                                   </span>
+                                  {taskFilter === 'all' && task.data?.due_date && (
+                                    <span className="text-[9px] text-slate-400">
+                                      {new Date(task.data.due_date + 'T00:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
+                                    </span>
+                                  )}
                                   <button
-                                    onClick={() => handleDeleteTask(task.id)}
+                                    onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }}
                                     className="rounded-full p-1 text-slate-300 transition-all duration-200 hover:scale-[1.02] hover:bg-red-50 hover:text-red-500"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
@@ -2750,6 +2742,80 @@ export default function TakvimPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Görev Detay Modalı */}
+      {selectedTaskDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedTaskDetail(null)} />
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100">
+                  <ListTodo className="h-5 w-5 text-orange-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">Görev Detayı</h3>
+                  <p className="text-[11px] text-slate-500">
+                    {selectedTaskDetail.due_date
+                      ? new Date(selectedTaskDetail.due_date + 'T00:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
+                      : 'Tarih belirtilmemiş'}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedTaskDetail(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Başlık</p>
+                <p className="text-sm font-semibold text-slate-800">{selectedTaskDetail.title}</p>
+              </div>
+              {selectedTaskDetail.description && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Açıklama</p>
+                  <p className="text-sm text-slate-600 whitespace-pre-wrap">{selectedTaskDetail.description}</p>
+                </div>
+              )}
+              {selectedTaskDetail.category && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Kategori</p>
+                  <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                    {CATEGORIES.find(c => c.value === selectedTaskDetail.category)?.icon} {CATEGORIES.find(c => c.value === selectedTaskDetail.category)?.label || selectedTaskDetail.category}
+                  </span>
+                </div>
+              )}
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Durum</p>
+                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                  selectedTaskDetail.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                }`}>
+                  {selectedTaskDetail.status === 'completed' ? '✓ Tamamlandı' : '○ Bekliyor'}
+                </span>
+              </div>
+            </div>
+            <div className="mt-5 flex gap-2">
+              <Button
+                onClick={() => { toggleTaskStatus(selectedTaskDetail.id, 'task', selectedTaskDetail.status); setSelectedTaskDetail(null); }}
+                className={`flex-1 h-9 rounded-xl text-sm font-semibold ${
+                  selectedTaskDetail.status === 'completed'
+                    ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                }`}
+              >
+                {selectedTaskDetail.status === 'completed' ? 'Geri Al' : 'Tamamla'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => { handleDeleteTask(selectedTaskDetail.id); setSelectedTaskDetail(null); }}
+                className="h-9 rounded-xl border-red-200 px-3 text-sm font-semibold text-red-600 hover:bg-red-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
