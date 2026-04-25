@@ -32,7 +32,7 @@ const menuCategories = [
   {
     title: 'Takip',
     items: [
-      { href: '/panel/basvurular', label: 'Başvurular', icon: MessageSquare },
+      { href: '/panel/basvurular', label: 'Talepler', icon: MessageSquare },
       { href: '/panel/ogrenci-listesi', label: 'Öğrenciler', icon: GraduationCap },
     ],
   },

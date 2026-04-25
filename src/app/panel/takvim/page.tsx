@@ -467,8 +467,6 @@ export default function TakvimPage() {
   const [pendingApplicationsLoading, setPendingApplicationsLoading] = useState(false);
   const [pendingApplications, setPendingApplications] = useState<PendingApplicationRecord[]>([]);
   const [pendingSelectionSlot, setPendingSelectionSlot] = useState<{ date: string; start_time: string } | null>(null);
-  const [expandedEmptySlots, setExpandedEmptySlots] = useState<Record<string, boolean>>({});
-
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [taskSaving, setTaskSaving] = useState(false);
   const [newTask, setNewTask] = useState({
@@ -685,10 +683,6 @@ export default function TakvimPage() {
     loadData();
   }, [currentDate]);
 
-  useEffect(() => {
-    setExpandedEmptySlots({});
-  }, [currentDate]);
-
   const loadData = async () => {
     setIsLoading(true);
     try {
@@ -857,14 +851,6 @@ export default function TakvimPage() {
 
   const closeWeekSlotModal = () => {
     setWeekSlotModal(null);
-  };
-
-  const toggleEmptySlotDetails = (date: Date, slot: string) => {
-    const key = `${getLocalDateString(date)}-${slot}`;
-    setExpandedEmptySlots((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
   };
 
   const openAppointmentEditModal = (appointment: Appointment) => {
@@ -1749,15 +1735,6 @@ export default function TakvimPage() {
                 <div className="rounded-xl bg-teal-50 p-2.5">
                   <CalendarCheck className="h-5 w-5 text-teal-600" />
                 </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-800">Boş Ders Saati</h2>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {weekSlotModal.date.getDate()} {MONTHS_TR[weekSlotModal.date.getMonth()]} {weekSlotModal.date.getFullYear()}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    {DAYS_FULL_TR[weekSlotModal.date.getDay() === 0 ? 6 : weekSlotModal.date.getDay() - 1]} · {formatLessonSlotLabel(weekSlotModal.slot)}
-                  </p>
-                </div>
               </div>
               <button
                 type="button"
@@ -1769,9 +1746,6 @@ export default function TakvimPage() {
             </div>
 
             <div className="space-y-3 p-5">
-              <p className="text-sm text-slate-500">
-                Ders saati zaten seçili. Bu kutu için doğrudan işlem yapabilirsiniz.
-              </p>
               <Button
                 type="button"
                 onClick={() => {
@@ -2676,8 +2650,6 @@ export default function TakvimPage() {
                     {LESSON_SLOTS.map((slot) => {
                       const periodStr = slot.value;
                       const timelineMeta = getLessonTimelineMeta(periodStr);
-                      const slotKey = `${getLocalDateString(currentDate)}-${periodStr}`;
-                      const isExpandedEmpty = Boolean(expandedEmptySlots[slotKey]);
                       const isCurrentSlot = currentLessonSlot === periodStr && isToday(currentDate);
                       const lessonEvents = getEventsForDate(currentDate).filter((event) => {
                         if (event.type === "appointment" || event.type === "guidance_plan" || event.type === "class_request") {
@@ -2716,8 +2688,8 @@ export default function TakvimPage() {
                               <div className="rounded-[10px] border border-slate-200 bg-slate-50/60">
                                 <button
                                   type="button"
-                                  onClick={() => toggleEmptySlotDetails(currentDate, periodStr)}
-                                  className="flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left transition-colors hover:bg-white/80"
+                                  onClick={() => openWeekSlotModal(currentDate, periodStr)}
+                                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-white/80"
                                 >
                                   <p className="text-xs text-slate-400">Bu saat boş</p>
                                   <div className="flex items-center gap-2">
@@ -2727,37 +2699,9 @@ export default function TakvimPage() {
                                         {pendingIndicatorCount}
                                       </span>
                                     )}
-                                    <Plus className={`h-3.5 w-3.5 text-slate-300 transition-transform duration-200 ${isExpandedEmpty ? "rotate-45" : ""}`} />
+                                    <Plus className="h-3.5 w-3.5 text-slate-300" />
                                   </div>
                                 </button>
-                                <div className={`grid transition-all duration-300 ease-out ${isExpandedEmpty ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
-                                  <div className="overflow-hidden">
-                                    <div className="flex flex-wrap gap-2 border-t border-slate-200/80 px-3 pb-3 pt-2">
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => openAppointmentModalForSlot(getLocalDateString(currentDate), periodStr)}
-                                        className="h-8 rounded-[10px] border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition-transform duration-200 hover:scale-[1.02] hover:bg-slate-50"
-                                      >
-                                        <Plus className="mr-1 h-3.5 w-3.5" />
-                                        Randevu ekle
-                                      </Button>
-                                      {pendingIndicatorCount > 0 && (
-                                        <Button
-                                          type="button"
-                                          size="sm"
-                                          variant="ghost"
-                                          onClick={() => openPendingApplicationsModal(getLocalDateString(currentDate), periodStr)}
-                                          className="h-8 rounded-[10px] px-2 text-xs font-medium text-slate-500 transition-transform duration-200 hover:scale-[1.02] hover:text-slate-700"
-                                        >
-                                          <span className="mr-1.5 h-2 w-2 rounded-full bg-red-500" />
-                                          {pendingIndicatorCount} başvuru
-                                        </Button>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
                               </div>
                             ) : (
                               <div className="space-y-2">
