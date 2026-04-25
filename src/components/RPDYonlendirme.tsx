@@ -296,62 +296,21 @@ export default function RPDYonlendirme({ teacherName, classKey, classDisplay }: 
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 pb-20 md:pb-0 relative overflow-hidden">
-      {/* Animated Background Elements - Enhanced */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-400/20 to-indigo-600/20 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-tr from-purple-400/20 to-pink-600/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-gradient-to-r from-emerald-400/10 to-blue-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
-        {/* Yeni hareketli parçacıklar */}
-        <div className="absolute top-20 left-20 w-3 h-3 bg-blue-400/30 rounded-full animate-float-slow"></div>
-        <div className="absolute top-40 right-40 w-2 h-2 bg-purple-400/30 rounded-full animate-float-slow" style={{ animationDelay: '1s' }}></div>
-        <div className="absolute bottom-40 left-1/3 w-4 h-4 bg-indigo-400/20 rounded-full animate-float-slow" style={{ animationDelay: '2s' }}></div>
-        <div className="absolute top-1/3 right-1/4 w-2 h-2 bg-pink-400/30 rounded-full animate-float-slow" style={{ animationDelay: '0.5s' }}></div>
-      </div>
-
-      <div className="container mx-auto px-2 sm:px-3 md:px-4 py-3 md:py-8 max-w-7xl relative z-10">
-        {/* Enhanced Header with Live Features */}
-        <div className="text-center mb-4 md:mb-8 animate-fade-in">
-          {/* Top Status Bar - Mobile Optimized */}
-          {/* Main Title with Animation - Mobile Optimized */}
-          <div className="flex items-center justify-center mb-2 md:mb-4 group">
-            <div className="relative">
-              <GraduationCap className="h-8 w-8 sm:h-10 sm:w-10 md:h-14 md:w-14 text-blue-600 mr-2 md:mr-3 group-hover:text-purple-600 hover:scale-110 transition-all duration-300 drop-shadow-lg" />
-              <div className="absolute -top-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 bg-gradient-to-r from-amber-400 to-orange-500 rounded-full flex items-center justify-center shadow-lg animate-bounce">
-                <Sparkles className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-white" />
-              </div>
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl md:text-4xl font-bold bg-gradient-to-r from-gray-800 via-blue-800 to-purple-800 bg-clip-text text-transparent">
-                RPD Yönlendirme
-              </h1>
-            </div>
-          </div>
-          <p className="text-xs sm:text-sm md:text-lg text-gray-600 px-2 hidden sm:block">Rehberlik ve Psikolojik Danışmanlık Servisi</p>
-          
-        </div>
+    <div className="pb-20 md:pb-0">
+      <div className="container mx-auto px-2 sm:px-3 md:px-4 py-3 md:py-4 max-w-3xl">
 
         <div className="grid grid-cols-1 place-items-center gap-3 sm:gap-4 md:gap-8 px-1">
           {/* Form Kartı - Mobile Enhanced */}
           <Card className="w-full max-w-3xl shadow-xl shadow-blue-500/10 backdrop-blur-sm bg-white/80 border-0 hover:shadow-2xl hover:shadow-blue-500/20 transition-all duration-500 group animate-slide-in-left overflow-visible">
-            <CardHeader className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-t-lg p-3 sm:p-4 md:p-6 relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-              {/* Animated dots */}
-              <div className="absolute top-2 right-2 flex gap-1">
-                <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white/30 rounded-full animate-pulse"></div>
-                <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white/50 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }}></div>
-                <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white/70 rounded-full animate-pulse" style={{ animationDelay: '0.6s' }}></div>
-              </div>
-              <CardTitle className="flex items-center text-base sm:text-lg md:text-xl relative z-10">
-                <div className="p-1.5 sm:p-2 bg-white/20 rounded-lg mr-2 sm:mr-3 group-hover:rotate-3 group-hover:scale-110 transition-all duration-300">
-                  <FileText className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6" />
+            <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg p-3 sm:p-4">
+              <CardTitle className="flex items-center text-base sm:text-lg">
+                <div className="p-1.5 bg-white/20 rounded-lg mr-2">
+                  <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
                 </div>
-                <span className="truncate">Öğrenci Yönlendirme</span>
-                <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 ml-2 text-amber-300 animate-pulse" />
+                Öğrenci Yönlendirme
               </CardTitle>
-              <CardDescription className="text-blue-100 text-xs sm:text-sm md:text-base flex items-center gap-2">
-                <Rocket className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                <span className="truncate">Yönlendirme bilgilerini girin</span>
+              <CardDescription className="text-blue-100 text-xs sm:text-sm">
+                Yönlendirme bilgilerini girin
               </CardDescription>
             </CardHeader>
             <CardContent className="p-3 sm:p-4 md:p-6">

@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   GraduationCap, Users, History, BookOpen, Plus, Trash2,
-  RefreshCw, UserCheck, ArrowRightLeft, ChevronDown, Award, AlertCircle,
-  MessageSquare, X, Calendar, Clock, CheckCircle2, Pencil,
+  RefreshCw, UserCheck, ArrowRightLeft, ArrowLeft, ChevronDown, Award, AlertCircle,
+  MessageSquare, X, Calendar, Clock, CheckCircle2, Pencil, User, BarChart3, Activity,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -14,6 +14,18 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  ReasonDistributionChart,
+  TeacherDistributionChart,
+  ReferralTimeline,
+} from "@/components/charts/StudentCharts";
+import { supabase } from "@/lib/supabase";
+import {
+  buildSourceRecordKey,
+  getObservationProxyMeta,
+  isAppointmentLinkedToSource,
+  isPendingStatus,
+} from "@/lib/guidanceApplications";
 import {
   getClassRequestDisplayCategory,
   getClassRequestTeacherNote,
@@ -74,6 +86,40 @@ interface GuidanceRequest {
   updated_at: string | null;
 }
 
+interface StudentAppointment {
+  id: string;
+  participant_name?: string;
+  participant_class?: string | null;
+  appointment_date?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  outcome_decision?: string[] | null;
+}
+
+interface StudentApplicationHistoryItem {
+  id: string;
+  sourceType: string;
+  sourceLabel: string;
+  sourceRecordId: string;
+  reason: string;
+  note: string | null;
+  status: "Bekliyor" | "Randevu verildi" | "Görüşüldü";
+  outcomeLabel: string | null;
+  lastActivityAt: string;
+}
+
+const extractReasonAndNote = (rawNote: string | null | undefined, fallback: string) => {
+  const text = (rawNote || "").trim();
+  if (!text) return { reason: fallback, note: null as string | null };
+  const topicMatch = text.match(/^\[(.*?)\]\s*(.*)$/);
+  if (topicMatch) {
+    const topic = topicMatch[1]?.trim() || fallback;
+    const note = (topicMatch[2] || "").trim() || null;
+    return { reason: topic, note };
+  }
+  return { reason: text, note: null as string | null };
+};
+
 type TabId = "my-referrals" | "class-list" | "class-referrals" | "guidance-requests";
 
 const CHART_COLORS = [
@@ -81,6 +127,51 @@ const CHART_COLORS = [
 ];
 
 const MONTHS_TR = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+
+const normalizeClassValue = (value?: string | null) =>
+  (value || "")
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/[\/\-_.()]/g, "")
+    .trim();
+
+const matchesApplicationToAppointment = (
+  appointment: any,
+  studentName?: string | null,
+  classDisplay?: string | null,
+  classKey?: string | null
+) => {
+  const appointmentName = (appointment?.participant_name || "")
+    .replace(/^\d+\s+/, "")
+    .trim()
+    .toLowerCase();
+  const normalizedStudentName = (studentName || "")
+    .replace(/^\d+\s+/, "")
+    .trim()
+    .toLowerCase();
+
+  if (!appointmentName || !normalizedStudentName) return false;
+
+  const nameMatch =
+    appointmentName === normalizedStudentName ||
+    appointmentName.includes(normalizedStudentName) ||
+    normalizedStudentName.includes(appointmentName);
+
+  if (!nameMatch) return false;
+
+  const appointmentClass = normalizeClassValue(appointment?.participant_class);
+  const applicationClass = normalizeClassValue(classDisplay || classKey);
+
+  if (!appointmentClass || !applicationClass) return true;
+
+  return (
+    appointmentClass === applicationClass ||
+    appointmentClass.includes(applicationClass) ||
+    applicationClass.includes(appointmentClass)
+  );
+};
 
 function formatDateShort(dateStr: string | null): string {
   if (!dateStr) return "";
@@ -112,6 +203,15 @@ export default function SinifimPage() {
   const [classChangeTarget, setClassChangeTarget] = useState("");
   const [submittingRequest, setSubmittingRequest] = useState(false);
 
+  // Öğrenci profil
+  const [selectedProfileStudent, setSelectedProfileStudent] = useState<string | null>(null);
+  const [profileHistory, setProfileHistory] = useState<any>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileAppointments, setProfileAppointments] = useState<any[]>([]);
+  const [profileAttendedAppointments, setProfileAttendedAppointments] = useState<StudentAppointment[]>([]);
+  const [profilePendingApps, setProfilePendingApps] = useState<any[]>([]);
+  const [profileApplicationHistory, setProfileApplicationHistory] = useState<StudentApplicationHistoryItem[]>([]);
+
   // Guidance requests state
   const [guidanceRequests, setGuidanceRequests] = useState<GuidanceRequest[]>([]);
   const [guidanceRequestsLoading, setGuidanceRequestsLoading] = useState(false);
@@ -133,6 +233,334 @@ export default function SinifimPage() {
     });
     fetch("/api/data").then(r => r.json()).then(d => setSinifList(d.sinifSubeList || []));
   }, []);
+
+  const openStudentProfile = async (studentName: string) => {
+    const cleanName = studentName.replace(/^\d+\s+/, "").trim();
+    setSelectedProfileStudent(studentName);
+    setProfileLoading(true);
+    setProfileHistory(null);
+    setProfileAppointments([]);
+    setProfileAttendedAppointments([]);
+    setProfileApplicationHistory([]);
+    setProfilePendingApps([]);
+    try {
+      const res = await fetch(`/api/student-history?studentName=${encodeURIComponent(cleanName)}&classDisplay=${encodeURIComponent(auth?.classDisplay || "")}`);
+      if (res.ok) {
+        const data = await res.json();
+        setProfileHistory(data);
+      }
+      await loadStudentActiveData(cleanName);
+    } catch { /* */ }
+    finally { setProfileLoading(false); }
+  };
+
+  const loadStudentActiveData = async (studentName: string) => {
+    const cleanName = studentName.replace(/^\d+\s+/, "").trim();
+    const matchName = (name: string) =>
+      (name || "").replace(/^\d+\s+/, "").trim().toLowerCase() === cleanName.toLowerCase();
+
+    try {
+      let plannedAppointments: any[] = [];
+      let attendedAppointmentsData: StudentAppointment[] = [];
+      if (supabase) {
+        const [plannedRes, attendedRes] = await Promise.all([
+          supabase
+            .from("appointments")
+            .select("*")
+            .eq("participant_type", "student")
+            .neq("status", "pending")
+            .neq("status", "attended")
+            .neq("status", "cancelled")
+            .ilike("participant_name", `%${cleanName}%`)
+            .order("appointment_date", { ascending: false })
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("appointments")
+            .select("*")
+            .eq("participant_type", "student")
+            .eq("status", "attended")
+            .ilike("participant_name", `%${cleanName}%`)
+            .order("appointment_date", { ascending: false })
+            .order("created_at", { ascending: false }),
+        ]);
+        plannedAppointments = (plannedRes.data || []).filter((a: any) =>
+          matchName(a.participant_name)
+        );
+        attendedAppointmentsData = (attendedRes.data || []).filter((a: any) =>
+          matchName(a.participant_name)
+        );
+      } else {
+        const [plannedRes, attendedRes] = await Promise.all([
+          fetch(`/api/appointments?search=${encodeURIComponent(cleanName)}&status=planned`),
+          fetch(`/api/appointments?search=${encodeURIComponent(cleanName)}&status=attended`),
+        ]);
+        if (plannedRes.ok) {
+          const data = await plannedRes.json();
+          const allApps = Array.isArray(data) ? data : data.appointments || [];
+          plannedAppointments = allApps.filter((a: any) => matchName(a.participant_name));
+        }
+        if (attendedRes.ok) {
+          const data = await attendedRes.json();
+          const allApps = Array.isArray(data) ? data : data.appointments || [];
+          attendedAppointmentsData = allApps.filter((a: any) => matchName(a.participant_name));
+        }
+      }
+      setProfileAppointments(plannedAppointments);
+      setProfileAttendedAppointments(attendedAppointmentsData);
+
+      if (supabase) {
+        const actualSourceKeys = new Set<string>();
+        const [refKeyData, indKeyData, incKeyData, parKeyData] = await Promise.all([
+          supabase.from("referrals").select("id").ilike("student_name", `%${cleanName}%`),
+          supabase.from("individual_requests").select("id").ilike("student_name", `%${cleanName}%`),
+          supabase.from("student_incidents").select("id").ilike("target_student_name", `%${cleanName}%`),
+          supabase.from("parent_meeting_requests").select("id").ilike("student_name", `%${cleanName}%`),
+        ]);
+
+        (refKeyData.data || []).forEach((r: any) => {
+          const key = buildSourceRecordKey("teacher_referral", r.id);
+          if (key) actualSourceKeys.add(key);
+        });
+        (indKeyData.data || []).forEach((r: any) => {
+          const key = buildSourceRecordKey("self_application", r.id);
+          if (key) actualSourceKeys.add(key);
+        });
+        (incKeyData.data || []).forEach((r: any) => {
+          const key = buildSourceRecordKey("student_report", r.id);
+          if (key) actualSourceKeys.add(key);
+        });
+        (parKeyData.data || []).forEach((r: any) => {
+          const key = buildSourceRecordKey("parent_request", r.id);
+          if (key) actualSourceKeys.add(key);
+        });
+
+        const [obsRes, refRes, indRes, incRes, parRes] = await Promise.all([
+          supabase
+            .from("observation_pool")
+            .select("*")
+            .ilike("student_name", `%${cleanName}%`)
+            .order("created_at", { ascending: false }),
+          supabase.from("referrals").select("*").ilike("student_name", `%${cleanName}%`),
+          supabase.from("individual_requests").select("*").ilike("student_name", `%${cleanName}%`),
+          supabase.from("student_incidents").select("*").ilike("target_student_name", `%${cleanName}%`),
+          supabase.from("parent_meeting_requests").select("*").ilike("student_name", `%${cleanName}%`),
+        ]);
+
+        const rawRecords: any[] = [];
+        (refRes.data || [])
+          .filter((r: any) => matchName(r.student_name))
+          .forEach((r: any) =>
+            rawRecords.push({
+              id: `teacher_referral-${r.id}`,
+              source_type: "teacher_referral",
+              source_record_id: r.id,
+              source_label: "Öğretmen Yönlendirmesi",
+              student_name: r.student_name,
+              class_display: r.class_display,
+              class_key: r.class_key,
+              reason: r.reason || "Belirtilmemiş",
+              note: r.note || null,
+              created_at: r.created_at,
+              record_status: r.status || null,
+            })
+          );
+        (indRes.data || [])
+          .filter((r: any) => matchName(r.student_name))
+          .forEach((r: any) => {
+            const parsed = extractReasonAndNote(r.note, "Bireysel Başvuru");
+            rawRecords.push({
+              id: `self_application-${r.id}`,
+              source_type: "self_application",
+              source_record_id: r.id,
+              source_label: "Bireysel Başvuru",
+              student_name: r.student_name,
+              class_display: r.class_display,
+              class_key: r.class_key,
+              reason: parsed.reason,
+              note: parsed.note,
+              created_at: r.created_at,
+              record_status: r.status || null,
+            })
+          });
+        (incRes.data || [])
+          .filter((r: any) => matchName(r.target_student_name))
+          .forEach((r: any) => {
+            const parsed = extractReasonAndNote(
+              r.description || r.note || null,
+              "Öğrenci Bildirimi"
+            );
+            rawRecords.push({
+              id: `student_report-${r.id}`,
+              source_type: "student_report",
+              source_record_id: r.id,
+              source_label: "Öğrenci Bildirimi",
+              student_name: r.target_student_name,
+              class_display: r.target_class_display,
+              class_key: r.target_class_key,
+              reason: parsed.reason,
+              note: parsed.note,
+              created_at: r.created_at || r.incident_date,
+              record_status: r.status || null,
+            })
+          });
+        (parRes.data || [])
+          .filter((r: any) => matchName(r.student_name))
+          .forEach((r: any) => {
+            const parsed = extractReasonAndNote(
+              r.note || r.reason || r.detail || r.subject || null,
+              "Veli Talebi"
+            );
+            rawRecords.push({
+              id: `parent_request-${r.id}`,
+              source_type: "parent_request",
+              source_record_id: r.id,
+              source_label: "Veli Talebi",
+              student_name: r.student_name,
+              class_display: r.class_display,
+              class_key: r.class_key,
+              reason: parsed.reason,
+              note: parsed.note,
+              created_at: r.created_at,
+              record_status: r.status || null,
+            })
+          });
+
+        (obsRes.data || [])
+          .filter((r: any) => matchName(r.student_name))
+          .forEach((r: any) => {
+            const proxyMeta = getObservationProxyMeta(r);
+            const parsed = extractReasonAndNote(r.note || null, "Gözlem Havuzu");
+            const proxyKey = buildSourceRecordKey(
+              proxyMeta.sourceType,
+              proxyMeta.sourceRecordId
+            );
+            if (proxyMeta.isProxy && proxyKey && actualSourceKeys.has(proxyKey)) return;
+            rawRecords.push({
+              id: proxyMeta.isProxy
+                ? `${proxyMeta.sourceType}-${proxyMeta.sourceRecordId || r.id}`
+                : `observation-${r.id}`,
+              source_type: proxyMeta.sourceType,
+              source_record_id: proxyMeta.sourceRecordId || r.id,
+              source_label:
+                proxyMeta.sourceType === "teacher_referral"
+                  ? "Öğretmen Yönlendirmesi"
+                  : proxyMeta.sourceType === "parent_request"
+                  ? "Veli Talebi"
+                  : proxyMeta.sourceType === "student_report"
+                  ? "Öğrenci Bildirimi"
+                  : proxyMeta.sourceType === "self_application"
+                  ? "Bireysel Başvuru"
+                  : "Gözlem Havuzu",
+              student_name: r.student_name,
+              class_display: r.class_display,
+              class_key: r.class_key,
+              reason: parsed.reason,
+              note: parsed.note,
+              created_at: r.created_at || r.observed_at,
+              record_status: r.status || null,
+            });
+          });
+
+        const deduped = new Map<string, any>();
+        rawRecords.forEach((record) => {
+          const sourceKey = buildSourceRecordKey(record.source_type, record.source_record_id);
+          if (!sourceKey) return;
+          if (!deduped.has(sourceKey)) deduped.set(sourceKey, record);
+        });
+
+        const findAppointmentForRecord = (
+          appointments: StudentAppointment[],
+          record: any
+        ) =>
+          appointments.find(
+            (appointment) =>
+              isAppointmentLinkedToSource(
+                appointment,
+                record.source_type,
+                record.source_record_id
+              ) ||
+              matchesApplicationToAppointment(
+                appointment,
+                record.student_name,
+                record.class_display,
+                record.class_key
+              )
+          ) || null;
+
+        const allHistory = Array.from(deduped.values())
+          .map((record) => {
+            const matchedAttended = findAppointmentForRecord(
+              attendedAppointmentsData,
+              record
+            );
+            const matchedScheduled = findAppointmentForRecord(plannedAppointments, record);
+            const mappedRecordStatus =
+              record.record_status === "completed"
+                ? "Görüşüldü"
+                : record.record_status === "scheduled" || record.record_status === "converted"
+                ? "Randevu verildi"
+                : isPendingStatus(record.record_status)
+                ? "Bekliyor"
+                : "Bekliyor";
+            const status = matchedAttended
+              ? "Görüşüldü"
+              : matchedScheduled
+              ? "Randevu verildi"
+              : mappedRecordStatus;
+            const outcomeLabel = getOutcomeLabelFromAppointment(matchedAttended);
+            const lastActivityAt = latestTimestamp(
+              record.created_at,
+              matchedScheduled?.updated_at,
+              matchedScheduled?.created_at,
+              matchedAttended?.updated_at,
+              matchedAttended?.created_at
+            );
+            return {
+              id: record.id,
+              sourceType: record.source_type,
+              sourceLabel: record.source_label,
+              sourceRecordId: record.source_record_id,
+              reason: record.reason || "Belirtilmemiş",
+              note: record.note || null,
+              status,
+              outcomeLabel,
+              lastActivityAt,
+            } as StudentApplicationHistoryItem;
+          })
+          .sort(
+            (a, b) =>
+              new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime()
+          );
+
+        setProfileApplicationHistory(allHistory);
+        setProfilePendingApps(
+          allHistory.filter((item) => item.status === "Bekliyor").map((item) => ({
+            id: item.id,
+            _source: item.sourceType,
+            _note: item.note || item.reason || "",
+          }))
+        );
+      } else {
+        setProfileApplicationHistory([]);
+        setProfilePendingApps([]);
+      }
+    } catch (err) {
+      console.error("loadStudentActiveData error:", err);
+      setProfileAppointments([]);
+      setProfileAttendedAppointments([]);
+      setProfileApplicationHistory([]);
+      setProfilePendingApps([]);
+    }
+  };
+
+  const closeStudentProfile = () => {
+    setSelectedProfileStudent(null);
+    setProfileHistory(null);
+    setProfileAppointments([]);
+    setProfileAttendedAppointments([]);
+    setProfileApplicationHistory([]);
+    setProfilePendingApps([]);
+  };
 
   const loadReferrals = useCallback(async () => {
     setReferralsLoading(true);
@@ -359,6 +787,96 @@ export default function SinifimPage() {
   const getStudentPendingRequest = (studentText: string) =>
     pendingRequests.find(r => r.student_name === studentText);
 
+  const formatDateTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  };
+
+  const getReasonColor = (reason: string) => {
+    const r = reason.toLowerCase();
+    if (r.includes("devamsızlık")) return "bg-red-100 text-red-700 border-red-200";
+    if (r.includes("kavga") || r.includes("şiddet")) return "bg-orange-100 text-orange-700 border-orange-200";
+    if (r.includes("ders")) return "bg-blue-100 text-blue-700 border-blue-200";
+    if (r.includes("sosyal") || r.includes("uyum")) return "bg-purple-100 text-purple-700 border-purple-200";
+    return "bg-slate-100 text-slate-700 border-slate-200";
+  };
+
+  const normalizeDecisionText = (value: string) =>
+    value
+      .toLocaleLowerCase("tr-TR")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/ç/g, "c")
+      .replace(/ğ/g, "g")
+      .replace(/ı/g, "i")
+      .replace(/ö/g, "o")
+      .replace(/ş/g, "s")
+      .replace(/ü/g, "u")
+      .trim();
+
+  const getOutcomeLabel = (decisions?: string[] | null): string | null => {
+    if (!decisions || decisions.length === 0) return null;
+    for (const decision of decisions) {
+      const normalized = normalizeDecisionText(decision);
+      if (normalized.includes("tamamlandi")) return "Tamamlandı";
+      if (normalized.includes("aktif takip") || normalized.includes("duzenli gorusme")) return "Aktif Takip";
+    }
+    return null;
+  };
+
+  const getOutcomeLabelFromAppointment = (appointment?: any | null): string | null => {
+    if (!appointment) return null;
+    const byDecision = getOutcomeLabel(appointment.outcome_decision || null);
+    if (byDecision) return byDecision;
+
+    const normalizedSourceStatus = normalizeDecisionText(
+      String(appointment.source_application_status || "")
+    );
+    if (normalizedSourceStatus.includes("active_follow")) return "Aktif Takip";
+    if (normalizedSourceStatus.includes("completed")) return "Tamamlandı";
+
+    const summaryText = normalizeDecisionText(
+      `${appointment.outcome_summary || ""} ${appointment.next_action || ""}`
+    );
+    if (summaryText.includes("aktif takip")) return "Aktif Takip";
+    if (summaryText.includes("tamamlandi")) return "Tamamlandı";
+
+    return null;
+  };
+
+  const latestTimestamp = (...values: Array<string | null | undefined>) => {
+    const sorted = values
+      .filter((value): value is string => Boolean(value))
+      .map((value) => ({ raw: value, time: new Date(value).getTime() }))
+      .filter((item) => Number.isFinite(item.time))
+      .sort((a, b) => b.time - a.time);
+    return sorted[0]?.raw || new Date().toISOString();
+  };
+
+  const isAppointmentAfterReferral = (
+    appointment: StudentAppointment,
+    referralDate: string
+  ) => {
+    const referralTime = new Date(referralDate).getTime();
+    if (!Number.isFinite(referralTime)) return true;
+    const appointmentDateTime = appointment.appointment_date
+      ? new Date(`${appointment.appointment_date}T00:00:00`).getTime()
+      : Number.NaN;
+    const appointmentCreatedAt = appointment.created_at
+      ? new Date(appointment.created_at).getTime()
+      : Number.NaN;
+    const appointmentUpdatedAt = appointment.updated_at
+      ? new Date(appointment.updated_at).getTime()
+      : Number.NaN;
+    const candidateTimes = [
+      appointmentDateTime,
+      appointmentCreatedAt,
+      appointmentUpdatedAt,
+    ].filter((time) => Number.isFinite(time));
+    if (candidateTimes.length === 0) return false;
+    return Math.max(...candidateTimes) >= referralTime;
+  };
+
   const toggleExpand = (name: string) =>
     setExpandedStudents(prev => {
       const s = new Set(prev);
@@ -385,37 +903,286 @@ export default function SinifimPage() {
   return (
     <div className="space-y-4 sm:space-y-5">
       {/* ── Header ── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700 p-4 text-white shadow-xl sm:p-5">
-        <div className="absolute -top-12 -right-12 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="p-3 rounded-2xl bg-white/20 backdrop-blur shrink-0">
-            <GraduationCap className="h-7 w-7 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold">Sınıfım</h1>
-              {auth.isHomeroom && (
-                <span className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-white/20 backdrop-blur font-medium">
-                  <Award className="h-3 w-3" /> Sınıf Rehber Öğretmeni
-                </span>
-              )}
+      {!selectedProfileStudent && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 p-2.5 shadow-lg">
+              <GraduationCap className="h-5 w-5 text-white" />
             </div>
-            <p className="text-white/80 text-sm mt-0.5">{auth.teacherName}</p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-slate-800">Sınıfım</h1>
+                {auth.classDisplay && (
+                  <span className="rounded-lg bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-700">{auth.classDisplay}</span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500">
+                {`${auth.teacherName} · ${students.length} öğrenci`}
+              </p>
+            </div>
           </div>
-          {auth.classDisplay && (
-            <div className="shrink-0 rounded-2xl bg-white/10 px-3 py-2 text-left backdrop-blur sm:bg-transparent sm:px-0 sm:py-0 sm:text-right">
-              <p className="text-2xl font-bold">{auth.classDisplay}</p>
-              <p className="text-white/60 text-xs">{students.length} öğrenci</p>
+          {!auth.classKey && (
+            <div className="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+              <AlertCircle className="h-3.5 w-3.5" />
+              Sınıf ataması yok
             </div>
           )}
         </div>
-        {!auth.classKey && (
-          <div className="relative mt-3 flex items-center gap-2 text-sm text-white/70 bg-white/10 rounded-xl px-3 py-2">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            Sınıf ataması yok — yöneticinizle iletişime geçin
-          </div>
-        )}
-      </div>
+      )}
+
+      {/* ── Öğrenci Profili ── */}
+      {selectedProfileStudent ? (
+        <div className="space-y-4">
+          {profileLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <RefreshCw className="h-6 w-6 animate-spin text-teal-500 mr-2" />
+              <span className="text-sm text-slate-500">Yükleniyor...</span>
+            </div>
+          ) : profileHistory ? (() => {
+            const hasReferrals = profileApplicationHistory.length > 0;
+            const showCharts = profileHistory.totalReferrals >= 5;
+            const hasRecentActivity = profileHistory.referrals?.some(
+              (r: any) => new Date(r.date) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+            );
+            const hasActiveAppointment = profileAppointments.length > 0;
+            const hasPendingApps = profilePendingApps.length > 0;
+            const hasActiveProcesses = hasActiveAppointment || hasPendingApps;
+
+            return (
+              <>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={closeStudentProfile}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-800"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-sm font-bold text-white shadow-lg">
+                    <User className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h1 className="text-lg font-bold text-slate-800 truncate">{selectedProfileStudent}</h1>
+                    <p className="text-xs text-slate-500">{profileHistory.classDisplay || auth.classDisplay || ""}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 rounded-full bg-violet-100 px-3 py-1">
+                      <History className="h-3.5 w-3.5 text-violet-600" />
+                      <span className="text-sm font-bold text-violet-700">{profileApplicationHistory.length}</span>
+                      <span className="text-xs text-violet-500 hidden sm:inline">kayıt</span>
+                    </div>
+                  </div>
+                </div>
+
+                {hasActiveProcesses && (
+                <Card className="border-0 shadow-sm overflow-hidden">
+                  <CardHeader className="border-b bg-slate-50 py-2.5 px-4">
+                    <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-blue-500" />
+                      Aktif Süreçler
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0 divide-y divide-slate-100">
+                    {profileAppointments.map((app: any) => {
+                      const appDate = app.appointment_date
+                        ? new Date(app.appointment_date + "T00:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" })
+                        : "";
+                      const lessonSlot = app.start_time || app.lesson_slot || "";
+                      return (
+                      <div key={app.id} className="flex items-center justify-between px-4 py-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100">
+                            <Calendar className="h-3.5 w-3.5 text-emerald-600" />
+                          </div>
+                          <div>
+                            <span className="text-sm font-medium text-slate-700">{appDate}</span>
+                            {lessonSlot && (
+                              <span className="ml-2 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                {lessonSlot}. ders
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Randevu Verildi</span>
+                      </div>
+                      );
+                    })}
+                    {profilePendingApps.map((app: any, idx: number) => {
+                      const source = app._source || app.source_type || "observation";
+                      const reason = app._note || app.note || "";
+                      const sourceLabel = source === "teacher_referral" ? "Öğretmen Yönlendirmesi"
+                        : source === "parent_request" ? "Veli Talebi"
+                        : source === "student_report" ? "Öğrenci Bildirimi"
+                        : source === "self_application" ? "Bireysel Başvuru"
+                        : source === "observation" ? "Gözlem"
+                        : "Başvuru";
+                      const displayNote = reason.replace(/^\[.*?\]\s*/, "").trim();
+                      const topicMatch = reason.match(/^\[(.*?)\]/);
+                      const topic = topicMatch ? topicMatch[1] : "";
+                      return (
+                        <div key={app.id || idx} className="flex items-center justify-between px-4 py-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100">
+                              <AlertCircle className="h-3.5 w-3.5 text-amber-600" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm font-medium text-slate-700">{sourceLabel}</span>
+                                {topic && (
+                                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{topic}</span>
+                                )}
+                              </div>
+                              {displayNote && (
+                                <p className="text-[11px] text-slate-500 truncate max-w-[300px]">{displayNote}</p>
+                              )}
+                            </div>
+                          </div>
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Bekliyor</span>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              )}
+
+                {showCharts && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Card className="border-0 shadow-sm">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                          <BarChart3 className="h-4 w-4 text-violet-500" />
+                          Neden Dağılımı
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ReasonDistributionChart data={profileHistory.stats.byReason} />
+                      </CardContent>
+                    </Card>
+                    <Card className="border-0 shadow-sm">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                          <UserCheck className="h-4 w-4 text-cyan-500" />
+                          Öğretmen Dağılımı
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <TeacherDistributionChart data={profileHistory.stats.byTeacher} />
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
+                {hasRecentActivity && (
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                        <Activity className="h-4 w-4 text-emerald-500" />
+                        Son 30 Gün Aktivitesi
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ReferralTimeline referrals={profileHistory.referrals} />
+                    </CardContent>
+                  </Card>
+                )}
+
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="border-b bg-slate-50 pb-3">
+                  <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                    <History className="h-4 w-4 text-slate-500" />
+                    Yönlendirme Geçmişi
+                    <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">
+                      {profileApplicationHistory.length} kayıt
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {!hasReferrals ? (
+                    <div className="p-8 text-center">
+                      <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
+                        <CheckCircle2 className="h-7 w-7 text-emerald-500" />
+                      </div>
+                      <p className="font-medium text-slate-600">Yönlendirme Kaydı Yok</p>
+                      <p className="mt-1 text-xs text-slate-500">Bu öğrenci için henüz yönlendirme yapılmamış</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-left text-sm">
+                        <thead className="bg-slate-50">
+                          <tr className="border-b border-slate-200 text-slate-700">
+                            <th className="px-4 py-3 font-semibold">Nasıl Yönlendirildi</th>
+                            <th className="px-4 py-3 font-semibold">Neden</th>
+                            <th className="px-4 py-3 font-semibold">Durum</th>
+                            <th className="px-4 py-3 font-semibold">Görüşme Sonucu</th>
+                            <th className="px-4 py-3 font-semibold">Son Güncelleme</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {profileApplicationHistory.map((item) => {
+                            return (
+                              <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
+                                <td className="px-4 py-3">
+                                  <Badge variant="outline" className="text-xs">
+                                    {item.sourceLabel}
+                                  </Badge>
+                                </td>
+                                <td className="px-4 py-3 text-slate-600 max-w-[320px]">
+                                  <div className="space-y-1">
+                                    <Badge className={`${getReasonColor(item.reason)} border text-xs`}>
+                                      {item.reason}
+                                    </Badge>
+                                    {item.note && (
+                                      <p className="text-xs text-slate-500 truncate">{item.note}</p>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <Badge
+                                    className={
+                                      item.status === "Görüşüldü"
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : item.status === "Randevu verildi"
+                                        ? "bg-blue-100 text-blue-700"
+                                        : "bg-amber-100 text-amber-700"
+                                    }
+                                  >
+                                    {item.status}
+                                  </Badge>
+                                </td>
+                                <td className="px-4 py-3">
+                                  {item.outcomeLabel ? (
+                                    <Badge className="bg-violet-100 text-violet-700">{item.outcomeLabel}</Badge>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">—</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-xs text-slate-500">
+                                  {new Date(item.lastActivityAt).toLocaleString("tr-TR", {
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    year: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              </>
+            );
+          })() : (
+            <div className="text-center py-12 text-slate-400">
+              <p className="text-sm">Öğrenci bilgisi yüklenemedi</p>
+            </div>
+          )}
+        </div>
+      ) : (
+      <>
 
       {/* ── Tabs ── */}
       <div className="flex gap-2 overflow-x-auto rounded-xl bg-slate-100 p-1.5">
@@ -540,77 +1307,68 @@ export default function SinifimPage() {
       {/* ── Class List ── */}
       {activeTab === "class-list" && (
         <Card className="border-0 shadow-sm">
-          <CardHeader className="flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="text-base">
-              Sınıf Listesi
-              {auth.classDisplay && <span className="ml-2 text-sm font-normal text-slate-500">({auth.classDisplay})</span>}
-            </CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => auth.classKey && loadStudents(auth.classKey)} disabled={studentsLoading || !auth.classKey}>
-              <RefreshCw className={`h-4 w-4 ${studentsLoading ? "animate-spin" : ""}`} />
-            </Button>
+          <CardHeader className="py-3 px-4 border-b border-slate-100">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input type="text" placeholder="Öğrenci adı soyadı" value={newStudentName}
+                onChange={e => setNewStudentName(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleAddStudent()}
+                className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 bg-white" />
+              <input type="text" placeholder="No" value={newStudentNumber}
+                onChange={e => setNewStudentNumber(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleAddStudent()}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 bg-white sm:w-20" />
+              <Button onClick={handleAddStudent} disabled={!newStudentName.trim() || addingStudent} size="sm" className="bg-teal-600 hover:bg-teal-700 text-white px-3">
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="p-0">
             {!auth.classKey ? (
               <div className="text-center py-12 text-slate-400">
                 <UserCheck className="h-10 w-10 mx-auto mb-3 opacity-30" /><p>Sınıf ataması yapılmamış</p>
               </div>
+            ) : studentsLoading ? (
+              <div className="flex justify-center py-8"><div className="w-8 h-8 border-4 border-teal-500/30 rounded-full animate-spin border-t-teal-500" /></div>
+            ) : students.length === 0 ? (
+              <div className="text-center py-8 text-slate-400">
+                <Users className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Sınıf listesi boş</p>
+              </div>
             ) : (
-              <>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <input type="text" placeholder="Öğrenci adı soyadı" value={newStudentName}
-                    onChange={e => setNewStudentName(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && handleAddStudent()}
-                    className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400" />
-                  <input type="text" placeholder="No" value={newStudentNumber}
-                    onChange={e => setNewStudentNumber(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && handleAddStudent()}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 sm:w-20" />
-                  <Button onClick={handleAddStudent} disabled={!newStudentName.trim() || addingStudent} size="sm" className="bg-violet-600 hover:bg-violet-700 text-white px-3 sm:self-auto">
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-                {studentsLoading ? (
-                  <div className="flex justify-center py-8"><div className="w-8 h-8 border-4 border-violet-500/30 rounded-full animate-spin border-t-violet-500" /></div>
-                ) : students.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400">
-                    <Users className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Sınıf listesi boş</p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-slate-100">
-                    {students.map((s, i) => {
-                      const pending = getStudentPendingRequest(s.text);
-                      return (
-                        <div key={s.value} className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="flex min-w-0 items-center gap-3">
-                            <span className="text-xs text-slate-400 w-5 text-right shrink-0">{i + 1}</span>
-                            <span className="text-sm text-slate-800 font-medium truncate">{s.text}</span>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
-                            {pending ? (
-                              <Badge className="text-xs bg-amber-100 text-amber-700">
-                                {pending.request_type === "delete" ? "Silme" : "Sınıf değişikliği"} talebi bekliyor
-                              </Badge>
-                            ) : (
-                              <>
-                                <button onClick={() => { setRequestModal({ student: s, type: "class_change" }); setClassChangeTarget(""); }}
-                                  className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Sınıf değiştirme talebi">
-                                  <ArrowRightLeft className="h-3.5 w-3.5" />
-                                  <span className="hidden sm:inline">Sınıf Değiştir</span>
-                                </button>
-                                <button onClick={() => setRequestModal({ student: s, type: "delete" })}
-                                  className="flex items-center gap-1 px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Silme talebi">
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                  <span className="hidden sm:inline">Sil</span>
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
+              <div className="divide-y divide-slate-100">
+                {students.map((s, i) => {
+                  const studentReferrals = classReferrals.filter(r =>
+                    r.student_name.replace(/^\d+\s+/, "").trim().toLowerCase() === s.text.replace(/^\d+\s+/, "").trim().toLowerCase()
+                  );
+                  const hasReferral = studentReferrals.length > 0;
+                  const pending = getStudentPendingRequest(s.text);
+                  const cleanName = s.text.replace(/^\d+\s+/, "").trim();
+                  return (
+                    <div key={s.value} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50/50">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-500">
+                        {i + 1}
+                      </div>
+                      <button
+                        onClick={() => openStudentProfile(s.text)}
+                        className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700 text-left hover:text-teal-700 transition-colors"
+                      >
+                        {s.text}
+                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {hasReferral && (
+                          <Badge className="text-[10px] bg-violet-100 text-violet-700 border-0">
+                            {studentReferrals.length}
+                          </Badge>
+                        )}
+                        {pending ? (
+                          <Badge className="text-[10px] bg-amber-100 text-amber-700 border-0">
+                            {pending.request_type === "delete" ? "Silme" : "Değişiklik"} bekliyor
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -823,6 +1581,9 @@ export default function SinifimPage() {
             </div>
           )}
         </div>
+      )}
+
+      </>
       )}
 
       {/* ── Student Request Modal ── */}

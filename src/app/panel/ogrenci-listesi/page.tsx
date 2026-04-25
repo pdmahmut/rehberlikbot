@@ -71,6 +71,40 @@ interface StudentHistory {
   };
 }
 
+interface StudentAppointment {
+  id: string;
+  participant_name?: string;
+  participant_class?: string | null;
+  appointment_date?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  outcome_decision?: string[] | null;
+}
+
+interface StudentApplicationHistoryItem {
+  id: string;
+  sourceType: string;
+  sourceLabel: string;
+  sourceRecordId: string;
+  reason: string;
+  note: string | null;
+  status: "Bekliyor" | "Randevu verildi" | "Görüşüldü";
+  outcomeLabel: string | null;
+  lastActivityAt: string;
+}
+
+const extractReasonAndNote = (rawNote: string | null | undefined, fallback: string) => {
+  const text = (rawNote || "").trim();
+  if (!text) return { reason: fallback, note: null as string | null };
+  const topicMatch = text.match(/^\[(.*?)\]\s*(.*)$/);
+  if (topicMatch) {
+    const topic = topicMatch[1]?.trim() || fallback;
+    const note = (topicMatch[2] || "").trim() || null;
+    return { reason: topic, note };
+  }
+  return { reason: text, note: null as string | null };
+};
+
 const normalizeClassValue = (value?: string | null) =>
   (value || "")
     .toLocaleLowerCase("tr-TR")
@@ -145,7 +179,9 @@ export default function OgrenciListesiPage() {
 
   // Aktif randevular ve bekleyen başvurular
   const [activeAppointments, setActiveAppointments] = useState<any[]>([]);
+  const [attendedAppointments, setAttendedAppointments] = useState<StudentAppointment[]>([]);
   const [pendingApplications, setPendingApplications] = useState<any[]>([]);
+  const [studentApplicationHistory, setStudentApplicationHistory] = useState<StudentApplicationHistoryItem[]>([]);
 
   // Görünüm: 'list' veya 'profile'
   const viewMode = selectedStudent ? "profile" : "list";
@@ -226,75 +262,58 @@ export default function OgrenciListesiPage() {
       (name || "").replace(/^\d+\s+/, "").trim().toLowerCase() === cleanName.toLowerCase();
 
     try {
-      const today = new Date().toISOString().slice(0, 10);
-
-      // 1. Planlanan randevular
-      const appRes = await fetch(
-        `/api/appointments?search=${encodeURIComponent(cleanName)}&status=planned&from=${today}`
-      );
       let plannedAppointments: any[] = [];
-      if (appRes.ok) {
-        const data = await appRes.json();
-        const allApps = Array.isArray(data) ? data : data.appointments || [];
-        plannedAppointments = allApps.filter((a: any) => matchName(a.participant_name));
-        setActiveAppointments(plannedAppointments);
-      } else {
-        setActiveAppointments([]);
-      }
-
-      // 2. Bekleyen başvurular — tüm tablolardan çek
+      let attendedAppointmentsData: StudentAppointment[] = [];
       if (supabase) {
-        const pending: any[] = [];
-        const seenSourceKeys = new Set<string>();
+        const [plannedRes, attendedRes] = await Promise.all([
+          supabase
+            .from("appointments")
+            .select("*")
+            .eq("participant_type", "student")
+            .neq("status", "pending")
+            .neq("status", "attended")
+            .neq("status", "cancelled")
+            .ilike("participant_name", `%${cleanName}%`)
+            .order("appointment_date", { ascending: false })
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("appointments")
+            .select("*")
+            .eq("participant_type", "student")
+            .eq("status", "attended")
+            .ilike("participant_name", `%${cleanName}%`)
+            .order("appointment_date", { ascending: false })
+            .order("created_at", { ascending: false }),
+        ]);
+        plannedAppointments = (plannedRes.data || []).filter((a: any) =>
+          matchName(a.participant_name)
+        );
+        attendedAppointmentsData = (attendedRes.data || []).filter((a: any) =>
+          matchName(a.participant_name)
+        );
+      } else {
+        const [plannedRes, attendedRes] = await Promise.all([
+          fetch(`/api/appointments?search=${encodeURIComponent(cleanName)}&status=planned`),
+          fetch(`/api/appointments?search=${encodeURIComponent(cleanName)}&status=attended`),
+        ]);
+        if (plannedRes.ok) {
+          const data = await plannedRes.json();
+          const allApps = Array.isArray(data) ? data : data.appointments || [];
+          plannedAppointments = allApps.filter((a: any) => matchName(a.participant_name));
+        }
+        if (attendedRes.ok) {
+          const data = await attendedRes.json();
+          const allApps = Array.isArray(data) ? data : data.appointments || [];
+          attendedAppointmentsData = allApps.filter((a: any) => matchName(a.participant_name));
+        }
+      }
+      setActiveAppointments(plannedAppointments);
+      setAttendedAppointments(attendedAppointmentsData);
+
+      // 2. Başvuru geçmişi (tüm kaynaklar)
+      if (supabase) {
         const actualSourceKeys = new Set<string>();
 
-        // Randevu eşleşme: SADECE kaynak bağlantısı (source link) üzerinden kontrol et.
-        // İsim bazlı eşleşmeyi yalnızca randevuda kaynak bilgisi varken kullan,
-        // aksi halde aynı öğrencinin farklı başvuruları yanlışlıkla filtrelenir.
-        const hasMatchingAppointment = (record: {
-          source_type: string;
-          source_record_id: string;
-          student_name: string;
-          class_display?: string | null;
-          class_key?: string | null;
-        }) =>
-          plannedAppointments.some((appointment) => {
-            // Önce kaynak bağlantısı ile kontrol et (kesin eşleşme)
-            if (
-              isAppointmentLinkedToSource(
-                appointment,
-                record.source_type,
-                record.source_record_id
-              )
-            ) {
-              return true;
-            }
-
-            // İsim bazlı eşleşme: SADECE randevuda kaynak bilgisi YOKSA kullan.
-            // Randevuda kaynak bilgisi varsa (source_application_type veya
-            // source_application_id doluysa) bu randevu zaten belirli bir başvuruya
-            // bağlıdır, diğer başvuruları gizlememeli.
-            const hasSourceInfo =
-              appointment.source_application_type ||
-              appointment.source_application_id ||
-              appointment.source_individual_request_id;
-            if (hasSourceInfo) return false;
-
-            return matchesApplicationToAppointment(
-              appointment,
-              record.student_name,
-              record.class_display,
-              record.class_key
-            );
-          });
-
-        const pushPending = (record: any) => {
-          const sourceKey = buildSourceRecordKey(record.source_type, record.source_record_id);
-          if (sourceKey && seenSourceKeys.has(sourceKey)) return;
-          if (hasMatchingAppointment(record)) return;
-          if (sourceKey) seenSourceKeys.add(sourceKey);
-          pending.push(record);
-        };
         const [refKeyData, indKeyData, incKeyData, parKeyData] = await Promise.all([
           supabase.from("referrals").select("id").ilike("student_name", `%${cleanName}%`),
           supabase.from("individual_requests").select("id").ilike("student_name", `%${cleanName}%`),
@@ -319,140 +338,221 @@ export default function OgrenciListesiPage() {
           if (key) actualSourceKeys.add(key);
         });
 
-        // observation_pool (merkezi havuz + gözlemler)
-        const { data: obsData } = await supabase
-          .from("observation_pool")
-          .select("*")
-          .ilike("student_name", `%${cleanName}%`)
-          .order("created_at", { ascending: false });
-        (obsData || []).filter((r: any) => matchName(r.student_name)).forEach((r: any) => {
-          if (!isPendingStatus(r.status) && r.status !== "converted" && r.status !== "scheduled") return;
-          const proxyMeta = getObservationProxyMeta(r);
-          if (proxyMeta.isProxy) {
-            const proxyKey = buildSourceRecordKey(proxyMeta.sourceType, proxyMeta.sourceRecordId);
-            if (proxyKey && actualSourceKeys.has(proxyKey)) return;
-          }
+        const [obsRes, refRes, indRes, incRes, parRes] = await Promise.all([
+          supabase
+            .from("observation_pool")
+            .select("*")
+            .ilike("student_name", `%${cleanName}%`)
+            .order("created_at", { ascending: false }),
+          supabase.from("referrals").select("*").ilike("student_name", `%${cleanName}%`),
+          supabase.from("individual_requests").select("*").ilike("student_name", `%${cleanName}%`),
+          supabase.from("student_incidents").select("*").ilike("target_student_name", `%${cleanName}%`),
+          supabase.from("parent_meeting_requests").select("*").ilike("student_name", `%${cleanName}%`),
+        ]);
 
-          pushPending({
-            id: proxyMeta.isProxy ? `${proxyMeta.sourceType}-${proxyMeta.sourceRecordId || r.id}` : r.id,
-            student_name: r.student_name,
-            class_display: r.class_display,
-            class_key: r.class_key,
-            source_type: proxyMeta.sourceType,
-            source_record_id: proxyMeta.sourceRecordId || r.id,
-            _source: proxyMeta.sourceType,
-            _note: r.note || "",
-            created_at: r.created_at || r.observed_at,
+        const rawRecords: any[] = [];
+        (refRes.data || [])
+          .filter((r: any) => matchName(r.student_name))
+          .forEach((r: any) =>
+            rawRecords.push({
+              id: `teacher_referral-${r.id}`,
+              source_type: "teacher_referral",
+              source_record_id: r.id,
+              source_label: "Öğretmen Yönlendirmesi",
+              student_name: r.student_name,
+              class_display: r.class_display,
+              class_key: r.class_key,
+              reason: r.reason || "Belirtilmemiş",
+              note: r.note || null,
+              created_at: r.created_at,
+              record_status: r.status || null,
+            })
+          );
+        (indRes.data || [])
+          .filter((r: any) => matchName(r.student_name))
+          .forEach((r: any) => {
+            const parsed = extractReasonAndNote(r.note, "Bireysel Başvuru");
+            rawRecords.push({
+              id: `self_application-${r.id}`,
+              source_type: "self_application",
+              source_record_id: r.id,
+              source_label: "Bireysel Başvuru",
+              student_name: r.student_name,
+              class_display: r.class_display,
+              class_key: r.class_key,
+              reason: parsed.reason,
+              note: parsed.note,
+              created_at: r.created_at,
+              record_status: r.status || null,
+            })
           });
-        });
+        (incRes.data || [])
+          .filter((r: any) => matchName(r.target_student_name))
+          .forEach((r: any) => {
+            const parsed = extractReasonAndNote(
+              r.description || r.note || null,
+              "Öğrenci Bildirimi"
+            );
+            rawRecords.push({
+              id: `student_report-${r.id}`,
+              source_type: "student_report",
+              source_record_id: r.id,
+              source_label: "Öğrenci Bildirimi",
+              student_name: r.target_student_name,
+              class_display: r.target_class_display,
+              class_key: r.target_class_key,
+              reason: parsed.reason,
+              note: parsed.note,
+              created_at: r.created_at || r.incident_date,
+              record_status: r.status || null,
+            })
+          });
+        (parRes.data || [])
+          .filter((r: any) => matchName(r.student_name))
+          .forEach((r: any) => {
+            const parsed = extractReasonAndNote(
+              r.note || r.reason || r.detail || r.subject || null,
+              "Veli Talebi"
+            );
+            rawRecords.push({
+              id: `parent_request-${r.id}`,
+              source_type: "parent_request",
+              source_record_id: r.id,
+              source_label: "Veli Talebi",
+              student_name: r.student_name,
+              class_display: r.class_display,
+              class_key: r.class_key,
+              reason: parsed.reason,
+              note: parsed.note,
+              created_at: r.created_at,
+              record_status: r.status || null,
+            })
+          });
 
-        // referrals — randevu verilmemiş olanlar
-        const { data: refData } = await supabase
-          .from("referrals")
-          .select("*")
-          .ilike("student_name", `%${cleanName}%`);
-        (refData || []).filter((r: any) => matchName(r.student_name)).forEach((r: any) => {
-          // referrals'ta status yok, observation_pool'da zaten varsa tekrar ekleme
-          // Sadece aynı source_record_id ile kontrol et (tür bazlı değil)
-          const alreadyInPool = pending.some(
-            (p) => p.source_record_id === r.id && (p._source === "teacher_referral" || p.source_type === "teacher_referral")
-          );
-          if (!alreadyInPool) {
-            // Bu yönlendirme için randevu var mı kontrol et
-            // Basit kontrol: son 30 gündeki yönlendirmeler "bekliyor" sayılır
-            const refDate = new Date(r.created_at);
-            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-            if (refDate > thirtyDaysAgo) {
-              pushPending({ id: r.id, student_name: r.student_name, source_type: "teacher_referral", source_record_id: r.id, _source: "teacher_referral", _note: r.reason || "", created_at: r.created_at });
-            }
-          }
-        });
+        (obsRes.data || [])
+          .filter((r: any) => matchName(r.student_name))
+          .forEach((r: any) => {
+            const proxyMeta = getObservationProxyMeta(r);
+            const parsed = extractReasonAndNote(r.note || null, "Gözlem Havuzu");
+            const proxyKey = buildSourceRecordKey(
+              proxyMeta.sourceType,
+              proxyMeta.sourceRecordId
+            );
+            if (proxyMeta.isProxy && proxyKey && actualSourceKeys.has(proxyKey)) return;
+            rawRecords.push({
+              id: proxyMeta.isProxy
+                ? `${proxyMeta.sourceType}-${proxyMeta.sourceRecordId || r.id}`
+                : `observation-${r.id}`,
+              source_type: proxyMeta.sourceType,
+              source_record_id: proxyMeta.sourceRecordId || r.id,
+              source_label:
+                proxyMeta.sourceType === "teacher_referral"
+                  ? "Öğretmen Yönlendirmesi"
+                  : proxyMeta.sourceType === "parent_request"
+                  ? "Veli Talebi"
+                  : proxyMeta.sourceType === "student_report"
+                  ? "Öğrenci Bildirimi"
+                  : proxyMeta.sourceType === "self_application"
+                  ? "Bireysel Başvuru"
+                  : "Gözlem Havuzu",
+              student_name: r.student_name,
+              class_display: r.class_display,
+              class_key: r.class_key,
+              reason: parsed.reason,
+              note: parsed.note,
+              created_at: r.created_at || r.observed_at,
+              record_status: r.status || null,
+            });
+          });
 
-        // individual_requests
-        const { data: indData } = await supabase
-          .from("individual_requests")
-          .select("*")
-          .ilike("student_name", `%${cleanName}%`);
-        (indData || []).filter((r: any) => matchName(r.student_name) && (isPendingStatus(r.status) || r.status === "converted" || r.status === "scheduled")).forEach((r: any) => {
-          const alreadyInPool = pending.some((p) => p.source_record_id === r.id);
-          if (!alreadyInPool) {
-            pushPending({ id: r.id, student_name: r.student_name, source_type: "self_application", source_record_id: r.id, _source: "self_application", _note: r.note || "", created_at: r.created_at });
-          }
-        });
-
-        // student_incidents
-        const { data: incData } = await supabase
-          .from("student_incidents")
-          .select("*")
-          .ilike("target_student_name", `%${cleanName}%`);
-        (incData || []).filter((r: any) => matchName(r.target_student_name) && (isPendingStatus(r.status) || r.status === "converted" || r.status === "scheduled")).forEach((r: any) => {
-          const alreadyInPool = pending.some((p) => p.source_record_id === r.id);
-          if (!alreadyInPool) {
-            pushPending({ id: r.id, student_name: r.target_student_name, class_display: r.target_class_display, class_key: r.target_class_key, source_type: "student_report", source_record_id: r.id, _source: "student_report", _note: r.description || r.note || "", created_at: r.created_at || r.incident_date });
-          }
-        });
-
-        // parent_meeting_requests
-        const { data: parData } = await supabase
-          .from("parent_meeting_requests")
-          .select("*")
-          .ilike("student_name", `%${cleanName}%`);
-        (parData || []).filter((r: any) => matchName(r.student_name)).forEach((r: any) => {
-          // isPendingStatus: "pending", "new", "bekliyor", "reviewing", boş değer hepsini kapsar
-          if (isPendingStatus(r.status) || r.status === "converted" || r.status === "scheduled") {
-            const alreadyInPool = pending.some((p) => p.source_record_id === r.id);
-            if (!alreadyInPool) {
-              pushPending({ id: r.id, student_name: r.student_name, source_type: "parent_request", source_record_id: r.id, _source: "parent_request", _note: r.note || r.reason || "", created_at: r.created_at });
-            }
-          }
-        });
-
-        // ID bazlı tekrar kaldır
-        const uniqueMap = new Map();
-        pending.forEach((raw) => {
-          const normalized = {
-            ...raw,
-            student_name: raw.student_name || raw.target_student_name,
-            class_display: raw.class_display || raw.target_class_display || null,
-            class_key: raw.class_key || raw.target_class_key || null,
-            source_type: raw.source_type || raw._source || "observation",
-            source_record_id: raw.source_record_id || raw.id,
-            _source: raw._source || raw.source_type || "observation",
-            _note:
-              raw._note ||
-              raw.note ||
-              raw.reason ||
-              raw.description ||
-              raw.detail ||
-              raw.subject ||
-              "",
-            created_at: raw.created_at || raw.incident_date || raw.observed_at,
-          };
-
-          const sourceKey = buildSourceRecordKey(
-            normalized.source_type,
-            normalized.source_record_id
-          );
+        const deduped = new Map<string, any>();
+        rawRecords.forEach((record) => {
+          const sourceKey = buildSourceRecordKey(record.source_type, record.source_record_id);
           if (!sourceKey) return;
-
-          if (
-            normalized.source_type !== "observation" &&
-            raw.source_type === "observation" &&
-            actualSourceKeys.has(sourceKey)
-          ) {
-            return;
-          }
-
-          if (hasMatchingAppointment(normalized)) return;
-          if (!uniqueMap.has(sourceKey)) uniqueMap.set(sourceKey, normalized);
+          if (!deduped.has(sourceKey)) deduped.set(sourceKey, record);
         });
-        setPendingApplications(Array.from(uniqueMap.values()));
+
+        const findAppointmentForRecord = (
+          appointments: StudentAppointment[],
+          record: any
+        ) =>
+          appointments.find(
+            (appointment) =>
+              isAppointmentLinkedToSource(
+                appointment,
+                record.source_type,
+                record.source_record_id
+              ) ||
+              matchesApplicationToAppointment(
+                appointment,
+                record.student_name,
+                record.class_display,
+                record.class_key
+              )
+          ) || null;
+
+        const allHistory = Array.from(deduped.values())
+          .map((record) => {
+            const matchedAttended = findAppointmentForRecord(
+              attendedAppointmentsData,
+              record
+            );
+            const matchedScheduled = findAppointmentForRecord(plannedAppointments, record);
+            const mappedRecordStatus =
+              record.record_status === "completed"
+                ? "Görüşüldü"
+                : record.record_status === "scheduled" || record.record_status === "converted"
+                ? "Randevu verildi"
+                : isPendingStatus(record.record_status)
+                ? "Bekliyor"
+                : "Bekliyor";
+            const status = matchedAttended
+              ? "Görüşüldü"
+              : matchedScheduled
+              ? "Randevu verildi"
+              : mappedRecordStatus;
+            const outcomeLabel = getOutcomeLabelFromAppointment(matchedAttended);
+            const lastActivityAt = latestTimestamp(
+              record.created_at,
+              matchedScheduled?.updated_at,
+              matchedScheduled?.created_at,
+              matchedAttended?.updated_at,
+              matchedAttended?.created_at
+            );
+            return {
+              id: record.id,
+              sourceType: record.source_type,
+              sourceLabel: record.source_label,
+              sourceRecordId: record.source_record_id,
+              reason: record.reason || "Belirtilmemiş",
+              note: record.note || null,
+              status,
+              outcomeLabel,
+              lastActivityAt,
+            } as StudentApplicationHistoryItem;
+          })
+          .sort(
+            (a, b) =>
+              new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime()
+          );
+
+        setStudentApplicationHistory(allHistory);
+        setPendingApplications(
+          allHistory.filter((item) => item.status === "Bekliyor").map((item) => ({
+            id: item.id,
+            _source: item.sourceType,
+            _note: item.note || item.reason || "",
+          }))
+        );
       } else {
+        setStudentApplicationHistory([]);
         setPendingApplications([]);
       }
     } catch (err) {
       console.error("loadStudentActiveData error:", err);
       setActiveAppointments([]);
+      setAttendedAppointments([]);
+      setStudentApplicationHistory([]);
       setPendingApplications([]);
     }
   };
@@ -462,6 +562,8 @@ export default function OgrenciListesiPage() {
     setLoadingHistory(true);
     setStudentHistory(null);
     setActiveAppointments([]);
+    setAttendedAppointments([]);
+    setStudentApplicationHistory([]);
     try {
       let url = `/api/student-history?studentName=${encodeURIComponent(studentName)}`;
       if (classDisplay) url += `&classDisplay=${encodeURIComponent(classDisplay)}`;
@@ -511,6 +613,8 @@ export default function OgrenciListesiPage() {
     setLoadingHistory(true);
     setStudentHistory(null);
     setActiveAppointments([]);
+    setAttendedAppointments([]);
+    setStudentApplicationHistory([]);
     try {
       const studentName = student.text.replace(/^\d+\s+/, "").trim();
       const classDisplay = classes.find((c) => c.value === selectedClass)?.text || "";
@@ -535,6 +639,8 @@ export default function OgrenciListesiPage() {
     setSelectedStudent(null);
     setStudentHistory(null);
     setActiveAppointments([]);
+    setAttendedAppointments([]);
+    setStudentApplicationHistory([]);
     setPendingApplications([]);
   };
 
@@ -563,6 +669,82 @@ export default function OgrenciListesiPage() {
     return "bg-slate-100 text-slate-700 border-slate-200";
   };
 
+  const normalizeDecisionText = (value: string) =>
+    value
+      .toLocaleLowerCase("tr-TR")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/ç/g, "c")
+      .replace(/ğ/g, "g")
+      .replace(/ı/g, "i")
+      .replace(/ö/g, "o")
+      .replace(/ş/g, "s")
+      .replace(/ü/g, "u")
+      .trim();
+
+  const getOutcomeLabel = (decisions?: string[] | null): string | null => {
+    if (!decisions || decisions.length === 0) return null;
+    for (const decision of decisions) {
+      const normalized = normalizeDecisionText(decision);
+      if (normalized.includes("tamamlandi")) return "Tamamlandı";
+      if (normalized.includes("aktif takip") || normalized.includes("duzenli gorusme")) return "Aktif Takip";
+    }
+    return null;
+  };
+
+  const getOutcomeLabelFromAppointment = (appointment?: any | null): string | null => {
+    if (!appointment) return null;
+    const byDecision = getOutcomeLabel(appointment.outcome_decision || null);
+    if (byDecision) return byDecision;
+
+    const normalizedSourceStatus = normalizeDecisionText(
+      String(appointment.source_application_status || "")
+    );
+    if (normalizedSourceStatus.includes("active_follow")) return "Aktif Takip";
+    if (normalizedSourceStatus.includes("completed")) return "Tamamlandı";
+
+    const summaryText = normalizeDecisionText(
+      `${appointment.outcome_summary || ""} ${appointment.next_action || ""}`
+    );
+    if (summaryText.includes("aktif takip")) return "Aktif Takip";
+    if (summaryText.includes("tamamlandi")) return "Tamamlandı";
+
+    return null;
+  };
+
+  const latestTimestamp = (...values: Array<string | null | undefined>) => {
+    const sorted = values
+      .filter((value): value is string => Boolean(value))
+      .map((value) => ({ raw: value, time: new Date(value).getTime() }))
+      .filter((item) => Number.isFinite(item.time))
+      .sort((a, b) => b.time - a.time);
+    return sorted[0]?.raw || new Date().toISOString();
+  };
+
+  const isAppointmentAfterReferral = (
+    appointment: StudentAppointment,
+    referralDate: string
+  ) => {
+    const referralTime = new Date(referralDate).getTime();
+    if (!Number.isFinite(referralTime)) return true;
+    const appointmentDateTime = appointment.appointment_date
+      ? new Date(`${appointment.appointment_date}T00:00:00`).getTime()
+      : Number.NaN;
+    const appointmentCreatedAt = appointment.created_at
+      ? new Date(appointment.created_at).getTime()
+      : Number.NaN;
+    const appointmentUpdatedAt = appointment.updated_at
+      ? new Date(appointment.updated_at).getTime()
+      : Number.NaN;
+    const candidateTimes = [
+      appointmentDateTime,
+      appointmentCreatedAt,
+      appointmentUpdatedAt,
+    ].filter((time) => Number.isFinite(time));
+    if (candidateTimes.length === 0) return false;
+    return Math.max(...candidateTimes) >= referralTime;
+  };
+
   const lastReferralDate = studentHistory?.referrals[0]?.date
     ? formatDate(studentHistory.referrals[0].date)
     : undefined;
@@ -586,7 +768,7 @@ export default function OgrenciListesiPage() {
   // PROFİL GÖRÜNÜMÜ
   // ============================================================
   if (viewMode === "profile") {
-    const hasReferrals = studentHistory && studentHistory.totalReferrals > 0;
+    const hasReferrals = studentApplicationHistory.length > 0;
     const showCharts = studentHistory && studentHistory.totalReferrals >= 5;
     const hasRecentActivity = studentHistory?.referrals.some(
       (r) => new Date(r.date) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
@@ -622,8 +804,8 @@ export default function OgrenciListesiPage() {
             {studentHistory && (
               <div className="flex items-center gap-1.5 rounded-full bg-violet-100 px-3 py-1">
                 <History className="h-3.5 w-3.5 text-violet-600" />
-                <span className="text-sm font-bold text-violet-700">{studentHistory.totalReferrals}</span>
-                <span className="text-xs text-violet-500 hidden sm:inline">yönlendirme</span>
+                <span className="text-sm font-bold text-violet-700">{studentApplicationHistory.length}</span>
+                <span className="text-xs text-violet-500 hidden sm:inline">kayıt</span>
               </div>
             )}
             <button
@@ -771,7 +953,7 @@ export default function OgrenciListesiPage() {
                   <History className="h-4 w-4 text-slate-500" />
                   Yönlendirme Geçmişi
                   <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">
-                    {studentHistory.totalReferrals} kayıt
+                    {studentApplicationHistory.length} kayıt
                   </span>
                 </CardTitle>
               </CardHeader>
@@ -785,49 +967,70 @@ export default function OgrenciListesiPage() {
                     <p className="mt-1 text-xs text-slate-500">Bu öğrenci için henüz yönlendirme yapılmamış</p>
                   </div>
                 ) : (
-                  <div className="divide-y divide-slate-100">
-                    {studentHistory.referrals.map((referral, idx) => (
-                      <div key={referral.id} className="p-4 transition-colors hover:bg-slate-50/50">
-                        <div className="flex items-start gap-3">
-                          <div
-                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${
-                              idx === 0
-                                ? "bg-gradient-to-br from-violet-500 to-purple-600 text-white"
-                                : "bg-slate-100 text-slate-500"
-                            }`}
-                          >
-                            {studentHistory.totalReferrals - idx}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge className={`${getReasonColor(referral.reason)} border text-xs`}>
-                                {referral.reason}
-                              </Badge>
-                              {idx === 0 && (
-                                <span className="rounded bg-violet-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                                  SON
-                                </span>
-                              )}
-                            </div>
-                            <div className="mt-2 flex items-center gap-4 text-xs text-slate-500">
-                              <span className="flex items-center gap-1">
-                                <UserCheck className="h-3.5 w-3.5" />
-                                {referral.teacherName}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Calendar className="h-3.5 w-3.5" />
-                                {formatDateTime(referral.date)}
-                              </span>
-                            </div>
-                            {referral.notes && (
-                              <p className="mt-2 rounded-lg border border-slate-100 bg-slate-50 p-2 text-sm text-slate-600">
-                                📝 {referral.notes}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-left text-sm">
+                      <thead className="bg-slate-50">
+                        <tr className="border-b border-slate-200 text-slate-700">
+                          <th className="px-4 py-3 font-semibold">Nasıl Yönlendirildi</th>
+                          <th className="px-4 py-3 font-semibold">Neden</th>
+                          <th className="px-4 py-3 font-semibold">Durum</th>
+                          <th className="px-4 py-3 font-semibold">Görüşme Sonucu</th>
+                          <th className="px-4 py-3 font-semibold">Son Güncelleme</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {studentApplicationHistory.map((item) => {
+                          return (
+                            <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
+                              <td className="px-4 py-3">
+                                <Badge variant="outline" className="text-xs">
+                                  {item.sourceLabel}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3 text-slate-600 max-w-[320px]">
+                                <div className="space-y-1">
+                                  <Badge className={`${getReasonColor(item.reason)} border text-xs`}>
+                                    {item.reason}
+                                  </Badge>
+                                  {item.note && (
+                                    <p className="text-xs text-slate-500 truncate">{item.note}</p>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <Badge
+                                  className={
+                                    item.status === "Görüşüldü"
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : item.status === "Randevu verildi"
+                                      ? "bg-blue-100 text-blue-700"
+                                      : "bg-amber-100 text-amber-700"
+                                  }
+                                >
+                                  {item.status}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3">
+                                {item.outcomeLabel ? (
+                                  <Badge className="bg-violet-100 text-violet-700">{item.outcomeLabel}</Badge>
+                                ) : (
+                                  <span className="text-xs text-slate-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-xs text-slate-500">
+                                {new Date(item.lastActivityAt).toLocaleString("tr-TR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </CardContent>

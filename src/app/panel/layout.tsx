@@ -32,7 +32,7 @@ const menuCategories = [
   {
     title: 'Takip',
     items: [
-      { href: '/panel/basvurular', label: 'Talepler', icon: MessageSquare },
+      { href: '/panel/basvurular', label: 'Başvurular', icon: MessageSquare },
       { href: '/panel/ogrenci-listesi', label: 'Öğrenciler', icon: GraduationCap },
     ],
   },
@@ -51,10 +51,9 @@ const menuCategories = [
 ];
 
 const teacherMenuItems = [
-  { href: '/panel/ogrenci-yonlendirmesi', label: 'Öğrenci Yönlendirme', icon: Users },
+  { href: '/panel/ogrenci-yonlendirmesi', label: 'Öğrenci Yönlendir', icon: Users },
   { href: '/panel/sinifim', label: 'Sınıfım', icon: GraduationCap },
-  { href: '/panel/yaptigim-yonlendirmeler', label: 'Yaptığım Yönlendirmeler', icon: History },
-  { href: '/panel/hesabim', label: 'Hesabım', icon: KeyRound },
+  { href: '/panel/yaptigim-yonlendirmeler', label: 'Yönlendirmelerim', icon: History },
 ];
 
 const allMenuItems = [...menuCategories.flatMap((category) => category.items), ...teacherMenuItems];
