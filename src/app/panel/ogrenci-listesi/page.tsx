@@ -1,36 +1,37 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { 
+import {
   GraduationCap,
   Search,
   RefreshCw,
   User,
   Calendar,
-  FileText,
   X,
   UserCheck,
   ChevronRight,
+  ChevronDown,
   History,
-  FileDown,
-  FileType,
   Users,
   BarChart3,
-  SortAsc,
-  SortDesc,
-  Star,
-  Sparkles,
+  ArrowLeft,
   Activity,
-  BookOpen,
-  CheckCircle2
+  CalendarPlus,
+  Clock,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { StudentSummaryCard, ReasonDistributionChart, TeacherDistributionChart, ReferralTimeline, MiniStatCard } from "@/components/charts/StudentCharts";
+import { supabase } from "@/lib/supabase";
+import {
+  ReasonDistributionChart,
+  TeacherDistributionChart,
+  ReferralTimeline,
+} from "@/components/charts/StudentCharts";
 
 interface Student {
   value: string;
@@ -64,110 +65,6 @@ interface StudentHistory {
   };
 }
 
-// Sınıf Seçim Kartı
-function ClassSelectCard({ 
-  classItem, 
-  isSelected, 
-  onClick
-}: { 
-  classItem: ClassOption; 
-  isSelected: boolean; 
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`
-        relative p-3 rounded-xl border-2 text-left transition-all duration-300 w-full
-        ${isSelected 
-          ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-teal-50 shadow-lg shadow-emerald-500/10' 
-          : 'border-slate-200 bg-white hover:border-emerald-300 hover:shadow-md'
-        }
-      `}
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className={`
-            p-2 rounded-lg
-            ${isSelected 
-              ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white' 
-              : 'bg-slate-100 text-slate-500'
-            }
-          `}>
-            <GraduationCap className="h-4 w-4" />
-          </div>
-          <span className={`font-medium text-sm ${isSelected ? 'text-emerald-700' : 'text-slate-700'}`}>
-            {classItem.text}
-          </span>
-        </div>
-      </div>
-    </button>
-  );
-}
-
-// Öğrenci Listesi Kartı
-function StudentCard({
-  student,
-  index,
-  isSelected,
-  onClick,
-  referralCount
-}: {
-  student: Student;
-  index: number;
-  isSelected: boolean;
-  onClick: () => void;
-  referralCount?: number;
-}) {
-  const hasReferrals = referralCount && referralCount > 0;
-  
-  return (
-    <button
-      onClick={onClick}
-      className={`
-        w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200
-        ${isSelected 
-          ? 'bg-gradient-to-r from-violet-50 to-purple-50 border-2 border-violet-400 shadow-md' 
-          : 'bg-white hover:bg-slate-50 border border-slate-200 hover:border-violet-200'
-        }
-      `}
-    >
-      <div className="flex items-center gap-3 min-w-0">
-        <div className={`
-          w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold
-          ${isSelected 
-            ? 'bg-gradient-to-br from-violet-500 to-purple-600 text-white' 
-            : 'bg-slate-100 text-slate-500'
-          }
-        `}>
-          {index + 1}
-        </div>
-        <div className="text-left min-w-0">
-          <p className={`font-medium text-sm truncate ${isSelected ? 'text-violet-800' : 'text-slate-700'}`}>
-            {student.text}
-          </p>
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        {hasReferrals && (
-          <span className={`
-            text-xs font-bold px-2 py-1 rounded-full
-            ${referralCount >= 5 
-              ? 'bg-red-100 text-red-600' 
-              : referralCount >= 3 
-                ? 'bg-amber-100 text-amber-600'
-                : 'bg-blue-100 text-blue-600'
-            }
-          `}>
-            {referralCount}
-          </span>
-        )}
-        <ChevronRight className={`h-4 w-4 ${isSelected ? 'text-violet-500' : 'text-slate-300'}`} />
-      </div>
-    </button>
-  );
-}
-
 export default function OgrenciListesiPage() {
   const searchParams = useSearchParams();
   const urlStudent = searchParams.get("student");
@@ -177,22 +74,30 @@ export default function OgrenciListesiPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [classSearchTerm, setClassSearchTerm] = useState("");
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loadingStudents, setLoadingStudents] = useState(false);
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
-  // Öğrenci detay modal
+  // Global arama
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [globalResults, setGlobalResults] = useState<any[]>([]);
+  const [searchingGlobal, setSearchingGlobal] = useState(false);
+
+  // Sınıf dropdown
+  const [classDropdownOpen, setClassDropdownOpen] = useState(false);
+
+  // Öğrenci profil
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [studentHistory, setStudentHistory] = useState<StudentHistory | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  
-  // URL'den gelen öğrenci için işlem yapıldı mı?
+
   const [urlProcessed, setUrlProcessed] = useState(false);
 
-  // Export işlemleri için state'ler
-  const [exportingWord, setExportingWord] = useState(false);
-  const [exportingPdf, setExportingPdf] = useState(false);
+  // Aktif randevular ve bekleyen başvurular
+  const [activeAppointments, setActiveAppointments] = useState<any[]>([]);
+  const [pendingApplications, setPendingApplications] = useState<any[]>([]);
+
+  // Görünüm: 'list' veya 'profile'
+  const viewMode = selectedStudent ? "profile" : "list";
 
   // Sınıfları yükle
   useEffect(() => {
@@ -203,8 +108,7 @@ export default function OgrenciListesiPage() {
           const data = await res.json();
           setClasses(data.sinifSubeList || []);
         }
-      } catch (error) {
-        console.error("Classes load error:", error);
+      } catch {
         toast.error("Sınıflar yüklenemedi");
       } finally {
         setLoadingClasses(false);
@@ -221,39 +125,187 @@ export default function OgrenciListesiPage() {
     }
   }, [urlStudent, urlClass, urlProcessed, loadingClasses]);
 
-  // Direkt öğrenci geçmişi yükle (sınıf seçmeden)
+  // Global öğrenci arama
+  useEffect(() => {
+    if (globalSearch.trim().length < 2) {
+      setGlobalResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setSearchingGlobal(true);
+      try {
+        const res = await fetch(
+          `/api/students?query=${encodeURIComponent(globalSearch.trim())}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setGlobalResults(Array.isArray(data) ? data.slice(0, 8) : []);
+        }
+      } catch {
+        setGlobalResults([]);
+      } finally {
+        setSearchingGlobal(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [globalSearch]);
+
+  // Dropdown dışına tıklanınca kapat
+  useEffect(() => {
+    if (!classDropdownOpen) return;
+    const close = () => setClassDropdownOpen(false);
+    const timer = setTimeout(() => document.addEventListener("click", close), 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("click", close);
+    };
+  }, [classDropdownOpen]);
+
+  const handleGlobalStudentSelect = (result: any) => {
+    setGlobalSearch("");
+    setGlobalResults([]);
+    const studentName = result.student_name || result.text || result.name || "";
+    const classDisplay = result.class_display || result.classDisplay || "";
+    loadStudentHistoryDirect(studentName, classDisplay);
+  };
+
+  const loadStudentActiveData = async (studentName: string) => {
+    const cleanName = studentName.replace(/^\d+\s+/, "").trim();
+    const matchName = (name: string) =>
+      (name || "").replace(/^\d+\s+/, "").trim().toLowerCase() === cleanName.toLowerCase();
+
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+
+      // 1. Planlanan randevular
+      const appRes = await fetch(
+        `/api/appointments?search=${encodeURIComponent(cleanName)}&status=planned&from=${today}`
+      );
+      if (appRes.ok) {
+        const data = await appRes.json();
+        const allApps = Array.isArray(data) ? data : data.appointments || [];
+        setActiveAppointments(allApps.filter((a: any) => matchName(a.participant_name)));
+      } else {
+        setActiveAppointments([]);
+      }
+
+      // 2. Bekleyen başvurular — tüm tablolardan çek
+      if (supabase) {
+        const pending: any[] = [];
+
+        // observation_pool (merkezi havuz + gözlemler)
+        const { data: obsData } = await supabase
+          .from("observation_pool")
+          .select("*")
+          .ilike("student_name", `%${cleanName}%`)
+          .eq("status", "pending");
+        (obsData || []).filter((r: any) => matchName(r.student_name)).forEach((r: any) => {
+          pending.push({ ...r, _source: r.source_type || "observation", _note: r.note || "" });
+        });
+
+        // referrals — randevu verilmemiş olanlar
+        const { data: refData } = await supabase
+          .from("referrals")
+          .select("*")
+          .ilike("student_name", `%${cleanName}%`);
+        (refData || []).filter((r: any) => matchName(r.student_name)).forEach((r: any) => {
+          // referrals'ta status yok, observation_pool'da zaten varsa tekrar ekleme
+          const alreadyInPool = pending.some(
+            (p) => p.source_record_id === r.id || p._source === "teacher_referral"
+          );
+          if (!alreadyInPool) {
+            // Bu yönlendirme için randevu var mı kontrol et
+            // Basit kontrol: son 30 gündeki yönlendirmeler "bekliyor" sayılır
+            const refDate = new Date(r.created_at);
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            if (refDate > thirtyDaysAgo) {
+              pending.push({ id: r.id, student_name: r.student_name, _source: "teacher_referral", _note: r.reason || "", created_at: r.created_at });
+            }
+          }
+        });
+
+        // individual_requests
+        const { data: indData } = await supabase
+          .from("individual_requests")
+          .select("*")
+          .ilike("student_name", `%${cleanName}%`)
+          .eq("status", "pending");
+        (indData || []).filter((r: any) => matchName(r.student_name)).forEach((r: any) => {
+          const alreadyInPool = pending.some((p) => p.source_record_id === r.id);
+          if (!alreadyInPool) {
+            pending.push({ id: r.id, student_name: r.student_name, _source: "self_application", _note: r.note || "", created_at: r.created_at });
+          }
+        });
+
+        // student_incidents
+        const { data: incData } = await supabase
+          .from("student_incidents")
+          .select("*")
+          .ilike("student_name", `%${cleanName}%`)
+          .in("status", ["new", "reviewing"]);
+        (incData || []).filter((r: any) => matchName(r.student_name)).forEach((r: any) => {
+          const alreadyInPool = pending.some((p) => p.source_record_id === r.id);
+          if (!alreadyInPool) {
+            pending.push({ id: r.id, student_name: r.student_name, _source: "student_report", _note: r.description || r.note || "", created_at: r.created_at || r.incident_date });
+          }
+        });
+
+        // parent_meeting_requests
+        const { data: parData } = await supabase
+          .from("parent_meeting_requests")
+          .select("*")
+          .ilike("student_name", `%${cleanName}%`);
+        (parData || []).filter((r: any) => matchName(r.student_name)).forEach((r: any) => {
+          const status = (r.status || "").toLowerCase();
+          if (status === "pending" || status === "new" || !status) {
+            const alreadyInPool = pending.some((p) => p.source_record_id === r.id);
+            if (!alreadyInPool) {
+              pending.push({ id: r.id, student_name: r.student_name, _source: "parent_request", _note: r.note || r.reason || "", created_at: r.created_at });
+            }
+          }
+        });
+
+        // ID bazlı tekrar kaldır
+        const uniqueMap = new Map();
+        pending.forEach((p) => {
+          if (!uniqueMap.has(p.id)) uniqueMap.set(p.id, p);
+        });
+        setPendingApplications(Array.from(uniqueMap.values()));
+      } else {
+        setPendingApplications([]);
+      }
+    } catch (err) {
+      console.error("loadStudentActiveData error:", err);
+      setActiveAppointments([]);
+      setPendingApplications([]);
+    }
+  };
+
   const loadStudentHistoryDirect = async (studentName: string, classDisplay?: string) => {
     setSelectedStudent({ value: studentName, text: studentName });
     setLoadingHistory(true);
     setStudentHistory(null);
-
+    setActiveAppointments([]);
     try {
       let url = `/api/student-history?studentName=${encodeURIComponent(studentName)}`;
-      if (classDisplay) {
-        url += `&classDisplay=${encodeURIComponent(classDisplay)}`;
-      }
-
+      if (classDisplay) url += `&classDisplay=${encodeURIComponent(classDisplay)}`;
       const res = await fetch(url);
-
       if (res.ok) {
         const data = await res.json();
         setStudentHistory(data);
-        toast.success(`${studentName} geçmişi yüklendi`, { icon: '📚' });
       } else {
         toast.error("Öğrenci geçmişi yüklenemedi");
       }
-    } catch (error) {
-      console.error("Student history error:", error);
+      loadStudentActiveData(studentName);
+    } catch {
       toast.error("Öğrenci geçmişi yüklenirken hata oluştu");
     } finally {
       setLoadingHistory(false);
     }
   };
 
-  // Öğrencileri yükle
   const loadStudents = async (classKey: string) => {
     if (!classKey) return;
-    
     setLoadingStudents(true);
     try {
       const res = await fetch(`/api/students?sinifSube=${encodeURIComponent(classKey)}`);
@@ -264,842 +316,535 @@ export default function OgrenciListesiPage() {
         setStudents([]);
         toast.error("Öğrenciler yüklenemedi");
       }
-    } catch (error) {
-      console.error("Students load error:", error);
+    } catch {
       setStudents([]);
-      toast.error("Öğrenciler yüklenirken hata oluştu");
     } finally {
       setLoadingStudents(false);
     }
   };
 
-  // Sınıf seçimi
   const handleClassChange = (value: string) => {
     setSelectedClass(value);
     setSearchTerm("");
-    setSelectedStudent(null);
-    setStudentHistory(null);
-    const classText = classes.find(c => c.value === value)?.text || value;
-    toast.success(`${classText} seçildi`, { icon: '🎓' });
+    setClassDropdownOpen(false);
     loadStudents(value);
   };
 
-  // Öğrenci detayını yükle
   const loadStudentHistory = async (student: Student) => {
     setSelectedStudent(student);
     setLoadingHistory(true);
     setStudentHistory(null);
-
+    setActiveAppointments([]);
     try {
-      const studentName = student.text.replace(/^\d+\s+/, '').trim();
-      const classDisplay = classes.find(c => c.value === selectedClass)?.text || '';
-
+      const studentName = student.text.replace(/^\d+\s+/, "").trim();
+      const classDisplay = classes.find((c) => c.value === selectedClass)?.text || "";
       const res = await fetch(
         `/api/student-history?studentName=${encodeURIComponent(studentName)}&classDisplay=${encodeURIComponent(classDisplay)}`
       );
-
       if (res.ok) {
         const data = await res.json();
         setStudentHistory(data);
       } else {
         toast.error("Öğrenci geçmişi yüklenemedi");
       }
-    } catch (error) {
-      console.error("Student history error:", error);
+      loadStudentActiveData(studentName);
+    } catch {
       toast.error("Öğrenci geçmişi yüklenirken hata oluştu");
     } finally {
       setLoadingHistory(false);
     }
   };
 
-  // Filtrelenmiş sınıflar
-  const filteredClasses = useMemo(() => {
-    if (!classSearchTerm.trim()) return classes;
-    return classes.filter(c => c.text.toLowerCase().includes(classSearchTerm.toLowerCase()));
-  }, [classes, classSearchTerm]);
+  const handleBack = () => {
+    setSelectedStudent(null);
+    setStudentHistory(null);
+    setActiveAppointments([]);
+    setPendingApplications([]);
+  };
 
-  // Filtrelenmiş ve sıralı öğrenciler
   const filteredStudents = useMemo(() => {
-    let result = students.filter(s => 
+    return students.filter((s) =>
       s.text.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    
-    if (sortOrder === "desc") {
-      result = [...result].reverse();
-    }
-    
-    return result;
-  }, [students, searchTerm, sortOrder]);
+  }, [students, searchTerm]);
 
-  // Tarih formatla
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('tr-TR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
+    return date.toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" });
   };
 
   const formatDateTime = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('tr-TR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return date.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
   };
 
-  // Neden rengi
   const getReasonColor = (reason: string) => {
-    const reasonLower = reason.toLowerCase();
-    if (reasonLower.includes('devamsızlık')) return 'bg-red-100 text-red-700 border-red-200';
-    if (reasonLower.includes('kavga') || reasonLower.includes('şiddet')) return 'bg-orange-100 text-orange-700 border-orange-200';
-    if (reasonLower.includes('ders')) return 'bg-blue-100 text-blue-700 border-blue-200';
-    if (reasonLower.includes('sosyal') || reasonLower.includes('uyum')) return 'bg-purple-100 text-purple-700 border-purple-200';
-    return 'bg-slate-100 text-slate-700 border-slate-200';
+    const r = reason.toLowerCase();
+    if (r.includes("devamsızlık")) return "bg-red-100 text-red-700 border-red-200";
+    if (r.includes("kavga") || r.includes("şiddet")) return "bg-orange-100 text-orange-700 border-orange-200";
+    if (r.includes("ders")) return "bg-blue-100 text-blue-700 border-blue-200";
+    if (r.includes("sosyal") || r.includes("uyum")) return "bg-purple-100 text-purple-700 border-purple-200";
+    return "bg-slate-100 text-slate-700 border-slate-200";
   };
 
-  // Word olarak indir
-  const downloadAsWord = () => {
-    if (!selectedStudent || !studentHistory) return;
-    
-    setExportingWord(true);
-    toast.loading("Word dosyası hazırlanıyor...", { id: "word-export" });
-    
-    try {
-      const classDisplay = urlClass || classes.find(c => c.value === selectedClass)?.text || "";
-      
-      let htmlContent = `
-        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-        <head><meta charset="utf-8"><title>Öğrenci Geçmişi</title></head>
-        <body style="font-family: Arial, sans-serif;">
-        <h1 style="color: #1e40af; border-bottom: 2px solid #1e40af; padding-bottom: 10px;">ÖĞRENCİ GEÇMİŞİ RAPORU</h1>
-        <table style="width: 100%; margin-bottom: 20px;">
-          <tr><td style="font-weight: bold; width: 150px;">Öğrenci:</td><td>${selectedStudent.text}</td></tr>
-          <tr><td style="font-weight: bold;">Sınıf:</td><td>${classDisplay}</td></tr>
-          <tr><td style="font-weight: bold;">Toplam Yönlendirme:</td><td>${studentHistory.totalReferrals}</td></tr>
-          ${studentHistory.stats.topReason ? `<tr><td style="font-weight: bold;">En Sık Neden:</td><td>${studentHistory.stats.topReason.name} (${studentHistory.stats.topReason.count})</td></tr>` : ''}
-          <tr><td style="font-weight: bold;">Rapor Tarihi:</td><td>${new Date().toLocaleDateString('tr-TR')}</td></tr>
-        </table>
-      `;
-      
-      if (studentHistory.totalReferrals === 0) {
-        htmlContent += `<p style="color: #059669; font-style: italic;">Bu öğrenci için yönlendirme kaydı bulunmuyor.</p>`;
-      } else {
-        htmlContent += `<h2 style="color: #374151; margin-top: 30px;">Yönlendirme Detayları</h2>`;
-        htmlContent += `<table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
-          <tr style="background-color: #f3f4f6;">
-            <th style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">#</th>
-            <th style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">Tarih</th>
-            <th style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">Neden</th>
-            <th style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">Öğretmen</th>
-            <th style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">Not</th>
-          </tr>`;
-        
-        studentHistory.referrals.forEach((r, idx) => {
-          const date = new Date(r.date);
-          htmlContent += `
-            <tr>
-              <td style="border: 1px solid #d1d5db; padding: 8px;">${idx + 1}</td>
-              <td style="border: 1px solid #d1d5db; padding: 8px;">${date.toLocaleDateString('tr-TR')}</td>
-              <td style="border: 1px solid #d1d5db; padding: 8px;">${r.reason}</td>
-              <td style="border: 1px solid #d1d5db; padding: 8px;">${r.teacherName}</td>
-              <td style="border: 1px solid #d1d5db; padding: 8px;">${r.notes || '-'}</td>
-            </tr>`;
-        });
-        
-        htmlContent += `</table>`;
-      }
-      
-      htmlContent += `</body></html>`;
-      
-      const blob = new Blob([htmlContent], { type: 'application/msword' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${selectedStudent.text.replace(/\s+/g, '_')}_gecmis.doc`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      toast.success("Word dosyası indirildi!", { id: "word-export" });
-    } catch (error) {
-      console.error("Word export error:", error);
-      toast.error("Word dosyası oluşturulamadı", { id: "word-export" });
-    } finally {
-      setExportingWord(false);
-    }
-  };
-
-  // PDF olarak indir
-  const downloadAsPdf = () => {
-    if (!selectedStudent || !studentHistory) return;
-    
-    setExportingPdf(true);
-    toast.loading("PDF dosyası hazırlanıyor...", { id: "pdf-export" });
-    
-    try {
-      const classDisplay = urlClass || classes.find(c => c.value === selectedClass)?.text || "";
-      
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        toast.error("Pop-up engelleyici aktif olabilir", { id: "pdf-export" });
-        setExportingPdf(false);
-        return;
-      }
-      
-      let htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Öğrenci Geçmişi - ${selectedStudent.text}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
-            h1 { color: #1e40af; border-bottom: 2px solid #1e40af; padding-bottom: 10px; }
-            .info-table { width: 100%; margin-bottom: 20px; }
-            .info-table td { padding: 5px 0; }
-            .info-table td:first-child { font-weight: bold; width: 180px; }
-            h2 { color: #374151; margin-top: 30px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th { background-color: #f3f4f6; border: 1px solid #d1d5db; padding: 8px; text-align: left; }
-            td { border: 1px solid #d1d5db; padding: 8px; }
-            .no-records { color: #059669; font-style: italic; }
-            .footer { margin-top: 30px; font-size: 12px; color: #6b7280; text-align: center; }
-            @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
-          </style>
-        </head>
-        <body>
-          <h1>ÖĞRENCİ GEÇMİŞİ RAPORU</h1>
-          <table class="info-table">
-            <tr><td>Öğrenci:</td><td>${selectedStudent.text}</td></tr>
-            <tr><td>Sınıf:</td><td>${classDisplay}</td></tr>
-            <tr><td>Toplam Yönlendirme:</td><td>${studentHistory.totalReferrals}</td></tr>
-            ${studentHistory.stats.topReason ? `<tr><td>En Sık Neden:</td><td>${studentHistory.stats.topReason.name} (${studentHistory.stats.topReason.count})</td></tr>` : ''}
-            <tr><td>Rapor Tarihi:</td><td>${new Date().toLocaleDateString('tr-TR')}</td></tr>
-          </table>
-      `;
-      
-      if (studentHistory.totalReferrals === 0) {
-        htmlContent += `<p class="no-records">Bu öğrenci için yönlendirme kaydı bulunmuyor.</p>`;
-      } else {
-        htmlContent += `<h2>Yönlendirme Detayları</h2>`;
-        htmlContent += `<table>
-          <tr>
-            <th>#</th>
-            <th>Tarih</th>
-            <th>Neden</th>
-            <th>Öğretmen</th>
-            <th>Not</th>
-          </tr>`;
-        
-        studentHistory.referrals.forEach((r, idx) => {
-          const date = new Date(r.date);
-          htmlContent += `
-            <tr>
-              <td>${idx + 1}</td>
-              <td>${date.toLocaleDateString('tr-TR')}</td>
-              <td>${r.reason}</td>
-              <td>${r.teacherName}</td>
-              <td>${r.notes || '-'}</td>
-            </tr>`;
-        });
-        
-        htmlContent += `</table>`;
-      }
-      
-      htmlContent += `
-          <div class="footer">Bu rapor RPD Yönlendirme Sistemi tarafından oluşturulmuştur.</div>
-        </body>
-        </html>
-      `;
-      
-      printWindow.document.write(htmlContent);
-      printWindow.document.close();
-      
-      setTimeout(() => {
-        printWindow.print();
-        toast.success("PDF olarak kaydetmek için 'PDF olarak kaydet' seçeneğini kullanın", { id: "pdf-export" });
-      }, 500);
-      
-    } catch (error) {
-      console.error("PDF export error:", error);
-      toast.error("PDF dosyası oluşturulamadı", { id: "pdf-export" });
-    } finally {
-      setExportingPdf(false);
-    }
-  };
-
-  const lastReferralDate = studentHistory?.referrals[0]?.date 
-    ? formatDate(studentHistory.referrals[0].date) 
+  const lastReferralDate = studentHistory?.referrals[0]?.date
+    ? formatDate(studentHistory.referrals[0].date)
     : undefined;
 
-  return (
-    <div className="space-y-6">
-      {/* Modern Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-cyan-600 via-blue-600 to-indigo-700 p-6 text-white shadow-xl">
-        <div className="absolute inset-0 bg-grid-white/10 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.5))]" />
-        
-        {/* Animated Background Elements */}
-        <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-blue-300/20 blur-3xl animate-float-slow" />
-        <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-indigo-300/20 blur-3xl animate-float-reverse" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-96 w-96 rounded-full bg-cyan-400/10 blur-3xl animate-pulse-glow" />
-        
-        {/* Floating Particles */}
-        <div className="absolute top-10 right-20 h-2 w-2 rounded-full bg-blue-200/60 animate-float animation-delay-100" />
-        <div className="absolute top-20 right-40 h-1.5 w-1.5 rounded-full bg-cyan-200/60 animate-float animation-delay-300" />
-        <div className="absolute bottom-16 left-32 h-2 w-2 rounded-full bg-indigo-200/60 animate-float animation-delay-500" />
-        <div className="absolute top-1/3 left-1/4 h-1 w-1 rounded-full bg-white/40 animate-sparkle animation-delay-200" />
-        <div className="absolute bottom-1/3 right-1/4 h-1.5 w-1.5 rounded-full bg-blue-300/50 animate-sparkle animation-delay-700" />
-        
-        <div className="relative">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm shadow-lg">
-                <Users className="h-7 w-7" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold">Öğrenci Listesi</h1>
-                <p className="text-cyan-100">Sınıf seçin ve öğrenci geçmişlerini görüntüleyin</p>
-              </div>
-            </div>
-            
-            {/* Hızlı İstatistikler */}
-            <div className="flex flex-wrap gap-2">
-              <div className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-3 py-2 border border-white/10 hover:bg-white/20 transition-all cursor-default">
-                <GraduationCap className="h-4 w-4 text-cyan-200" />
-                <div>
-                  <p className="text-[10px] text-cyan-200 uppercase tracking-wider">Sınıf</p>
-                  <p className="text-lg font-bold leading-none">{classes.length}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-3 py-2 border border-white/10 hover:bg-white/20 transition-all cursor-default">
-                <User className="h-4 w-4 text-indigo-200" />
-                <div>
-                  <p className="text-[10px] text-cyan-200 uppercase tracking-wider">Öğrenci</p>
-                  <p className="text-lg font-bold leading-none">{students.length}</p>
-                </div>
-              </div>
-              {studentHistory && (
-                <div className="flex items-center gap-2 rounded-lg bg-emerald-500/30 backdrop-blur-sm px-3 py-2 border border-emerald-400/30 hover:bg-emerald-500/40 transition-all cursor-default">
-                  <History className="h-4 w-4 text-emerald-200" />
-                  <div>
-                    <p className="text-[10px] text-emerald-200 uppercase tracking-wider">Yönlendirme</p>
-                    <p className="text-lg font-bold leading-none">{studentHistory.totalReferrals}</p>
-                  </div>
-                </div>
-              )}
-            </div>
+  // Randevu oluştur — takvim sayfasına yönlendir, modal otomatik açılsın
+  const handleCreateAppointment = () => {
+    const studentName = selectedStudent?.text?.replace(/^\d+\s+/, "").trim() || "";
+    const classDisplay = studentHistory?.classDisplay || classes.find((c) => c.value === selectedClass)?.text || "";
+    const today = new Date().toISOString().slice(0, 10);
+    const params = new URLSearchParams({
+      openAppointment: "true",
+      participantType: "student",
+      participantName: studentName,
+      participantClass: classDisplay,
+      appointmentDate: today,
+    });
+    window.location.href = `/panel/takvim?${params.toString()}`;
+  };
+
+  // ============================================================
+  // PROFİL GÖRÜNÜMÜ
+  // ============================================================
+  if (viewMode === "profile") {
+    const hasReferrals = studentHistory && studentHistory.totalReferrals > 0;
+    const showCharts = studentHistory && studentHistory.totalReferrals >= 5;
+    const hasRecentActivity = studentHistory?.referrals.some(
+      (r) => new Date(r.date) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    );
+    const hasActiveAppointment = activeAppointments.length > 0;
+    const hasPendingApps = pendingApplications.length > 0;
+    const hasActiveProcesses = hasActiveAppointment || hasPendingApps;
+
+    return (
+      <div className="space-y-4">
+        {/* Kompakt Başlık Satırı */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleBack}
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-800"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-sm font-bold text-white shadow-lg">
+            <User className="h-5 w-5" />
           </div>
-          
-          {/* Alt bilgi çubuğu - Geliştirilmiş */}
-          <div className="mt-4 pt-4 border-t border-white/20 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              {/* Sıralama */}
-              <div className="flex items-center bg-white/10 rounded-lg p-1">
-                <button
-                  onClick={() => setSortOrder("asc")}
-                  className={`px-2 py-1 rounded text-xs font-medium transition-all flex items-center gap-1 ${
-                    sortOrder === "asc" 
-                      ? "bg-white text-blue-600 shadow-sm" 
-                      : "text-white/80 hover:text-white"
-                  }`}
-                >
-                  <SortAsc className="h-3 w-3" />
-                  A-Z
-                </button>
-                <button
-                  onClick={() => setSortOrder("desc")}
-                  className={`px-2 py-1 rounded text-xs font-medium transition-all flex items-center gap-1 ${
-                    sortOrder === "desc" 
-                      ? "bg-white text-blue-600 shadow-sm" 
-                      : "text-white/80 hover:text-white"
-                  }`}
-                >
-                  <SortDesc className="h-3 w-3" />
-                  Z-A
-                </button>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg font-bold text-slate-800 truncate">
+              {selectedStudent?.text}
+            </h1>
+            <p className="text-xs text-slate-500">
+              {studentHistory?.classDisplay ||
+                classes.find((c) => c.value === selectedClass)?.text ||
+                ""}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {studentHistory && (
+              <div className="flex items-center gap-1.5 rounded-full bg-violet-100 px-3 py-1">
+                <History className="h-3.5 w-3.5 text-violet-600" />
+                <span className="text-sm font-bold text-violet-700">{studentHistory.totalReferrals}</span>
+                <span className="text-xs text-violet-500 hidden sm:inline">yönlendirme</span>
               </div>
-              
-              {/* Seçili Öğrenci */}
-              {selectedStudent && (
-                <Badge className="bg-emerald-500/30 text-white border-emerald-400/30 hover:bg-emerald-500/40">
-                  <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-300" />
-                  {selectedStudent.text}
-                </Badge>
-              )}
-              
-              {/* Seçili Sınıf */}
-              {selectedClass && (
-                <Badge className="bg-white/20 text-white border-0 hover:bg-white/30">
-                  <BookOpen className="h-3 w-3 mr-1" />
-                  {classes.find(c => c.value === selectedClass)?.text}
-                </Badge>
-              )}
-            </div>
-            
-            <div className="flex items-center gap-2">
-              {/* Excel Export */}
-              {students.length > 0 && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    const classText = classes.find(c => c.value === selectedClass)?.text || "sinif";
-                    const csvContent = "No,Öğrenci Adı\n" + 
-                      students.map((s, i) => `${i + 1},"${s.text}"`).join("\n");
-                    const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `ogrenci-listesi-${classText}-${new Date().toISOString().slice(0, 10)}.csv`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    toast.success("Öğrenci listesi indirildi");
-                  }}
-                  className="bg-white/10 hover:bg-white/20 text-white border-0"
-                >
-                  <FileDown className="h-4 w-4 mr-1" />
-                  Liste
-                </Button>
-              )}
-              
-              {/* Seçimi Temizle */}
-              {selectedStudent && (
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  onClick={() => {
-                    setSelectedStudent(null);
-                    setStudentHistory(null);
-                  }}
-                  className="bg-red-500/20 hover:bg-red-500/30 text-white border-0"
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  Temizle
-                </Button>
-              )}
-            </div>
+            )}
+            <button
+              onClick={handleCreateAppointment}
+              className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-emerald-700"
+            >
+              <CalendarPlus className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Randevu Oluştur</span>
+              <span className="sm:hidden">Randevu</span>
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* Özet Kartları */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-0 shadow-xl">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-emerald-200 text-xs font-medium">Toplam Sınıf</p>
-                <p className="text-3xl font-bold mt-1">{classes.length}</p>
-              </div>
-              <div className="p-3 bg-white/20 rounded-xl">
-                <GraduationCap className="h-6 w-6" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-violet-500 to-purple-600 text-white border-0 shadow-xl">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-violet-200 text-xs font-medium">Seçili Sınıf</p>
-                <p className="text-lg font-bold mt-1 truncate">
-                  {selectedClass ? classes.find(c => c.value === selectedClass)?.text : "-"}
-                </p>
-              </div>
-              <div className="p-3 bg-white/20 rounded-xl">
-                <BookOpen className="h-6 w-6" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-cyan-500 to-blue-600 text-white border-0 shadow-xl">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-cyan-200 text-xs font-medium">Öğrenci Sayısı</p>
-                <p className="text-3xl font-bold mt-1">{filteredStudents.length}</p>
-              </div>
-              <div className="p-3 bg-white/20 rounded-xl">
-                <User className="h-6 w-6" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-amber-500 to-orange-600 text-white border-0 shadow-xl">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-amber-200 text-xs font-medium">Seçili Öğrenci</p>
-                <p className="text-lg font-bold mt-1 truncate">
-                  {selectedStudent?.text || "-"}
-                </p>
-              </div>
-              <div className="p-3 bg-white/20 rounded-xl">
-                <Star className="h-6 w-6" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Sınıf Seçimi */}
-      <Card className="bg-white/80 backdrop-blur border-0 shadow-lg overflow-hidden">
-        <CardHeader className="border-b bg-gradient-to-r from-emerald-50 to-teal-50 pb-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600">
-                <GraduationCap className="h-3.5 w-3.5 text-white" />
-              </div>
-              Sınıf Seçin
-              <span className="ml-2 px-2 py-0.5 rounded-full bg-emerald-100 text-xs font-medium text-emerald-600">
-                {filteredClasses.length} sınıf
-              </span>
-            </CardTitle>
-            
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Sınıf ara..."
-                value={classSearchTerm}
-                onChange={(e) => setClassSearchTerm(e.target.value)}
-                className="pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent w-full md:w-48 transition-all"
-              />
-            </div>
+        {loadingHistory ? (
+          <div className="flex items-center justify-center py-20">
+            <RefreshCw className="h-6 w-6 animate-spin text-violet-500 mr-2" />
+            <span className="text-sm text-slate-500">Yükleniyor...</span>
           </div>
-        </CardHeader>
-        <CardContent className="p-4">
-          {loadingClasses ? (
-            <div className="flex items-center justify-center py-8">
-              <RefreshCw className="h-6 w-6 animate-spin text-emerald-500" />
-            </div>
-          ) : (
-            <div className="grid gap-2 grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 max-h-[200px] overflow-y-auto">
-              {filteredClasses.map((classItem) => (
-                <ClassSelectCard
-                  key={classItem.value}
-                  classItem={classItem}
-                  isSelected={selectedClass === classItem.value}
-                  onClick={() => handleClassChange(selectedClass === classItem.value ? "" : classItem.value)}
-                />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 lg:grid-cols-5">
-        {/* Sol Panel - Öğrenci Listesi */}
-        <div className="lg:col-span-2 space-y-4">
-          <Card className="bg-white/80 backdrop-blur border-0 shadow-lg overflow-hidden">
-            <CardHeader className="border-b bg-gradient-to-r from-violet-50 to-purple-50 pb-4">
-              <div className="flex flex-col gap-3">
-                <CardTitle className="text-sm font-medium text-slate-700 flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <div className="p-1.5 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600">
-                      <User className="h-3.5 w-3.5 text-white" />
-                    </div>
-                    Öğrenciler
-                  </span>
-                  {selectedClass && !loadingStudents && (
-                    <Badge className="bg-violet-100 text-violet-700 border-0">
-                      {filteredStudents.length} öğrenci
-                    </Badge>
-                  )}
-                </CardTitle>
-                
-                {selectedClass && (
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <Input
-                        placeholder="Öğrenci ara..."
-                        className="pl-9 h-9 bg-white"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                      />
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-9 w-9"
-                      onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-                    >
-                      {sortOrder === "asc" ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="p-3">
-              <div className="h-[500px] overflow-y-auto space-y-2">
-                {!selectedClass ? (
-                  <div className="h-full flex items-center justify-center text-slate-400 px-4">
-                    <div className="text-center">
-                      <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
-                        <GraduationCap className="h-10 w-10 text-slate-400" />
+        ) : studentHistory ? (
+          <div className="space-y-4">
+            {/* Aktif Süreçler Kartı */}
+            {hasActiveProcesses && (
+              <Card className="border-0 shadow-sm overflow-hidden">
+                <CardHeader className="border-b bg-slate-50 py-2.5 px-4">
+                  <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-blue-500" />
+                    Aktif Süreçler
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 divide-y divide-slate-100">
+                  {/* Planlanan randevular */}
+                  {activeAppointments.map((app: any) => {
+                    const appDate = app.appointment_date
+                      ? new Date(app.appointment_date + "T00:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" })
+                      : "";
+                    const lessonSlot = app.start_time || app.lesson_slot || "";
+                    return (
+                      <div key={app.id} className="flex items-center justify-between px-4 py-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100">
+                            <Calendar className="h-3.5 w-3.5 text-emerald-600" />
+                          </div>
+                          <div>
+                            <span className="text-sm font-medium text-slate-700">{appDate}</span>
+                            {lessonSlot && (
+                              <span className="ml-2 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                {lessonSlot}. ders
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                          Randevu Verildi
+                        </span>
                       </div>
-                      <p className="font-medium text-slate-600">Sınıf Seçin</p>
-                      <p className="text-xs mt-1">Yukarıdan bir sınıf seçerek<br/>öğrenci listesini görüntüleyin</p>
-                    </div>
-                  </div>
-                ) : loadingStudents ? (
-                  <div className="h-full flex items-center justify-center text-slate-400">
-                    <RefreshCw className="h-6 w-6 animate-spin text-violet-500 mr-2" />
-                    Öğrenciler yükleniyor...
-                  </div>
-                ) : filteredStudents.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-slate-400 px-4">
-                    <div className="text-center">
-                      <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
-                        <User className="h-10 w-10 text-slate-400" />
+                    );
+                  })}
+                  {/* Bekleyen başvurular */}
+                  {pendingApplications.map((app: any, idx: number) => {
+                    const source = app._source || app.source_type || "observation";
+                    const reason = app._note || app.note || "";
+                    const sourceLabel = source === "teacher_referral" ? "Öğretmen Yönlendirmesi"
+                      : source === "parent_request" ? "Veli Talebi"
+                      : source === "student_report" ? "Öğrenci Bildirimi"
+                      : source === "self_application" ? "Bireysel Başvuru"
+                      : source === "observation" ? "Gözlem"
+                      : "Başvuru";
+                    const displayNote = reason.replace(/^\[.*?\]\s*/, "").trim();
+                    const topicMatch = reason.match(/^\[(.*?)\]/);
+                    const topic = topicMatch ? topicMatch[1] : "";
+                    return (
+                      <div key={app.id || idx} className="flex items-center justify-between px-4 py-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100">
+                            <AlertCircle className="h-3.5 w-3.5 text-amber-600" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm font-medium text-slate-700">{sourceLabel}</span>
+                              {topic && (
+                                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{topic}</span>
+                              )}
+                            </div>
+                            {displayNote && (
+                              <p className="text-[11px] text-slate-500 truncate max-w-[300px]">{displayNote}</p>
+                            )}
+                          </div>
+                        </div>
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                          Bekliyor
+                        </span>
                       </div>
-                      <p className="font-medium text-slate-600">Öğrenci Bulunamadı</p>
-                      <p className="text-xs mt-1">
-                        {searchTerm ? `"${searchTerm}" ile eşleşen öğrenci yok` : "Bu sınıfta öğrenci bulunmuyor"}
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  filteredStudents.map((student, idx) => (
-                    <StudentCard
-                      key={student.value}
-                      student={student}
-                      index={idx}
-                      isSelected={selectedStudent?.value === student.value}
-                      onClick={() => loadStudentHistory(student)}
-                    />
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sağ Panel - Öğrenci Detayı */}
-        <div className="lg:col-span-3 space-y-4">
-          {!selectedStudent ? (
-            <Card className="bg-white/80 backdrop-blur border-0 shadow-lg h-full">
-              <CardContent className="h-[600px] flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center">
-                    <Sparkles className="h-12 w-12 text-violet-400" />
-                  </div>
-                  <p className="font-semibold text-slate-700 text-lg">Öğrenci Seçin</p>
-                  <p className="text-sm text-slate-500 mt-2 max-w-xs mx-auto">
-                    Listeden bir öğrenciye tıklayarak yönlendirme geçmişini ve detaylı analizleri görüntüleyin
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : loadingHistory ? (
-            <Card className="bg-white/80 backdrop-blur border-0 shadow-lg h-full">
-              <CardContent className="h-[600px] flex items-center justify-center">
-                <div className="text-center">
-                  <RefreshCw className="h-8 w-8 animate-spin text-violet-500 mx-auto mb-4" />
-                  <p className="text-slate-500">Öğrenci geçmişi yükleniyor...</p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : studentHistory ? (
-            <div className="space-y-4">
-              {/* Özet Kart */}
-              <StudentSummaryCard
-                totalReferrals={studentHistory.totalReferrals}
-                topReason={studentHistory.stats.topReason}
-                teacherCount={Object.keys(studentHistory.stats.byTeacher).length}
-                lastReferralDate={lastReferralDate}
-              />
-
-              {/* Mini İstatistikler */}
-              <div className="grid gap-3 md:grid-cols-2">
-                <MiniStatCard
-                  title="Farklı Neden"
-                  value={Object.keys(studentHistory.stats.byReason).length}
-                  icon={<FileText className="h-4 w-4 text-white" />}
-                  color="bg-gradient-to-br from-amber-500 to-orange-600"
-                  bgColor="bg-amber-50"
-                />
-                <MiniStatCard
-                  title="Farklı Öğretmen"
-                  value={Object.keys(studentHistory.stats.byTeacher).length}
-                  icon={<UserCheck className="h-4 w-4 text-white" />}
-                  color="bg-gradient-to-br from-cyan-500 to-blue-600"
-                  bgColor="bg-cyan-50"
-                />
-              </div>
-
-              {/* Export Butonları */}
-              <Card className="bg-white/80 backdrop-blur border-0 shadow-lg">
-                <CardContent className="p-4">
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5 text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-                      onClick={downloadAsWord}
-                      disabled={exportingWord}
-                    >
-                      {exportingWord ? (
-                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <FileType className="h-3.5 w-3.5" />
-                      )}
-                      Word İndir
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
-                      onClick={downloadAsPdf}
-                      disabled={exportingPdf}
-                    >
-                      {exportingPdf ? (
-                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <FileDown className="h-3.5 w-3.5" />
-                      )}
-                      PDF İndir
-                    </Button>
-                  </div>
+                    );
+                  })}
                 </CardContent>
               </Card>
-
-              {/* Grafikler */}
-              {studentHistory.totalReferrals > 0 && (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Card className="bg-white/80 backdrop-blur border-0 shadow-lg">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                        <BarChart3 className="h-4 w-4 text-violet-500" />
-                        Neden Dağılımı
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ReasonDistributionChart data={studentHistory.stats.byReason} />
-                    </CardContent>
-                  </Card>
-
-                  <Card className="bg-white/80 backdrop-blur border-0 shadow-lg">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                        <UserCheck className="h-4 w-4 text-cyan-500" />
-                        Öğretmen Dağılımı
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <TeacherDistributionChart data={studentHistory.stats.byTeacher} />
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
-
-              {/* Zaman Çizelgesi */}
-              {studentHistory.totalReferrals > 0 && (
-                <Card className="bg-white/80 backdrop-blur border-0 shadow-lg">
+            )}
+            {/* Grafikler — sadece 5+ yönlendirme varsa */}
+            {showCharts && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card className="border-0 shadow-sm">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                      <Activity className="h-4 w-4 text-emerald-500" />
-                      Son 30 Gün Aktivitesi
+                      <BarChart3 className="h-4 w-4 text-violet-500" />
+                      Neden Dağılımı
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ReferralTimeline referrals={studentHistory.referrals} />
+                    <ReasonDistributionChart data={studentHistory.stats.byReason} />
                   </CardContent>
                 </Card>
-              )}
+                <Card className="border-0 shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                      <UserCheck className="h-4 w-4 text-cyan-500" />
+                      Öğretmen Dağılımı
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <TeacherDistributionChart data={studentHistory.stats.byTeacher} />
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
-              {/* Yönlendirme Listesi */}
-              <Card className="bg-white/80 backdrop-blur border-0 shadow-lg">
-                <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-slate-100 pb-4">
+            {/* Zaman Çizelgesi — sadece son 30 günde aktivite varsa */}
+            {hasRecentActivity && (
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                    <div className="p-1.5 rounded-lg bg-gradient-to-br from-slate-600 to-slate-800">
-                      <History className="h-3.5 w-3.5 text-white" />
-                    </div>
-                    Yönlendirme Geçmişi
-                    <span className="ml-2 px-2 py-0.5 rounded-full bg-slate-200 text-xs font-medium text-slate-600">
-                      {studentHistory.totalReferrals} kayıt
-                    </span>
+                    <Activity className="h-4 w-4 text-emerald-500" />
+                    Son 30 Gün Aktivitesi
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-0">
-                  {studentHistory.totalReferrals === 0 ? (
-                    <div className="p-8 text-center text-slate-400">
-                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-emerald-100 to-green-100 flex items-center justify-center">
-                        <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-                      </div>
-                      <p className="font-medium text-slate-600">Yönlendirme Kaydı Yok</p>
-                      <p className="text-xs mt-1">Bu öğrenci için henüz yönlendirme yapılmamış</p>
-                    </div>
-                  ) : (
-                    <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
-                      {studentHistory.referrals.map((referral, idx) => (
-                        <div key={referral.id} className="p-4 hover:bg-slate-50/50 transition-colors">
-                          <div className="flex items-start gap-3">
-                            <div className={`
-                              flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold
-                              ${idx === 0 
-                                ? 'bg-gradient-to-br from-violet-500 to-purple-600 text-white' 
-                                : 'bg-slate-100 text-slate-500'
-                              }
-                            `}>
-                              {studentHistory.totalReferrals - idx}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="mb-2">
-                                <p className="text-base font-bold text-slate-800 leading-tight">
-                                  {referral.studentName || selectedStudent?.text || studentHistory.studentName}
-                                </p>
-                                <p className="text-[11px] text-slate-500 mt-0.5">
-                                  Öğrenci yönlendirme kaydı
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <Badge className={`${getReasonColor(referral.reason)} border text-xs`}>
-                                  {referral.reason}
-                                </Badge>
-                                {idx === 0 && (
-                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-violet-500 text-white">
-                                    SON
-                                  </span>
-                                )}
-                              </div>
-                              <div className="mt-2 flex items-center gap-4 text-xs text-slate-500">
-                                <span className="flex items-center gap-1">
-                                  <UserCheck className="h-3.5 w-3.5" />
-                                  {referral.teacherName}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <Calendar className="h-3.5 w-3.5" />
-                                  {formatDateTime(referral.date)}
-                                </span>
-                              </div>
-                              {referral.notes && (
-                                <p className="mt-2 text-sm text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                  📝 {referral.notes}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                <CardContent>
+                  <ReferralTimeline referrals={studentHistory.referrals} />
                 </CardContent>
               </Card>
+            )}
+
+            {/* Yönlendirme Listesi */}
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="border-b bg-slate-50 pb-3">
+                <CardTitle className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                  <History className="h-4 w-4 text-slate-500" />
+                  Yönlendirme Geçmişi
+                  <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">
+                    {studentHistory.totalReferrals} kayıt
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {!hasReferrals ? (
+                  <div className="p-8 text-center">
+                    <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
+                      <CheckCircle2 className="h-7 w-7 text-emerald-500" />
+                    </div>
+                    <p className="font-medium text-slate-600">Yönlendirme Kaydı Yok</p>
+                    <p className="mt-1 text-xs text-slate-500">Bu öğrenci için henüz yönlendirme yapılmamış</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {studentHistory.referrals.map((referral, idx) => (
+                      <div key={referral.id} className="p-4 transition-colors hover:bg-slate-50/50">
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${
+                              idx === 0
+                                ? "bg-gradient-to-br from-violet-500 to-purple-600 text-white"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            {studentHistory.totalReferrals - idx}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge className={`${getReasonColor(referral.reason)} border text-xs`}>
+                                {referral.reason}
+                              </Badge>
+                              {idx === 0 && (
+                                <span className="rounded bg-violet-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                  SON
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-2 flex items-center gap-4 text-xs text-slate-500">
+                              <span className="flex items-center gap-1">
+                                <UserCheck className="h-3.5 w-3.5" />
+                                {referral.teacherName}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3.5 w-3.5" />
+                                {formatDateTime(referral.date)}
+                              </span>
+                            </div>
+                            {referral.notes && (
+                              <p className="mt-2 rounded-lg border border-slate-100 bg-slate-50 p-2 text-sm text-slate-600">
+                                📝 {referral.notes}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  // ============================================================
+  // LİSTE GÖRÜNÜMÜ
+  // ============================================================
+  return (
+    <div className="space-y-4">
+      {/* Başlık + Arama */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 p-2.5 shadow-lg">
+            <Users className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-slate-800">Öğrenciler</h1>
+            <p className="text-xs text-slate-500">
+              {selectedClass
+                ? `${classes.find((c) => c.value === selectedClass)?.text} · ${filteredStudents.length} öğrenci`
+                : `${classes.length} sınıf`}
+            </p>
+          </div>
+        </div>
+
+        {/* Global Öğrenci Arama */}
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Öğrenci ara (tüm sınıflar)..."
+            value={globalSearch}
+            onChange={(e) => setGlobalSearch(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-4 text-sm shadow-sm outline-none transition-all focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+          />
+          {searchingGlobal && (
+            <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-violet-500" />
+          )}
+          {globalResults.length > 0 && (
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
+              {globalResults.map((r: any, i: number) => (
+                <button
+                  key={i}
+                  onClick={() => handleGlobalStudentSelect(r)}
+                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-violet-50"
+                >
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-xs font-bold text-violet-600">
+                    <User className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-slate-800">
+                      {r.text || r.student_name || r.name}
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      {r.class_display || r.classDisplay || ""}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
+                </button>
+              ))}
             </div>
-          ) : null}
+          )}
+          {globalSearch.trim().length >= 2 && !searchingGlobal && globalResults.length === 0 && (
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-xl border border-slate-200 bg-white p-4 text-center shadow-xl">
+              <p className="text-xs text-slate-500">Sonuç bulunamadı</p>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Sınıf Seçimi — Dropdown */}
+      <div className="flex items-center gap-3">
+        <div className="relative">
+          <button
+            onClick={(e) => { e.stopPropagation(); setClassDropdownOpen(!classDropdownOpen); }}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all hover:border-violet-300 hover:shadow-md"
+          >
+            <GraduationCap className="h-4 w-4 text-violet-500" />
+            {selectedClass
+              ? classes.find((c) => c.value === selectedClass)?.text
+              : "Sınıf seçin"}
+            <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${classDropdownOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          {classDropdownOpen && (
+            <div className="absolute left-0 top-full z-50 mt-1 max-h-64 w-56 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
+              {loadingClasses ? (
+                <div className="flex items-center justify-center py-4">
+                  <RefreshCw className="h-4 w-4 animate-spin text-violet-500" />
+                </div>
+              ) : (
+                classes.map((c) => (
+                  <button
+                    key={c.value}
+                    onClick={(e) => { e.stopPropagation(); handleClassChange(c.value); }}
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors ${
+                      selectedClass === c.value
+                        ? "bg-violet-50 font-semibold text-violet-700"
+                        : "text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <GraduationCap className={`h-3.5 w-3.5 ${selectedClass === c.value ? "text-violet-500" : "text-slate-400"}`} />
+                    {c.text}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {selectedClass && (
+          <button
+            onClick={() => { setSelectedClass(""); setStudents([]); setSearchTerm(""); }}
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Öğrenci Listesi */}
+      {selectedClass && (
+        <Card className="border-0 shadow-sm overflow-hidden">
+          <CardHeader className="border-b bg-slate-50 py-3 px-4">
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder="Bu sınıfta ara..."
+                  className="pl-9 h-9 bg-white"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <span className="text-xs text-slate-500 whitespace-nowrap">
+                {filteredStudents.length} öğrenci
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {loadingStudents ? (
+              <div className="flex items-center justify-center py-12">
+                <RefreshCw className="h-5 w-5 animate-spin text-violet-500 mr-2" />
+                <span className="text-sm text-slate-500">Yükleniyor...</span>
+              </div>
+            ) : filteredStudents.length === 0 ? (
+              <div className="py-12 text-center">
+                <User className="mx-auto h-8 w-8 text-slate-300 mb-2" />
+                <p className="text-sm text-slate-500">
+                  {searchTerm ? `"${searchTerm}" ile eşleşen öğrenci yok` : "Öğrenci bulunamadı"}
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {filteredStudents.map((student, idx) => (
+                  <button
+                    key={student.value}
+                    onClick={() => loadStudentHistory(student)}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-violet-50/50"
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-500">
+                      {idx + 1}
+                    </div>
+                    <p className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">
+                      {student.text}
+                    </p>
+                    <ChevronRight className="h-4 w-4 text-slate-300" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Sınıf seçilmemişse boş durum */}
+      {!selectedClass && !loadingClasses && (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-100">
+            <GraduationCap className="h-8 w-8 text-violet-400" />
+          </div>
+          <p className="font-semibold text-slate-700">Sınıf Seçin</p>
+          <p className="mt-1 max-w-xs text-sm text-slate-500">
+            Yukarıdan bir sınıf seçerek öğrenci listesini görüntüleyin veya arama kutusunu kullanarak doğrudan öğrenci bulun
+          </p>
+        </div>
+      )}
     </div>
   );
 }

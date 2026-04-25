@@ -499,6 +499,48 @@ export default function TakvimPage() {
         setShowAppointmentModal(true);
         window.history.replaceState({}, document.title, window.location.pathname);
       }
+
+      // Öğrenci profilinden gelen hızlı randevu oluşturma
+      const openAppointmentParam = params.get("openAppointment");
+      const participantName = params.get("participantName");
+      const participantClass = params.get("participantClass");
+      const participantType = params.get("participantType");
+      const appointmentDate = params.get("appointmentDate");
+
+      if (openAppointmentParam === "true" && participantName) {
+        let matchedClassKey = "";
+        let matchedClassText = participantClass || "";
+        if (classes.length > 0 && participantClass) {
+          const normalizedClassDisplay = normalizeClassValue(participantClass);
+          const foundClass = classes.find(c =>
+            c.text === participantClass ||
+            normalizeClassValue(c.text) === normalizedClassDisplay
+          );
+          if (foundClass) {
+            matchedClassKey = foundClass.value;
+            matchedClassText = foundClass.text;
+          }
+        }
+
+        // classes henüz yüklenmediyse bekle
+        if (classes.length === 0) return;
+
+        setFormData(prev => ({
+          ...prev,
+          participant_name: participantName,
+          participant_class: matchedClassText,
+          participant_type: (participantType as ParticipantType) || "student",
+          appointment_date: appointmentDate || getLocalDateString(new Date()),
+        }));
+
+        if (matchedClassKey) {
+          setSelectedClass(matchedClassKey);
+        }
+
+        setSelectedStudentName(participantName);
+        setShowAppointmentModal(true);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
     }
   }, [classes]);
 
@@ -1287,9 +1329,7 @@ export default function TakvimPage() {
       appointments.forEach(app => {
         const colors: any = { planned: 'blue', attended: 'green', not_attended: 'red', postponed: 'amber', cancelled: 'slate' };
         const pType = app.participant_type === 'student' ? 'Öğrenci' : app.participant_type === 'parent' ? 'Veli' : 'Öğretmen';
-        const shortClass = (app.participant_class || '').replace(/\.\s*sınıf\s*/i, '/').replace(/\s*şubesi/i, '').replace(/\s+/g, '').trim();
-        const shortName = (app.participant_name || '').replace(/^\d+\s*/, '');
-        allEvents.push({ id: app.id, date: app.appointment_date, time: app.start_time, title: shortClass ? `${shortClass} ${shortName}` : shortName, type: 'appointment', status: app.status, color: colors[app.status] || 'blue', data: app });
+        allEvents.push({ id: app.id, date: app.appointment_date, time: app.start_time, title: app.participant_class ? `${app.participant_class} ${app.participant_name}` : app.participant_name, type: 'appointment', status: app.status, color: colors[app.status] || 'blue', data: app });
       });
     }
     if (showActivities) {
@@ -2362,7 +2402,7 @@ export default function TakvimPage() {
           {viewType === 'week' && (
             <Card className="border-slate-200 overflow-hidden shadow-sm">
               <CardContent className="p-0">
-                <table className="w-full border-collapse table-fixed">
+                <table className="w-full border-collapse">
                   <thead>
                     <tr>
                       <th className="w-[52px] border-b border-r border-slate-200 bg-slate-50 p-1" />
@@ -2421,7 +2461,7 @@ export default function TakvimPage() {
                                       const guidanceTeacher = e.data?.lesson_teacher || e.data?.teacher_name || '';
 
                                       return (
-                                        <div key={e.id} className={`min-h-[56px] rounded-lg border px-1.5 ${cardBg} ${isCompleted ? 'opacity-60' : ''} flex items-center justify-center`}>
+                                        <div key={e.id} className={`min-h-[56px] rounded-lg border p-1.5 ${cardBg} ${isCompleted ? 'opacity-60' : ''}`}>
                                           {isAppointment ? (
                                             <div className="flex h-full flex-col items-center justify-center text-center">
                                               <p className={`text-[11px] font-bold leading-tight ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-800'}`} title={titleText}>
