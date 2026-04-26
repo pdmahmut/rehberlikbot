@@ -52,8 +52,8 @@ const menuCategories = [
 
 const teacherMenuItems = [
   { href: '/panel/ogrenci-yonlendirmesi', label: 'Öğrenci Yönlendir', icon: Users },
+  { href: '/panel/yonlendirmeler', label: 'Yönlendirmeler', icon: History },
   { href: '/panel/sinifim', label: 'Sınıfım', icon: GraduationCap },
-  { href: '/panel/yaptigim-yonlendirmeler', label: 'Yönlendirmelerim', icon: History },
 ];
 
 const allMenuItems = [...menuCategories.flatMap((category) => category.items), ...teacherMenuItems];
@@ -414,7 +414,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
 
       {role === 'teacher' && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-2 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-1.5">
             {teacherMenuItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);

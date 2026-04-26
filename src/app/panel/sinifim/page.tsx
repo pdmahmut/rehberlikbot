@@ -120,7 +120,7 @@ const extractReasonAndNote = (rawNote: string | null | undefined, fallback: stri
   return { reason: text, note: null as string | null };
 };
 
-type TabId = "my-referrals" | "class-list" | "class-referrals" | "guidance-requests";
+type TabId = "class-list" | "guidance-requests";
 
 const CHART_COLORS = [
   "#6366f1","#8b5cf6","#a855f7","#ec4899","#f43f5e","#f97316","#eab308",
@@ -895,9 +895,8 @@ export default function SinifimPage() {
 
   const tabs: { id: TabId; label: string; icon: typeof History; count: number; hidden?: boolean }[] = [
     { id: "my-referrals", label: "Yaptığım Yönlendirmeler", icon: History, count: myReferrals.length, hidden: true },
-    { id: "class-list", label: "Sınıf Listesi", icon: Users, count: students.length },
-    { id: "class-referrals", label: "Sınıfa Yapılan Yönlendirmeler", icon: BookOpen, count: classReferrals.length },
-    { id: "guidance-requests", label: "Rehberlik Talebi", icon: MessageSquare, count: activeGuidanceRequests.length, hidden: !auth.classKey },
+    { id: "class-list", label: "Öğrenciler", icon: Users, count: students.length },
+    { id: "guidance-requests", label: "Talepler", icon: MessageSquare, count: activeGuidanceRequests.length, hidden: !auth.classKey },
   ];
 
   return (
@@ -1307,17 +1306,17 @@ export default function SinifimPage() {
       {/* ── Class List ── */}
       {activeTab === "class-list" && (
         <Card className="border-0 shadow-sm">
-          <CardHeader className="py-3 px-4 border-b border-slate-100">
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <input type="text" placeholder="Öğrenci adı soyadı" value={newStudentName}
+          <CardHeader className="py-2.5 px-3 sm:px-4 border-b border-slate-100">
+            <div className="flex gap-1.5 sm:gap-2">
+              <input type="text" placeholder="Ad soyad" value={newStudentName}
                 onChange={e => setNewStudentName(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleAddStudent()}
-                className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 bg-white" />
+                className="flex-1 min-w-0 px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 bg-white" />
               <input type="text" placeholder="No" value={newStudentNumber}
                 onChange={e => setNewStudentNumber(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleAddStudent()}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 bg-white sm:w-20" />
-              <Button onClick={handleAddStudent} disabled={!newStudentName.trim() || addingStudent} size="sm" className="bg-teal-600 hover:bg-teal-700 text-white px-3">
+                className="w-14 sm:w-16 px-2 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 bg-white" />
+              <Button onClick={handleAddStudent} disabled={!newStudentName.trim() || addingStudent} size="sm" className="bg-teal-600 hover:bg-teal-700 text-white px-2.5 shrink-0">
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -1341,10 +1340,9 @@ export default function SinifimPage() {
                   );
                   const hasReferral = studentReferrals.length > 0;
                   const pending = getStudentPendingRequest(s.text);
-                  const cleanName = s.text.replace(/^\d+\s+/, "").trim();
                   return (
-                    <div key={s.value} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50/50">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-500">
+                    <div key={s.value} className="flex items-center gap-2 px-3 sm:px-4 py-2 transition-colors hover:bg-slate-50/50">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-100 text-[10px] font-bold text-slate-500">
                         {i + 1}
                       </div>
                       <button
@@ -1353,63 +1351,32 @@ export default function SinifimPage() {
                       >
                         {s.text}
                       </button>
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex items-center gap-1 shrink-0">
                         {hasReferral && (
-                          <Badge className="text-[10px] bg-violet-100 text-violet-700 border-0">
+                          <Badge className="text-[9px] bg-violet-100 text-violet-700 border-0 px-1.5">
                             {studentReferrals.length}
                           </Badge>
                         )}
                         {pending ? (
-                          <Badge className="text-[10px] bg-amber-100 text-amber-700 border-0">
-                            {pending.request_type === "delete" ? "Silme" : "Değişiklik"} bekliyor
+                          <Badge className="text-[9px] bg-amber-100 text-amber-700 border-0 px-1.5">
+                            {pending.request_type === "delete" ? "Silme" : "Değişiklik"}
                           </Badge>
-                        ) : null}
+                        ) : (
+                          <>
+                            <button onClick={(e) => { e.stopPropagation(); setRequestModal({ student: s, type: "class_change" }); setClassChangeTarget(""); }}
+                              className="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors" title="Sınıf değiştir">
+                              <ArrowRightLeft className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); setRequestModal({ student: s, type: "delete" }); }}
+                              className="p-1 text-red-400 hover:bg-red-50 rounded transition-colors" title="Listeden çıkar">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   );
                 })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── Class Referrals ── */}
-      {activeTab === "class-referrals" && (
-        <Card className="border-0 shadow-sm">
-          <CardHeader className="flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="text-base">
-              Sınıfa Yapılan Yönlendirmeler
-              {auth.classDisplay && <span className="ml-2 text-sm font-normal text-slate-500">({auth.classDisplay})</span>}
-            </CardTitle>
-            <Button variant="ghost" size="sm" onClick={loadReferrals} disabled={referralsLoading}>
-              <RefreshCw className={`h-4 w-4 ${referralsLoading ? "animate-spin" : ""}`} />
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {!auth.classKey ? (
-              <div className="text-center py-12 text-slate-400"><BookOpen className="h-10 w-10 mx-auto mb-3 opacity-30" /><p>Sınıf ataması yapılmamış</p></div>
-            ) : referralsLoading ? (
-              <div className="flex justify-center py-8"><div className="w-8 h-8 border-4 border-violet-500/30 rounded-full animate-spin border-t-violet-500" /></div>
-            ) : classReferrals.length === 0 ? (
-              <div className="text-center py-12 text-slate-400"><BookOpen className="h-10 w-10 mx-auto mb-3 opacity-30" /><p>Sınıfınızdaki öğrenciler için yönlendirme bulunmuyor</p></div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {classReferrals.map(r => (
-                  <div key={r.id} className="py-3 flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-slate-800 text-sm">{r.student_name}</span>
-                        {r.teacher_name && <span className="text-xs text-slate-400">— {r.teacher_name}</span>}
-                      </div>
-                      {r.reason && <p className="text-xs text-slate-500 mt-0.5 truncate">{r.reason}</p>}
-                      <p className="text-xs text-slate-400 mt-0.5">{new Date(r.created_at).toLocaleDateString("tr-TR")}</p>
-                    </div>
-                    <Badge className={`text-xs shrink-0 ${r.status === "Tamamlandı" ? "bg-green-100 text-green-700" : r.status === "Devam Ediyor" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
-                      {r.status}
-                    </Badge>
-                  </div>
-                ))}
               </div>
             )}
           </CardContent>

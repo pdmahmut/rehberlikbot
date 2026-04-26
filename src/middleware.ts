@@ -47,6 +47,7 @@ export function middleware(request: NextRequest) {
     const teacherAllowed = [
       '/panel/ogrenci-yonlendirmesi',
       '/panel/yonlendirme-gecmisi',
+      '/panel/yonlendirmeler',
       '/panel/sinifim',
       '/panel/yaptigim-yonlendirmeler',
       '/panel/hesabim',
