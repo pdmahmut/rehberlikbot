@@ -185,6 +185,7 @@ const extractTopicFromNote = (note?: string | null) => {
 export default function BasvurularPage() {
   const [applicationsSearchQuery, setApplicationsSearchQuery] = useState("");
   const [showEntryForm, setShowEntryForm] = useState(false);
+  const [showNewEntryDropdown, setShowNewEntryDropdown] = useState(false);
   const [entryFormSource, setEntryFormSource] = useState<ApplicationRecord["source"]>("Gözlem Havuzu");
   const [entryForm, setEntryForm] = useState({
     student_name: "",
@@ -822,62 +823,45 @@ export default function BasvurularPage() {
   return (
     <div className="space-y-6">
       {/* Başlık */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 p-6 text-white shadow-xl">
-        <div className="absolute inset-0 bg-grid-white/10 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.5))]" />
-        <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-blue-400/20 blur-3xl animate-float-slow" />
-        <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-indigo-400/20 blur-3xl animate-float-reverse" />
-        <div className="relative z-10">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm shadow-lg">
-              <MessageSquare className="h-8 w-8 text-blue-700" />
+      <div className="rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 px-5 py-4 text-white shadow-xl">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-white/20 rounded-xl">
+              <MessageSquare className="h-5 w-5" />
             </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold">Başvurular Takibi</h1>
-              <p className="text-white/80 mt-1">Tüm başvuru kaynaklarından gelen öğrenci başvurularını takip edin ve yönetin</p>
-            </div>
+            <h1 className="text-xl font-bold">Başvurular Takibi</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-2 mt-4">
-            {[
-              { label: "Toplam", value: applicationRecords.length, cls: "bg-white/10 border-white/10" },
-              { label: "Görüşüldü", value: applicationStatistics.status["Görüşüldü"], cls: "bg-indigo-500/30 border-indigo-400/30" },
-              { label: "Randevu", value: applicationStatistics.status["Randevu verildi"], cls: "bg-violet-500/30 border-violet-400/30" },
-              { label: "Bekliyor", value: applicationStatistics.status["Bekliyor"], cls: "bg-cyan-500/30 border-cyan-400/30" },
-              { label: "Tamamlandı", value: applicationStatistics.outcome["Tamamlandı"], cls: "bg-emerald-500/30 border-emerald-400/30" },
-              { label: "Aktif Takip", value: applicationStatistics.outcome["Aktif Takip"], cls: "bg-sky-500/30 border-sky-400/30" },
-            ].map(({ label, value, cls }) => (
-              <div key={label} className={`flex items-center gap-2 rounded-lg backdrop-blur-sm px-3 py-2 border ${cls}`}>
-                <p className="text-[10px] text-white/70 uppercase tracking-wider">{label}</p>
-                <p className="text-lg font-bold leading-none">{value}</p>
-              </div>
-            ))}
+
+          {/* Yeni Başvuru Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowNewEntryDropdown(!showNewEntryDropdown)}
+              className="flex items-center gap-1.5 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur px-3 py-2 text-sm font-semibold transition-all"
+            >
+              <Plus className="h-4 w-4" />
+              Yeni Başvuru
+            </button>
+            {showNewEntryDropdown && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowNewEntryDropdown(false)} />
+                <div className="absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden">
+                  {ENTRY_CHANNELS_FOR_CREATION.map((ch) => (
+                    <button
+                      key={ch.source}
+                      onClick={() => { openEntryForm(ch.source); setShowNewEntryDropdown(false); }}
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <span>{ch.icon}</span>
+                      {ch.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* GİRİŞ KANALLARI */}
-      <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-slate-100 p-4">
-          <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Yeni Başvuru Ekle
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-2">
-            {ENTRY_CHANNELS_FOR_CREATION.map((ch) => (
-              <button
-                key={ch.source}
-                type="button"
-                onClick={() => openEntryForm(ch.source)}
-                className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all ${ch.color}`}
-              >
-                <span>{ch.icon}</span>
-                {ch.label}
-              </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
       {/* GİRİŞ FORMU MODALI */}
       {showEntryForm && (() => {
