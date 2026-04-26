@@ -183,6 +183,10 @@ export default function OgrenciListesiPage() {
   const [pendingApplications, setPendingApplications] = useState<any[]>([]);
   const [studentApplicationHistory, setStudentApplicationHistory] = useState<StudentApplicationHistoryItem[]>([]);
 
+  // Sınıf rehber öğretmenleri ve mevcutlar
+  const [classTeachers, setClassTeachers] = useState<Record<string, string>>({});
+  const [classCounts, setClassCounts] = useState<Record<string, number>>({});
+
   // Görünüm: 'list' veya 'profile'
   const viewMode = selectedStudent ? "profile" : "list";
 
@@ -247,6 +251,32 @@ export default function OgrenciListesiPage() {
       document.removeEventListener("click", close);
     };
   }, [classDropdownOpen]);
+
+  // Sınıf rehber öğretmenleri ve mevcutları yükle
+  useEffect(() => {
+    fetch("/api/teacher-accounts")
+      .then((r) => r.json())
+      .then((data) => {
+        const mapping: Record<string, string> = {};
+        (data.users || []).forEach((u: any) => {
+          if (u.class_key) mapping[u.class_key] = u.teacher_name;
+        });
+        setClassTeachers(mapping);
+      })
+      .catch(() => {});
+
+    if (classes.length > 0) {
+      classes.forEach((c) => {
+        fetch(`/api/students?sinifSube=${encodeURIComponent(c.value)}`)
+          .then((r) => r.json())
+          .then((data) => {
+            const count = Array.isArray(data) ? data.length : 0;
+            setClassCounts((prev) => ({ ...prev, [c.value]: count }));
+          })
+          .catch(() => {});
+      });
+    }
+  }, [classes]);
 
   const handleGlobalStudentSelect = (result: any) => {
     setGlobalSearch("");
@@ -764,6 +794,17 @@ export default function OgrenciListesiPage() {
     window.location.href = `/panel/takvim?${params.toString()}`;
   };
 
+  // Sınıfları seviyeye göre grupla (5, 6, 7, 8...)
+  const groupedClasses = useMemo(() => {
+    const groups: Record<string, typeof classes> = {};
+    classes.forEach((c) => {
+      const grade = c.value.replace(/[^0-9]/g, "") || "?";
+      if (!groups[grade]) groups[grade] = [];
+      groups[grade].push(c);
+    });
+    return Object.entries(groups).sort(([a], [b]) => Number(a) - Number(b));
+  }, [classes]);
+
   // ============================================================
   // PROFİL GÖRÜNÜMÜ
   // ============================================================
@@ -1046,183 +1087,183 @@ export default function OgrenciListesiPage() {
   // ============================================================
   return (
     <div className="space-y-4">
-      {/* Başlık + Arama */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* Başlık — gradient fon */}
+      <div className="rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700 px-5 py-4 text-white shadow-xl">
         <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 p-2.5 shadow-lg">
-            <Users className="h-5 w-5 text-white" />
+          <div className="p-2.5 bg-white/20 rounded-xl">
+            <Users className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-800">Öğrenciler</h1>
-            <p className="text-xs text-slate-500">
+            <h1 className="text-xl font-bold">Öğrenciler</h1>
+            <p className="text-white/70 text-xs">
               {selectedClass
                 ? `${classes.find((c) => c.value === selectedClass)?.text} · ${filteredStudents.length} öğrenci`
                 : `${classes.length} sınıf`}
             </p>
           </div>
         </div>
-
-        {/* Global Öğrenci Arama */}
-        <div className="relative w-full sm:w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Öğrenci ara (tüm sınıflar)..."
-            value={globalSearch}
-            onChange={(e) => setGlobalSearch(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-4 text-sm shadow-sm outline-none transition-all focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-          />
-          {searchingGlobal && (
-            <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-violet-500" />
-          )}
-          {globalResults.length > 0 && (
-            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
-              {globalResults.map((r: any, i: number) => (
-                <button
-                  key={i}
-                  onClick={() => handleGlobalStudentSelect(r)}
-                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-violet-50"
-                >
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-xs font-bold text-violet-600">
-                    <User className="h-3.5 w-3.5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-slate-800">
-                      {r.text || r.student_name || r.name}
-                    </p>
-                    <p className="text-[11px] text-slate-500">
-                      {r.class_display || r.classDisplay || ""}
-                    </p>
-                  </div>
-                  <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
-                </button>
-              ))}
-            </div>
-          )}
-          {globalSearch.trim().length >= 2 && !searchingGlobal && globalResults.length === 0 && (
-            <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-xl border border-slate-200 bg-white p-4 text-center shadow-xl">
-              <p className="text-xs text-slate-500">Sonuç bulunamadı</p>
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* Sınıf Seçimi — Dropdown */}
-      <div className="flex items-center gap-3">
-        <div className="relative">
-          <button
-            onClick={(e) => { e.stopPropagation(); setClassDropdownOpen(!classDropdownOpen); }}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all hover:border-violet-300 hover:shadow-md"
-          >
-            <GraduationCap className="h-4 w-4 text-violet-500" />
-            {selectedClass
-              ? classes.find((c) => c.value === selectedClass)?.text
-              : "Sınıf seçin"}
-            <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${classDropdownOpen ? "rotate-180" : ""}`} />
-          </button>
-
-          {classDropdownOpen && (
-            <div className="absolute left-0 top-full z-50 mt-1 max-h-64 w-56 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
-              {loadingClasses ? (
-                <div className="flex items-center justify-center py-4">
-                  <RefreshCw className="h-4 w-4 animate-spin text-violet-500" />
+      {/* Global Öğrenci Arama */}
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+        <input
+          type="text"
+          placeholder="Öğrenci ara (tüm sınıflar)..."
+          value={globalSearch}
+          onChange={(e) => setGlobalSearch(e.target.value)}
+          className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-sm shadow-sm outline-none transition-all focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+        />
+        {searchingGlobal && (
+          <RefreshCw className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-violet-500" />
+        )}
+        {globalResults.length > 0 && (
+          <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
+            {globalResults.map((r: any, i: number) => (
+              <button
+                key={i}
+                onClick={() => handleGlobalStudentSelect(r)}
+                className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-violet-50"
+              >
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-xs font-bold text-violet-600">
+                  <User className="h-3.5 w-3.5" />
                 </div>
-              ) : (
-                classes.map((c) => (
-                  <button
-                    key={c.value}
-                    onClick={(e) => { e.stopPropagation(); handleClassChange(c.value); }}
-                    className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors ${
-                      selectedClass === c.value
-                        ? "bg-violet-50 font-semibold text-violet-700"
-                        : "text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    <GraduationCap className={`h-3.5 w-3.5 ${selectedClass === c.value ? "text-violet-500" : "text-slate-400"}`} />
-                    {c.text}
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-
-        {selectedClass && (
-          <button
-            onClick={() => { setSelectedClass(""); setStudents([]); setSearchTerm(""); }}
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-          >
-            <X className="h-4 w-4" />
-          </button>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-slate-800">
+                    {r.text || r.student_name || r.name}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    {r.class_display || r.classDisplay || ""}
+                  </p>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
+              </button>
+            ))}
+          </div>
+        )}
+        {globalSearch.trim().length >= 2 && !searchingGlobal && globalResults.length === 0 && (
+          <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-xl border border-slate-200 bg-white p-4 text-center shadow-xl">
+            <p className="text-xs text-slate-500">Sonuç bulunamadı</p>
+          </div>
         )}
       </div>
 
-      {/* Öğrenci Listesi */}
-      {selectedClass && (
-        <Card className="border-0 shadow-sm overflow-hidden">
-          <CardHeader className="border-b bg-slate-50 py-3 px-4">
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Bu sınıfta ara..."
-                  className="pl-9 h-9 bg-white"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <span className="text-xs text-slate-500 whitespace-nowrap">
-                {filteredStudents.length} öğrenci
-              </span>
+      {/* Sınıf Kartları */}
+      {!selectedClass && (
+        <div className="space-y-4">
+          {loadingClasses ? (
+            <div className="flex justify-center py-8">
+              <RefreshCw className="h-6 w-6 animate-spin text-violet-500" />
             </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {loadingStudents ? (
-              <div className="flex items-center justify-center py-12">
-                <RefreshCw className="h-5 w-5 animate-spin text-violet-500 mr-2" />
-                <span className="text-sm text-slate-500">Yükleniyor...</span>
+          ) : (
+            groupedClasses.map(([grade, gradeClasses]) => (
+              <div key={grade}>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">{grade}. Sınıflar</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {gradeClasses.map((c) => {
+                    const teacher = classTeachers[c.value];
+                    const count = classCounts[c.value];
+                    return (
+                      <button
+                        key={c.value}
+                        onClick={() => handleClassChange(c.value)}
+                        className="group flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-violet-400 hover:shadow-md hover:bg-violet-50/30 text-left"
+                      >
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-lg font-black text-white shadow-md group-hover:scale-105 transition-transform">
+                          {c.value}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-slate-800">{c.text}</p>
+                          {teacher ? (
+                            <p className="text-xs text-slate-500 truncate mt-0.5">{teacher}</p>
+                          ) : (
+                            <p className="text-xs text-slate-400 mt-0.5">&nbsp;</p>
+                          )}
+                        </div>
+                        {count !== undefined && (
+                          <div className="shrink-0 text-right">
+                            <p className="text-lg font-bold text-violet-600">{count}</p>
+                            <p className="text-[9px] text-slate-400">öğrenci</p>
+                          </div>
+                        )}
+                        <ChevronRight className="h-4 w-4 text-slate-300 shrink-0 group-hover:text-violet-500" />
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            ) : filteredStudents.length === 0 ? (
-              <div className="py-12 text-center">
-                <User className="mx-auto h-8 w-8 text-slate-300 mb-2" />
-                <p className="text-sm text-slate-500">
-                  {searchTerm ? `"${searchTerm}" ile eşleşen öğrenci yok` : "Öğrenci bulunamadı"}
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {filteredStudents.map((student, idx) => (
-                  <button
-                    key={student.value}
-                    onClick={() => loadStudentHistory(student)}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-violet-50/50"
-                  >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-500">
-                      {idx + 1}
-                    </div>
-                    <p className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">
-                      {student.text}
-                    </p>
-                    <ChevronRight className="h-4 w-4 text-slate-300" />
-                  </button>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            ))
+          )}
+        </div>
       )}
 
-      {/* Sınıf seçilmemişse boş durum */}
-      {!selectedClass && !loadingClasses && (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-100">
-            <GraduationCap className="h-8 w-8 text-violet-400" />
+      {/* Seçili Sınıf — Geri + Öğrenci Listesi */}
+      {selectedClass && (
+        <>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setSelectedClass(""); setStudents([]); setSearchTerm(""); }}
+              className="flex h-8 w-8 items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-500 shadow-sm hover:bg-slate-50"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <span className="text-sm font-semibold text-slate-700">
+              {classes.find((c) => c.value === selectedClass)?.text}
+            </span>
           </div>
-          <p className="font-semibold text-slate-700">Sınıf Seçin</p>
-          <p className="mt-1 max-w-xs text-sm text-slate-500">
-            Yukarıdan bir sınıf seçerek öğrenci listesini görüntüleyin veya arama kutusunu kullanarak doğrudan öğrenci bulun
-          </p>
-        </div>
+
+          <Card className="border-0 shadow-sm overflow-hidden">
+            <CardHeader className="border-b bg-slate-50 py-3 px-4">
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input
+                    placeholder="Bu sınıfta ara..."
+                    className="pl-9 h-9 bg-white"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                <span className="text-xs text-slate-500 whitespace-nowrap">
+                  {filteredStudents.length} öğrenci
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loadingStudents ? (
+                <div className="flex items-center justify-center py-12">
+                  <RefreshCw className="h-5 w-5 animate-spin text-violet-500 mr-2" />
+                  <span className="text-sm text-slate-500">Yükleniyor...</span>
+                </div>
+              ) : filteredStudents.length === 0 ? (
+                <div className="py-12 text-center">
+                  <User className="mx-auto h-8 w-8 text-slate-300 mb-2" />
+                  <p className="text-sm text-slate-500">
+                    {searchTerm ? `"${searchTerm}" ile eşleşen öğrenci yok` : "Öğrenci bulunamadı"}
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {filteredStudents.map((student, idx) => (
+                    <button
+                      key={student.value}
+                      onClick={() => loadStudentHistory(student)}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-violet-50/50"
+                    >
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-500">
+                        {idx + 1}
+                      </div>
+                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">
+                        {student.text}
+                      </p>
+                      <ChevronRight className="h-4 w-4 text-slate-300" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   );
