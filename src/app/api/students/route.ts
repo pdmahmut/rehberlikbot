@@ -98,7 +98,44 @@ export async function GET(request: NextRequest) {
       const existingTexts = new Set(jsonOgrenciList.map((o) => o.text.toLowerCase()));
       const uniqueSupabaseList = supabaseOgrenciList.filter((s) => !existingTexts.has(s.text.toLowerCase()));
 
-      return NextResponse.json([...jsonOgrenciList, ...uniqueSupabaseList]);
+      // Onaylanmış talepleri uygula: silme, eski sınıftan çıkarma, yeni sınıfa ekleme
+      let combinedList = [...jsonOgrenciList, ...uniqueSupabaseList];
+      try {
+        const { getRequests } = require('@/lib/classStudentRequests');
+        const allApproved = getRequests({ status: 'approved' });
+
+        // 1. Bu sınıftan silinen veya başka sınıfa taşınan öğrencileri çıkar
+        const removedFromThis = allApproved
+          .filter((r: any) => r.class_key === sinifSube && (r.request_type === 'delete' || r.request_type === 'class_change'))
+          .map((r: any) => normalizeText((r.student_name || '').replace(/^\d+\s+/, '')));
+        if (removedFromThis.length > 0) {
+          combinedList = combinedList.filter(s => {
+            const name = normalizeText(s.text.replace(/^\d+\s+/, ''));
+            return !removedFromThis.some((d: string) => d === name);
+          });
+        }
+
+        // 2. Başka sınıftan bu sınıfa taşınan öğrencileri ekle
+        const movedToThis = allApproved.filter((r: any) =>
+          r.request_type === 'class_change' &&
+          r.new_class_key === sinifSube &&
+          r.class_key !== sinifSube
+        );
+        movedToThis.forEach((r: any) => {
+          const name = normalizeText((r.student_name || '').replace(/^\d+\s+/, ''));
+          const alreadyExists = combinedList.some(s => normalizeText(s.text.replace(/^\d+\s+/, '')) === name);
+          if (!alreadyExists) {
+            combinedList.push({
+              value: r.student_name,
+              text: r.student_name,
+              class_key: sinifSube,
+              class_display: getClassDisplayByKey(sinifSube),
+            });
+          }
+        });
+      } catch { /* */ }
+
+      return NextResponse.json(combinedList);
     }
 
     if (query) {
