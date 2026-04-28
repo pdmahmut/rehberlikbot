@@ -10,7 +10,7 @@ export type LegacyApplicationSourceType =
   | "student_incident";
 
 export type PanelApplicationSource =
-  | "Gözlem Havuzu"
+  | "Rehberlik İsteği"
   | "Öğrenci Bildirimleri"
   | "Öğretmen Yönlendirmeleri"
   | "Veli Talepleri"
@@ -38,7 +38,7 @@ const SOURCE_TABLES: Record<ApplicationSourceType, string> = {
 };
 
 export const APPLICATION_SOURCE_LABELS: Record<ApplicationSourceType, string> = {
-  observation: "Gözlem Havuzu",
+  observation: "Rehberlik İsteği",
   student_report: "Öğrenci Bildirimi",
   teacher_referral: "Öğretmen Yönlendirmesi",
   parent_request: "Veli Talebi",
@@ -46,7 +46,7 @@ export const APPLICATION_SOURCE_LABELS: Record<ApplicationSourceType, string> = 
 };
 
 export const PANEL_SOURCE_LABELS: Record<ApplicationSourceType, PanelApplicationSource> = {
-  observation: "Gözlem Havuzu",
+  observation: "Rehberlik İsteği",
   student_report: "Öğrenci Bildirimleri",
   teacher_referral: "Öğretmen Yönlendirmeleri",
   parent_request: "Veli Talepleri",
@@ -54,7 +54,7 @@ export const PANEL_SOURCE_LABELS: Record<ApplicationSourceType, PanelApplication
 };
 
 const PANEL_SOURCE_TO_TYPE: Record<PanelApplicationSource, ApplicationSourceType> = {
-  "Gözlem Havuzu": "observation",
+  "Rehberlik İsteği": "observation",
   "Öğrenci Bildirimleri": "student_report",
   "Öğretmen Yönlendirmeleri": "teacher_referral",
   "Veli Talepleri": "parent_request",
@@ -95,7 +95,6 @@ export function normalizeApplicationStatus(status?: string | null): ApplicationS
     case "closed":
     case "resolved":
     case "görüşüldü":
-    case "goruşuldu":
     case "gorusuldu":
       return "completed";
     case "reviewing":
@@ -153,6 +152,7 @@ export function getPanelSourceLabel(value?: string | null): PanelApplicationSour
 
 export function getSourceTypeFromPanelLabel(value?: string | null): ApplicationSourceType | null {
   if (!value?.trim()) return null;
+  if (value === "Gözlem Havuzu") return "observation";
   return PANEL_SOURCE_TO_TYPE[value as PanelApplicationSource] || null;
 }
 
@@ -203,6 +203,118 @@ export function isAppointmentLinkedToSource(
   const sourceKey = buildSourceRecordKey(sourceType, sourceRecordId);
   if (!sourceKey) return false;
   return getAppointmentSourceReference(appointment).sourceKey === sourceKey;
+}
+
+const normalizeMatchText = (value?: string | null) =>
+  String(value || "")
+    .replace(/^\s*\d+\s+/, "")
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const normalizeMatchClass = (value?: string | null) =>
+  String(value || "")
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/[\/\-_.()]/g, "")
+    .trim();
+
+export function matchesApplicationToAppointment(
+  appointment: { participant_name?: string | null; participant_class?: string | null },
+  studentName?: string | null,
+  classDisplay?: string | null,
+  classKey?: string | null
+) {
+  const appointmentName = normalizeMatchText(appointment.participant_name);
+  const applicationName = normalizeMatchText(studentName);
+  if (!appointmentName || !applicationName) return false;
+
+  const nameMatch =
+    appointmentName === applicationName ||
+    appointmentName.includes(applicationName) ||
+    applicationName.includes(appointmentName);
+  if (!nameMatch) return false;
+
+  const appointmentClass = normalizeMatchClass(appointment.participant_class);
+  const applicationClass = normalizeMatchClass(classDisplay || classKey);
+  if (!appointmentClass || !applicationClass) return true;
+
+  return (
+    appointmentClass === applicationClass ||
+    appointmentClass.includes(applicationClass) ||
+    applicationClass.includes(appointmentClass)
+  );
+}
+
+const getComparableAppointmentTime = (appointment: {
+  created_at?: string | null;
+  updated_at?: string | null;
+  appointment_date?: string | null;
+}) => {
+  const candidate =
+    appointment.created_at ||
+    appointment.updated_at ||
+    (appointment.appointment_date ? `${appointment.appointment_date}T00:00:00` : null);
+
+  const time = candidate ? new Date(candidate).getTime() : Number.NaN;
+  return Number.isFinite(time) ? time : Number.NaN;
+};
+
+export function findAppointmentForApplicationRecord<
+  TAppointment extends SourceReferenceInput & {
+    participant_name?: string | null;
+    participant_class?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+    appointment_date?: string | null;
+  }
+>(
+  appointments: TAppointment[],
+  record: {
+    source_type?: string | null;
+    source_record_id?: string | null;
+    student_name?: string | null;
+    class_display?: string | null;
+    class_key?: string | null;
+    created_at?: string | null;
+  }
+): TAppointment | null {
+  const linkedAppointment =
+    appointments.find((appointment) =>
+      isAppointmentLinkedToSource(
+        appointment,
+        record.source_type,
+        record.source_record_id
+      )
+    ) || null;
+
+  if (linkedAppointment) {
+    return linkedAppointment;
+  }
+
+  const recordTime = record.created_at ? new Date(record.created_at).getTime() : Number.NaN;
+  const fallbackMatches = appointments
+    .filter((appointment) =>
+      matchesApplicationToAppointment(
+        appointment,
+        record.student_name,
+        record.class_display,
+        record.class_key
+      )
+    )
+    .map((appointment) => ({
+      appointment,
+      time: getComparableAppointmentTime(appointment),
+    }))
+    .filter(({ time }) => Number.isFinite(time))
+    .filter(({ time }) => !Number.isFinite(recordTime) || time >= recordTime)
+    .sort((a, b) => a.time - b.time);
+
+  return fallbackMatches[0]?.appointment || null;
 }
 
 export function getObservationProxyMeta(

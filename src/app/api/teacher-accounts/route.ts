@@ -1,32 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-function getSupabase() {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) throw new Error("Supabase yapılandırması eksik");
-  return createClient(url, key);
-}
+import {
+  findTeacherAccountByName,
+  getTeacherAccountsSupabase,
+} from "@/lib/teacherAccounts";
 
 const normalizeTeacherPassword = (value: string) =>
   String(value || "").trim().toLocaleLowerCase("tr-TR");
 
-const generateSystemUsername = (teacherName: string) => {
-  const base = teacherName
-    .toLocaleLowerCase("tr-TR")
-    .trim()
-    .replace(/\s+/g, ".")
-    .replace(/[^a-z0-9.]/g, "")
-    .slice(0, 24) || "ogretmen";
-  return `${base}.${Date.now()}`;
+const isRlsPolicyError = (error: unknown) => {
+  const message = String(
+    (error as { message?: string; details?: string } | null)?.message ||
+      (error as { details?: string } | null)?.details ||
+      ""
+  ).toLocaleLowerCase("en-US");
+
+  return message.includes("row-level security policy");
 };
 
 export async function GET() {
   try {
-    const supabase = getSupabase();
+    const supabase = getTeacherAccountsSupabase();
     const { data, error } = await supabase
       .from("teacher_users")
       .select("id, username, teacher_name, class_key, class_display, password_hash, created_at")
@@ -54,8 +47,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Şifre en az 4 karakter olmalı" }, { status: 400 });
     }
 
-    const supabase = getSupabase();
+    const supabase = getTeacherAccountsSupabase();
     const normalizedPassword = normalizeTeacherPassword(password);
+    const trimmedTeacherName = String(teacher_name).trim();
+
+    const existingUserByTeacherName = await findTeacherAccountByName(
+      supabase,
+      trimmedTeacherName
+    );
+
+    if (existingUserByTeacherName) {
+      return NextResponse.json(
+        { error: "Bu öğretmen için zaten bir hesap var" },
+        { status: 409 }
+      );
+    }
 
     const { data: existingUserByPassword } = await supabase
       .from("teacher_users")
@@ -78,23 +84,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Bu şifre daha önce kullanılmış. Farklı bir şifre girin." }, { status: 409 });
     }
 
-    const generatedUsername = generateSystemUsername(String(teacher_name));
+    const generatedUsername =
+      trimmedTeacherName
+        .toLocaleLowerCase("tr-TR")
+        .trim()
+        .replace(/\s+/g, ".")
+        .replace(/[^a-z0-9.]/g, "")
+        .slice(0, 24) || "ogretmen";
+
     const { data, error } = await supabase
       .from("teacher_users")
       .insert({
-        username: generatedUsername,
+        username: `${generatedUsername}.${Date.now()}`,
         password_hash: String(password).trim(),
-        teacher_name: String(teacher_name).trim(),
+        teacher_name: trimmedTeacherName,
       })
       .select("id, teacher_name, class_key, class_display, password_hash, created_at")
       .single();
 
     if (error) throw error;
 
-    await supabase.from("teacher_password_history").insert({
+    const { error: historyError } = await supabase.from("teacher_password_history").insert({
       teacher_user_id: data.id,
       normalized_password: normalizedPassword,
     });
+
+    if (historyError && !isRlsPolicyError(historyError)) {
+      await supabase.from("teacher_users").delete().eq("id", data.id);
+      throw historyError;
+    }
 
     return NextResponse.json({ success: true, user: data });
   } catch (err: any) {
@@ -109,7 +127,7 @@ export async function PATCH(request: NextRequest) {
 
     if (!id) return NextResponse.json({ error: "ID zorunludur" }, { status: 400 });
 
-    const supabase = getSupabase();
+    const supabase = getTeacherAccountsSupabase();
 
     if (action === "assign_class") {
       const { error } = await supabase
@@ -186,7 +204,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "ID zorunludur" }, { status: 400 });
     }
 
-    const supabase = getSupabase();
+    const supabase = getTeacherAccountsSupabase();
     const { error } = await supabase.from("teacher_users").delete().eq("id", id);
 
     if (error) throw error;

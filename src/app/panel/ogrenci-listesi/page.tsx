@@ -34,8 +34,8 @@ import {
 } from "@/components/charts/StudentCharts";
 import {
   buildSourceRecordKey,
+  findAppointmentForApplicationRecord,
   getObservationProxyMeta,
-  isAppointmentLinkedToSource,
   isPendingStatus,
 } from "@/lib/guidanceApplications";
 
@@ -79,6 +79,9 @@ interface StudentAppointment {
   created_at?: string | null;
   updated_at?: string | null;
   outcome_decision?: string[] | null;
+  source_individual_request_id?: string | null;
+  source_application_id?: string | null;
+  source_application_type?: string | null;
 }
 
 interface StudentApplicationHistoryItem {
@@ -103,51 +106,6 @@ const extractReasonAndNote = (rawNote: string | null | undefined, fallback: stri
     return { reason: topic, note };
   }
   return { reason: text, note: null as string | null };
-};
-
-const normalizeClassValue = (value?: string | null) =>
-  (value || "")
-    .toLocaleLowerCase("tr-TR")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .replace(/[\/\-_.()]/g, "")
-    .trim();
-
-const matchesApplicationToAppointment = (
-  appointment: any,
-  studentName?: string | null,
-  classDisplay?: string | null,
-  classKey?: string | null
-) => {
-  const appointmentName = (appointment?.participant_name || "")
-    .replace(/^\d+\s+/, "")
-    .trim()
-    .toLowerCase();
-  const normalizedStudentName = (studentName || "")
-    .replace(/^\d+\s+/, "")
-    .trim()
-    .toLowerCase();
-
-  if (!appointmentName || !normalizedStudentName) return false;
-
-  const nameMatch =
-    appointmentName === normalizedStudentName ||
-    appointmentName.includes(normalizedStudentName) ||
-    normalizedStudentName.includes(appointmentName);
-
-  if (!nameMatch) return false;
-
-  const appointmentClass = normalizeClassValue(appointment?.participant_class);
-  const applicationClass = normalizeClassValue(classDisplay || classKey);
-
-  if (!appointmentClass || !applicationClass) return true;
-
-  return (
-    appointmentClass === applicationClass ||
-    appointmentClass.includes(applicationClass) ||
-    applicationClass.includes(appointmentClass)
-  );
 };
 
 export default function OgrenciListesiPage() {
@@ -254,12 +212,14 @@ export default function OgrenciListesiPage() {
 
   // Sınıf rehber öğretmenleri ve mevcutları yükle
   useEffect(() => {
-    fetch("/api/teacher-accounts")
+    fetch("/api/teachers?all=1")
       .then((r) => r.json())
       .then((data) => {
         const mapping: Record<string, string> = {};
-        (data.users || []).forEach((u: any) => {
-          if (u.class_key) mapping[u.class_key] = u.teacher_name;
+        (data.teachers || []).forEach((teacher: any) => {
+          if (teacher.sinifSubeKey) {
+            mapping[teacher.sinifSubeKey] = teacher.teacherName;
+          }
         });
         setClassTeachers(mapping);
       })
@@ -463,7 +423,7 @@ export default function OgrenciListesiPage() {
           .filter((r: any) => matchName(r.student_name))
           .forEach((r: any) => {
             const proxyMeta = getObservationProxyMeta(r);
-            const parsed = extractReasonAndNote(r.note || null, "Gözlem Havuzu");
+            const parsed = extractReasonAndNote(r.note || null, "Rehberlik İsteği");
             const proxyKey = buildSourceRecordKey(
               proxyMeta.sourceType,
               proxyMeta.sourceRecordId
@@ -484,7 +444,7 @@ export default function OgrenciListesiPage() {
                   ? "Öğrenci Bildirimi"
                   : proxyMeta.sourceType === "self_application"
                   ? "Bireysel Başvuru"
-                  : "Gözlem Havuzu",
+                  : "Rehberlik İsteği",
               student_name: r.student_name,
               class_display: r.class_display,
               class_key: r.class_key,
@@ -506,20 +466,14 @@ export default function OgrenciListesiPage() {
           appointments: StudentAppointment[],
           record: any
         ) =>
-          appointments.find(
-            (appointment) =>
-              isAppointmentLinkedToSource(
-                appointment,
-                record.source_type,
-                record.source_record_id
-              ) ||
-              matchesApplicationToAppointment(
-                appointment,
-                record.student_name,
-                record.class_display,
-                record.class_key
-              )
-          ) || null;
+          findAppointmentForApplicationRecord(appointments, {
+            source_type: record.source_type,
+            source_record_id: record.source_record_id,
+            student_name: record.student_name,
+            class_display: record.class_display,
+            class_key: record.class_key,
+            created_at: record.created_at,
+          });
 
         const allHistory = Array.from(deduped.values())
           .map((record) => {
@@ -912,7 +866,7 @@ export default function OgrenciListesiPage() {
                       : source === "parent_request" ? "Veli Talebi"
                       : source === "student_report" ? "Öğrenci Bildirimi"
                       : source === "self_application" ? "Bireysel Başvuru"
-                      : source === "observation" ? "Gözlem"
+                        : source === "observation" ? "Rehberlik İsteği"
                       : "Başvuru";
                     const displayNote = reason.replace(/^\[.*?\]\s*/, "").trim();
                     const topicMatch = reason.match(/^\[(.*?)\]/);

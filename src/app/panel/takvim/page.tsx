@@ -21,13 +21,13 @@ import {
   XCircle,
   Users,
   X,
-  Bell,
   AlertTriangle
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { 
   Appointment, 
+  ApplicationSourceType,
   PARTICIPANT_TYPES, 
   APPOINTMENT_LOCATIONS,
   LESSON_SLOTS,
@@ -39,6 +39,14 @@ import {
   getClassRequestDisplayCategory,
   getClassRequestTeacherNote,
 } from "@/lib/classRequests";
+import {
+  buildSourceRecordKey,
+  findAppointmentForApplicationRecord,
+  getObservationProxyMeta,
+  getPanelSourceLabel,
+  getSourceTypeFromPanelLabel,
+  normalizeSourceTypeOrNull,
+} from "@/lib/guidanceApplications";
 
 const normalizeLessonSlot = (timeStr?: string | null) => {
   if (!timeStr) return '';
@@ -291,45 +299,12 @@ type PendingApplicationRecord = {
   student_name: string;
   class_display?: string | null;
   class_key?: string | null;
-  source: "Veli Talepleri" | "Öğretmen Yönlendirmeleri" | "Öğrenci Bildirimleri" | "Gözlem Havuzu" | "Bireysel Başvuru";
+  source: "Veli Talepleri" | "Öğretmen Yönlendirmeleri" | "Öğrenci Bildirimleri" | "Rehberlik İsteği" | "Bireysel Başvuru";
+  source_type: ApplicationSourceType;
+  source_record_id: string;
   referrer?: string;
   date: string;
   note?: string | null;
-};
-
-const normalizeStudentName = (value?: string | null) =>
-  String(value || "")
-    .replace(/^\s*\d+\s+/, "")
-    .replace(/\s+/g, " ")
-    .toLocaleLowerCase("tr-TR")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-
-const matchesApplicationToAppointment = (
-  appointment: Partial<Appointment>,
-  studentName?: string | null,
-  classDisplay?: string | null,
-  classKey?: string | null
-) => {
-  const appointmentName = normalizeStudentName(appointment.participant_name);
-  const applicationName = normalizeStudentName(studentName);
-  if (!appointmentName || !applicationName) return false;
-  const nameMatch =
-    appointmentName === applicationName ||
-    appointmentName.includes(applicationName) ||
-    applicationName.includes(appointmentName);
-  if (!nameMatch) return false;
-
-  const appointmentClass = normalizeClassValue(appointment.participant_class);
-  const applicationClass = normalizeClassValue(classDisplay || classKey);
-  if (!appointmentClass || !applicationClass) return true;
-
-  return (
-    appointmentClass === applicationClass ||
-    appointmentClass.includes(applicationClass) ||
-    applicationClass.includes(appointmentClass)
-  );
 };
 
 const isPendingApplicationStatus = (status?: string | null) => {
@@ -345,11 +320,6 @@ export default function TakvimPage() {
 
   const getTimelineMeta = (slot: string) =>
     LESSON_TIMELINE.find((item) => item.value === slot);
-
-  // Auth & Bildirim State'leri
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [notifications, setNotifications] = useState<{ pendingRequests: any[]; recentReferrals: any[] }>({ pendingRequests: [], recentReferrals: [] });
-  const [notifLoading, setNotifLoading] = useState(false);
 
   // Veri State'leri
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -446,19 +416,14 @@ export default function TakvimPage() {
         let indId = "";
         let appId = "";
 
-        if (sType === "Bireysel Başvuru") {
+        const normalizedSourceType =
+          normalizeSourceTypeOrNull(sType) ||
+          getSourceTypeFromPanelLabel(sType);
+
+        if (normalizedSourceType === "self_application") {
           indId = sId.includes('-') ? sId.split('-')[1] : sId;
-        } else if (sType === "Öğretmen Yönlendirmeleri") {
-          appType = "teacher_referral";
-          appId = sId.includes('-') ? sId.split('-')[1] : sId;
-        } else if (sType === "Öğrenci Bildirimleri") {
-          appType = "student_incident";
-          appId = sId.includes('-') ? sId.split('-')[1] : sId;
-        } else if (sType === "Veli Talepleri") {
-          appType = "parent_meeting";
-          appId = sId.includes('-') ? sId.split('-')[1] : sId;
-        } else if (sType === "Gözlem Havuzu") {
-          appType = "observation";
+        } else if (normalizedSourceType) {
+          appType = normalizedSourceType;
           appId = sId.includes('-') ? sId.split('-')[1] : sId;
         }
 
@@ -580,34 +545,11 @@ export default function TakvimPage() {
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
-      setUserRole(d.role || null);
       if (d.role === 'admin') {
-        loadNotifications();
         loadClassRequestCategorySuggestions();
       }
     }).catch(() => {});
   }, []);
-
-  const loadNotifications = async () => {
-    setNotifLoading(true);
-    try {
-      const today = new Date();
-      const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-      const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7);
-      const weekAgoStr = `${weekAgo.getFullYear()}-${String(weekAgo.getMonth()+1).padStart(2,'0')}-${String(weekAgo.getDate()).padStart(2,'0')}`;
-
-      const [reqRes, refResult] = await Promise.all([
-        fetch('/api/class-requests?status=pending'),
-        supabase.from('referrals').select('id, teacher_name, class_display, student_name, reason, created_at').gte('created_at', weekAgoStr).order('created_at', { ascending: false }).limit(10)
-      ]);
-      const reqData = reqRes.ok ? await reqRes.json() : { requests: [] };
-      setNotifications({
-        pendingRequests: reqData.requests || [],
-        recentReferrals: refResult.data || []
-      });
-    } catch { /* ignore */ }
-    finally { setNotifLoading(false); }
-  };
 
   // --- Data Fetching ---
   useEffect(() => {
@@ -836,41 +778,17 @@ export default function TakvimPage() {
   };
 
   const getApplicationSourceMeta = (record: PendingApplicationRecord) => {
-    if (record.source === "Bireysel Başvuru") {
+    if (record.source_type === "self_application") {
       return {
         source_application_id: "",
         source_application_type: "",
-        source_individual_request_id: record.id.replace("individual-", "")
-      };
-    }
-
-    const sourceId = record.id.includes("-") ? record.id.split("-").slice(1).join("-") : record.id;
-
-    if (record.source === "Öğretmen Yönlendirmeleri") {
-      return {
-        source_application_id: sourceId,
-        source_application_type: "teacher_referral",
-        source_individual_request_id: ""
-      };
-    }
-    if (record.source === "Öğrenci Bildirimleri") {
-      return {
-        source_application_id: sourceId,
-        source_application_type: "student_incident",
-        source_individual_request_id: ""
-      };
-    }
-    if (record.source === "Veli Talepleri") {
-      return {
-        source_application_id: sourceId,
-        source_application_type: "parent_meeting",
-        source_individual_request_id: ""
+        source_individual_request_id: record.source_record_id
       };
     }
 
     return {
-      source_application_id: sourceId,
-      source_application_type: "observation",
+      source_application_id: record.source_record_id,
+      source_application_type: record.source_type,
       source_individual_request_id: ""
     };
   };
@@ -907,115 +825,159 @@ export default function TakvimPage() {
     setShowAppointmentModal(true);
   };
 
+  const fetchPendingApplicationRecords = async () => {
+    const [
+      referralResult,
+      observationResult,
+      incidentResult,
+      requestResult,
+      individualRequestResult,
+      appointmentResult
+    ] = await Promise.all([
+      supabase.from("referrals").select("*").order("created_at", { ascending: false }),
+      supabase.from("observation_pool").select("*").order("created_at", { ascending: false }),
+      supabase.from("student_incidents").select("*").in("status", ["new", "reviewing"]).order("incident_date", { ascending: false }).order("created_at", { ascending: false }),
+      supabase.from("parent_meeting_requests").select("*").order("created_at", { ascending: false }),
+      supabase.from("individual_requests").select("*").order("created_at", { ascending: false }),
+      supabase.from("appointments").select("*").eq("participant_type", "student").neq("status", "cancelled").order("updated_at", { ascending: false })
+    ]);
+
+    const activeAppointments = appointmentResult.data || [];
+    const records: PendingApplicationRecord[] = [];
+    const actualSourceKeys = new Set<string>();
+
+    (incidentResult.data || []).forEach((item: any) => {
+      if (!isPendingApplicationStatus(item.status)) return;
+      const key = buildSourceRecordKey("student_report", item.id);
+      if (key) actualSourceKeys.add(key);
+    });
+    (referralResult.data || []).forEach((item: any) => {
+      if (!isPendingApplicationStatus(item.status)) return;
+      const key = buildSourceRecordKey("teacher_referral", item.id);
+      if (key) actualSourceKeys.add(key);
+    });
+    (requestResult.data || []).forEach((item: any) => {
+      if (!isPendingApplicationStatus(item.status)) return;
+      const key = buildSourceRecordKey("parent_request", item.id);
+      if (key) actualSourceKeys.add(key);
+    });
+    (individualRequestResult.data || []).forEach((item: any) => {
+      if (!isPendingApplicationStatus(item.status)) return;
+      const key = buildSourceRecordKey("self_application", item.id);
+      if (key) actualSourceKeys.add(key);
+    });
+
+    const pushIfPending = (record: PendingApplicationRecord) => {
+      const hasAppointment = Boolean(
+        findAppointmentForApplicationRecord(activeAppointments, {
+          source_type: record.source_type,
+          source_record_id: record.source_record_id,
+          student_name: record.student_name,
+          class_display: record.class_display,
+          class_key: record.class_key,
+          created_at: record.date,
+        })
+      );
+
+      if (!hasAppointment) {
+        records.push(record);
+      }
+    };
+
+    (incidentResult.data || []).forEach((item: any) => {
+      if (!isPendingApplicationStatus(item.status)) return;
+      pushIfPending({
+        id: `incident-${item.id}`,
+        student_name: item.target_student_name,
+        class_display: item.target_class_display,
+        class_key: item.target_class_key,
+        source: "Öğrenci Bildirimleri",
+        source_type: "student_report",
+        source_record_id: item.id,
+        referrer: item.record_role === "linked_reporter" ? item.reporter_student_name || undefined : undefined,
+        date: item.created_at || item.incident_date || new Date().toISOString(),
+        note: item.description
+      });
+    });
+
+    (observationResult.data || []).forEach((item: any) => {
+      if (!isPendingApplicationStatus(item.status)) return;
+      const proxyMeta = getObservationProxyMeta(item);
+      const proxyKey = buildSourceRecordKey(proxyMeta.sourceType, proxyMeta.sourceRecordId);
+      if (proxyMeta.isProxy && proxyKey && actualSourceKeys.has(proxyKey)) return;
+      pushIfPending({
+        id: proxyMeta.isProxy
+          ? `${proxyMeta.sourceType}-${proxyMeta.sourceRecordId || item.id}`
+          : `observation-${item.id}`,
+        student_name: item.student_name,
+        class_display: item.class_display,
+        class_key: item.class_key,
+        source: getPanelSourceLabel(proxyMeta.sourceType) as PendingApplicationRecord["source"],
+        source_type: proxyMeta.sourceType,
+        source_record_id: proxyMeta.sourceRecordId || item.id,
+        date: item.created_at || item.observed_at || new Date().toISOString(),
+        note: item.note
+      });
+    });
+
+    (referralResult.data || []).forEach((item: any) => {
+      if (!isPendingApplicationStatus(item.status)) return;
+      pushIfPending({
+        id: `referral-${item.id}`,
+        student_name: item.student_name,
+        class_display: item.class_display,
+        class_key: item.class_key,
+        source: "Öğretmen Yönlendirmeleri",
+        source_type: "teacher_referral",
+        source_record_id: item.id,
+        referrer: item.teacher_name,
+        date: item.created_at || new Date().toISOString(),
+        note: item.note || item.reason
+      });
+    });
+
+    (requestResult.data || []).forEach((item: any) => {
+      if (!isPendingApplicationStatus(item.status)) return;
+      pushIfPending({
+        id: `request-${item.id}`,
+        student_name: item.student_name,
+        class_display: item.class_display,
+        class_key: item.class_key,
+        source: "Veli Talepleri",
+        source_type: "parent_request",
+        source_record_id: item.id,
+        referrer: item.parent_name || undefined,
+        date: item.created_at || new Date().toISOString(),
+        note: item.detail || item.subject
+      });
+    });
+
+    (individualRequestResult.data || []).forEach((item: any) => {
+      if (!isPendingApplicationStatus(item.status)) return;
+      pushIfPending({
+        id: `individual-${item.id}`,
+        student_name: item.student_name,
+        class_display: item.class_display,
+        class_key: item.class_key,
+        source: "Bireysel Başvuru",
+        source_type: "self_application",
+        source_record_id: item.id,
+        date: item.created_at || new Date().toISOString(),
+        note: item.note
+      });
+    });
+
+    records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return records;
+  };
+
   const openPendingApplicationsModal = async (date: string, start_time: string) => {
     setPendingSelectionSlot({ date, start_time });
     setPendingApplicationsLoading(true);
     setShowPendingApplicationsModal(true);
 
     try {
-      const [
-        referralResult,
-        observationResult,
-        incidentResult,
-        requestResult,
-        individualRequestResult,
-        appointmentResult
-      ] = await Promise.all([
-        supabase.from("referrals").select("*").order("created_at", { ascending: false }),
-        supabase.from("observation_pool").select("*").order("created_at", { ascending: false }),
-        supabase.from("student_incidents").select("*").in("status", ["new", "reviewing"]).order("incident_date", { ascending: false }).order("created_at", { ascending: false }),
-        supabase.from("parent_meeting_requests").select("*").order("created_at", { ascending: false }),
-        supabase.from("individual_requests").select("*").order("created_at", { ascending: false }),
-        supabase.from("appointments").select("*").eq("participant_type", "student").neq("status", "cancelled").order("updated_at", { ascending: false })
-      ]);
-
-      const activeAppointments = appointmentResult.data || [];
-      const records: PendingApplicationRecord[] = [];
-
-      const pushIfPending = (record: PendingApplicationRecord) => {
-        const hasAppointment = activeAppointments.some((appointment) =>
-          matchesApplicationToAppointment(
-            appointment,
-            record.student_name,
-            record.class_display,
-            record.class_key
-          )
-        );
-
-        if (!hasAppointment) {
-          records.push(record);
-        }
-      };
-
-      (incidentResult.data || []).forEach((item: any) => {
-        if (!isPendingApplicationStatus(item.status)) return;
-        pushIfPending({
-          id: `incident-${item.id}`,
-          student_name: item.target_student_name,
-          class_display: item.target_class_display,
-          class_key: item.target_class_key,
-          source: "Öğrenci Bildirimleri",
-          referrer: item.record_role === "linked_reporter" ? item.reporter_student_name || undefined : undefined,
-          date: item.created_at || item.incident_date || new Date().toISOString(),
-          note: item.description
-        });
-      });
-
-      (observationResult.data || []).forEach((item: any) => {
-        if (!isPendingApplicationStatus(item.status)) return;
-        pushIfPending({
-          id: `observation-${item.id}`,
-          student_name: item.student_name,
-          class_display: item.class_display,
-          class_key: item.class_key,
-          source: "Gözlem Havuzu",
-          date: item.created_at || item.observed_at || new Date().toISOString(),
-          note: item.note
-        });
-      });
-
-      (referralResult.data || []).forEach((item: any) => {
-        if (!isPendingApplicationStatus(item.status)) return;
-        pushIfPending({
-          id: `referral-${item.id}`,
-          student_name: item.student_name,
-          class_display: item.class_display,
-          class_key: item.class_key,
-          source: "Öğretmen Yönlendirmeleri",
-          referrer: item.teacher_name,
-          date: item.created_at || new Date().toISOString(),
-          note: item.note || item.reason
-        });
-      });
-
-      (requestResult.data || []).forEach((item: any) => {
-        if (!isPendingApplicationStatus(item.status)) return;
-        pushIfPending({
-          id: `request-${item.id}`,
-          student_name: item.student_name,
-          class_display: item.class_display,
-          class_key: item.class_key,
-          source: "Veli Talepleri",
-          referrer: item.parent_name || undefined,
-          date: item.created_at || new Date().toISOString(),
-          note: item.detail || item.subject
-        });
-      });
-
-      (individualRequestResult.data || []).forEach((item: any) => {
-        if (!isPendingApplicationStatus(item.status)) return;
-        pushIfPending({
-          id: `individual-${item.id}`,
-          student_name: item.student_name,
-          class_display: item.class_display,
-          class_key: item.class_key,
-          source: "Bireysel Başvuru",
-          date: item.created_at || new Date().toISOString(),
-          note: item.note
-        });
-      });
-
-      records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const records = await fetchPendingApplicationRecords();
       setPendingApplications(records);
     } catch (error) {
       console.error("Pending applications load error:", error);
@@ -1050,6 +1012,49 @@ export default function TakvimPage() {
     
     setAppointmentSaving(true);
     try {
+      let resolvedSourceApplicationId = formData.source_application_id || "";
+      let resolvedSourceApplicationType = formData.source_application_type || "";
+      let resolvedSourceIndividualRequestId = formData.source_individual_request_id || "";
+
+      const needsFollowUpSource =
+        !editingAppointment &&
+        formData.participant_type === "student" &&
+        !resolvedSourceApplicationId &&
+        !resolvedSourceApplicationType &&
+        !resolvedSourceIndividualRequestId;
+
+      if (needsFollowUpSource) {
+        const noteParts = [];
+        if (formData.purpose) {
+          noteParts.push(`[${formData.purpose}]`);
+        }
+        if (formData.preparation_note?.trim()) {
+          noteParts.push(formData.preparation_note.trim());
+        }
+
+        const sourceResponse = await fetch("/api/gozlem-havuzu", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            student_name: finalName,
+            class_display: formData.participant_class,
+            class_key: selectedClass || null,
+            note: noteParts.join(" ").trim() || null,
+            observation_type: "behavior",
+            priority: "medium",
+            status: "pending",
+            observed_at: getLocalDateString(new Date()),
+          }),
+        });
+        const sourceResult = await sourceResponse.json().catch(() => ({}));
+        if (!sourceResponse.ok || !sourceResult?.data?.id) {
+          throw new Error(sourceResult.error || "Rehberlik isteği kaydı oluşturulamadı");
+        }
+
+        resolvedSourceApplicationId = sourceResult.data.id;
+        resolvedSourceApplicationType = "observation";
+      }
+
       const appointmentData = {
         id: editingAppointment?.id,
         appointment_date: formData.appointment_date,
@@ -1062,9 +1067,9 @@ export default function TakvimPage() {
         preparation_note: formData.preparation_note || null,
         topic_tags: formData.purpose ? [formData.purpose] : [],
         priority: 'normal',
-        source_application_id: formData.source_application_id || null,
-        source_application_type: formData.source_application_type || null,
-        source_individual_request_id: formData.source_individual_request_id || null
+        source_application_id: resolvedSourceApplicationId || null,
+        source_application_type: resolvedSourceApplicationType || null,
+        source_individual_request_id: resolvedSourceIndividualRequestId || null
       };
       
       console.log(editingAppointment ? 'Updating appointment:' : 'Inserting appointment:', appointmentData);
@@ -1457,7 +1462,6 @@ export default function TakvimPage() {
   };
 
   const currentLessonSlot = getCurrentLessonSlot(currentDate, LESSON_TIMELINE);
-  const pendingIndicatorCount = notifications.pendingRequests.length;
   const dayOtherTasks = useMemo(() => {
     if (taskFilter === 'all') {
       return allTasks
@@ -1473,69 +1477,6 @@ export default function TakvimPage() {
 
   return (
     <div className="space-y-2.5">
-
-      {/* Admin Bildirim Paneli */}
-      {userRole === 'admin' && (notifications.pendingRequests.length > 0 || notifications.recentReferrals.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Bekleyen Sınıf Talepleri */}
-          {notifications.pendingRequests.length > 0 && (
-            <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-500 shadow-sm">
-                    <Bell className="h-4 w-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-violet-800">Sınıf Rehberliği Talepleri</p>
-                    <p className="text-xs text-violet-600">{notifications.pendingRequests.length} bekleyen talep</p>
-                  </div>
-                </div>
-                <a href="/panel/sinif-rehberligi" className="text-xs font-semibold text-violet-600 hover:text-violet-800 transition-colors">Görüntüle →</a>
-              </div>
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {notifications.pendingRequests.slice(0, 5).map((req: any) => (
-                  <div key={req.id} className="flex items-center gap-2 rounded-xl bg-white/70 border border-violet-100 px-3 py-2">
-                    <div className="h-2 w-2 rounded-full bg-violet-400 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-slate-800 truncate">{req.class_display} — {getClassRequestCategoryLabel(req)}</p>
-                      <p className="text-[11px] text-slate-500">{req.teacher_name}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Son Öğretmen Yönlendirmeleri */}
-          {notifications.recentReferrals.length > 0 && (
-            <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-500 shadow-sm">
-                    <Bell className="h-4 w-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-blue-800">Yeni Öğrenci Yönlendirmeleri</p>
-                    <p className="text-xs text-blue-600">Son 7 günde {notifications.recentReferrals.length} yönlendirme</p>
-                  </div>
-                </div>
-                <a href="/panel/basvurular" className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">Görüntüle →</a>
-              </div>
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {notifications.recentReferrals.slice(0, 5).map((ref: any) => (
-                  <div key={ref.id} className="flex items-center gap-2 rounded-xl bg-white/70 border border-blue-100 px-3 py-2">
-                    <div className="h-2 w-2 rounded-full bg-blue-400 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-slate-800 truncate">{ref.student_name} ({ref.class_display})</p>
-                      <p className="text-[11px] text-slate-500">{ref.teacher_name} — {ref.reason}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Sınıf Talebi Planlama Güncelle Modalı */}
       {showCrEditModal && editingCr && (
@@ -2575,15 +2516,7 @@ export default function TakvimPage() {
                                   className="flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left transition-colors hover:bg-white/80"
                                 >
                                   <p className="text-xs text-slate-400">Bu saat boş</p>
-                                  <div className="flex items-center gap-2">
-                                    {pendingIndicatorCount > 0 && (
-                                      <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-600 ring-1 ring-inset ring-red-200">
-                                        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                                        {pendingIndicatorCount}
-                                      </span>
-                                    )}
-                                    <Plus className={`h-3.5 w-3.5 text-slate-300 transition-transform duration-200 ${isExpandedEmpty ? "rotate-45" : ""}`} />
-                                  </div>
+                                  <Plus className={`h-3.5 w-3.5 text-slate-300 transition-transform duration-200 ${isExpandedEmpty ? "rotate-45" : ""}`} />
                                 </button>
                                 <div className={`grid transition-all duration-300 ease-out ${isExpandedEmpty ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
                                   <div className="overflow-hidden">
@@ -2598,18 +2531,15 @@ export default function TakvimPage() {
                                         <Plus className="mr-1 h-3.5 w-3.5" />
                                         Randevu ekle
                                       </Button>
-                                      {pendingIndicatorCount > 0 && (
-                                        <Button
-                                          type="button"
-                                          size="sm"
-                                          variant="ghost"
-                                          onClick={() => openPendingApplicationsModal(getLocalDateString(currentDate), periodStr)}
-                                          className="h-8 rounded-[10px] px-2 text-xs font-medium text-slate-500 transition-transform duration-200 hover:scale-[1.02] hover:text-slate-700"
-                                        >
-                                          <span className="mr-1.5 h-2 w-2 rounded-full bg-red-500" />
-                                          {pendingIndicatorCount} başvuru
-                                        </Button>
-                                      )}
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => openPendingApplicationsModal(getLocalDateString(currentDate), periodStr)}
+                                        className="h-8 rounded-[10px] px-2 text-xs font-medium text-slate-500 transition-transform duration-200 hover:scale-[1.02] hover:text-slate-700"
+                                      >
+                                        Bekleyen başvurular
+                                      </Button>
                                     </div>
                                   </div>
                                 </div>

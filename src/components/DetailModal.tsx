@@ -84,7 +84,7 @@ export function DetailModal({ open, item, onOpenChange }: DetailModalProps) {
           <Badge variant="secondary" className="px-3 py-2 text-xs">
             {item.type === "referral" && "Öğretmen Yönlendirmesi"}
             {item.type === "incident" && "Öğrenci Bildirimi"}
-            {item.type === "observation" && "Gözlem"}
+                {item.type === "observation" && "Rehberlik İsteği"}
             {item.type === "request" && "Veli Talebi"}
             {item.type === "individual" && "Bireysel Başvuru"}
           </Badge>

@@ -85,7 +85,7 @@ export interface ParentMeetingRequestRecord {
 }
 
 export const APPLICATION_SOURCE_TYPES = [
-  { value: "observation", label: "Gözlem Havuzu" },
+  { value: "observation", label: "Rehberlik İsteği" },
   { value: "student_report", label: "Öğrenci Bildirimi" },
   { value: "teacher_referral", label: "Öğretmen Yönlendirmesi" },
   { value: "parent_request", label: "Veli Talebi" },
@@ -341,7 +341,7 @@ export const TOPIC_TAGS = [
 
 export type TopicTag = typeof TOPIC_TAGS[number];
 
-// Gözlem havuzu seçenekleri
+// Rehberlik isteği seçenekleri
 export const OBSERVATION_TYPES = [
   { value: 'behavior', label: 'Davranış' },
   { value: 'academic', label: 'Akademik' },

@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { ClipboardList, Check, X, RefreshCw, Clock, ArrowRightLeft, Trash2, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,12 +35,20 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default function SinifTalepleriPage() {
+  const searchParams = useSearchParams();
   const [requests, setRequests] = useState<ClassStudentRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"pending" | "approved" | "rejected" | "all">("pending");
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [noteInputs, setNoteInputs] = useState<Record<string, string>>({});
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const filterParam = searchParams.get("filter");
+    if (filterParam === "pending" || filterParam === "approved" || filterParam === "rejected" || filterParam === "all") {
+      setFilter(filterParam);
+    }
+  }, [searchParams]);
 
   const load = useCallback(async () => {
     setLoading(true);

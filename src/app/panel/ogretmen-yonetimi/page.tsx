@@ -35,7 +35,6 @@ interface Sinif {
   text: string;
 }
 
-type Tab = "ogretmenler" | "atamalar";
 interface TeacherUser {
   id: string;
   teacher_name: string;
@@ -127,8 +126,13 @@ export default function OgretmenYonetimiPage() {
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || "Eklenemedi"); return; }
       setTeachers(prev => [...prev, data.teacher]);
+      setUsers((prev) => {
+        if (!data.account) return prev;
+        const alreadyExists = prev.some((user) => user.id === data.account.id);
+        return alreadyExists ? prev : [...prev, data.account];
+      });
       setNewName("");
-      toast.success(`${data.teacher.teacherName} eklendi`);
+      toast.success(`${data.teacher.teacherName} eklendi ve hesaplara yansıdı`);
     } catch {
       toast.error("Bağlantı hatası");
     } finally {
@@ -165,11 +169,16 @@ export default function OgretmenYonetimiPage() {
         body: JSON.stringify({
           action: "assign_class",
           teacherId: teacher.teacherId,
+          teacherName: teacher.teacherName,
           sinifSubeKey: assigningClass.value,
           sinifSubeDisplay: assigningClass.text,
         }),
       });
-      if (!res.ok) { toast.error("Atama başarısız"); return; }
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        toast.error(data?.error || "Atama başarısız");
+        return;
+      }
       setTeachers(prev => prev.map(t => {
         if (t.sinifSubeKey === assigningClass.value) return { ...t, sinifSubeKey: undefined, sinifSubeDisplay: undefined };
         if (t.teacherId === teacher.teacherId) return { ...t, sinifSubeKey: assigningClass.value, sinifSubeDisplay: assigningClass.text };
@@ -190,9 +199,17 @@ export default function OgretmenYonetimiPage() {
       const res = await fetch("/api/teachers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "remove_class", teacherId: teacher.teacherId }),
+        body: JSON.stringify({
+          action: "remove_class",
+          teacherId: teacher.teacherId,
+          teacherName: teacher.teacherName,
+        }),
       });
-      if (!res.ok) { toast.error("Kaldırılamadı"); return; }
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        toast.error(data?.error || "Kaldırılamadı");
+        return;
+      }
       setTeachers(prev => prev.map(t =>
         t.teacherId === teacher.teacherId ? { ...t, sinifSubeKey: undefined, sinifSubeDisplay: undefined } : t
       ));

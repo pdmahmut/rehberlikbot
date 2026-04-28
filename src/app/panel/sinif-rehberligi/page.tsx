@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { Plus, CheckCircle2, Clock, Calendar, BookOpen, X, AlertTriangle, Sparkles, CircleDashed, Trash2, MessageSquare, ChevronDown, RefreshCw, Send } from "lucide-react"
 import { toast } from "sonner"
@@ -168,6 +169,7 @@ function useBusySlots() {
 }
 
 export default function SinifRehberligiPage() {
+  const searchParams = useSearchParams()
   const [topics, setTopics] = useState<GuidanceTopic[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'planlama' | 'gecmis' | 'talepler'>('planlama')
@@ -210,6 +212,19 @@ export default function SinifRehberligiPage() {
   const [savingRequestPlan, setSavingRequestPlan] = useState(false)
   const [categorySuggestions, setCategorySuggestions] = useState<string[]>([])
   const [teacherOptions, setTeacherOptions] = useState<string[]>([])
+
+  useEffect(() => {
+    const tab = searchParams.get("tab")
+    const filter = searchParams.get("filter")
+
+    if (tab === "planlama" || tab === "gecmis" || tab === "talepler") {
+      setActiveTab(tab)
+    }
+
+    if (filter === "pending" || filter === "scheduled" || filter === "completed" || filter === "all") {
+      setRequestsFilter(filter)
+    }
+  }, [searchParams])
 
   const fetchTopics = useCallback(async () => {
     setLoading(true)

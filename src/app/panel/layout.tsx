@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Bell,
   BookOpen,
@@ -45,6 +45,7 @@ const menuCategories = [
   {
     title: 'Yönetim',
     items: [
+      { href: '/panel/bildirimler', label: 'Bildirimler', icon: Bell },
       { href: '/panel/ogretmen-yonetimi', label: 'Öğretmen Yönetimi', icon: Users },
     ],
   },
@@ -75,8 +76,49 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
     'Sınıf',
     'Yönetim',
   ]);
-  const [pendingRequestCount, setPendingRequestCount] = useState(0);
-  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [adminNotificationUnreadCount, setAdminNotificationUnreadCount] = useState(0);
+
+  const loadAdminNotifications = useCallback(async (showPopups = true) => {
+    try {
+      const response = await fetch('/api/admin-notifications', {
+        headers: { Accept: 'application/json' },
+      });
+      const data = await response.json().catch(() => ({ notifications: [], unreadCount: 0 }));
+      if (!response.ok) return;
+
+      setAdminNotificationUnreadCount(data.unreadCount || 0);
+
+      const popupTargets = showPopups
+        ? (data.notifications || [])
+            .filter((item: any) => {
+              if (item.popupSeen || item.read) return false;
+              const createdAt = new Date(item.createdAt || item.created_at || 0).getTime();
+              return Number.isFinite(createdAt) && Date.now() - createdAt <= 10 * 60 * 1000;
+            })
+            .slice(0, 3)
+        : [];
+
+      if (popupTargets.length > 0) {
+        await fetch('/api/admin-notifications', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: popupTargets.map((item: any) => item.id), popupSeen: true }),
+        }).catch(() => {});
+
+        popupTargets.forEach((item: any) => {
+          toast.info(item.title, {
+            description: item.summary,
+            action: {
+              label: 'Aç',
+              onClick: () => router.push(item.targetUrl),
+            },
+          });
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }, [router]);
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -88,14 +130,37 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
         setRoleLoading(false);
 
         if (data.role === 'admin') {
-          fetch('/api/class-student-requests?status=pending')
-            .then((response) => response.json())
-            .then((pendingData) => setPendingRequestCount(pendingData.requests?.length || 0))
-            .catch(() => {});
+          loadAdminNotifications(true);
         }
       })
       .catch(() => setRoleLoading(false));
-  }, []);
+  }, [loadAdminNotifications]);
+
+  useEffect(() => {
+    if (role !== 'admin') return;
+    loadAdminNotifications(false);
+  }, [pathname, role, loadAdminNotifications]);
+
+  useEffect(() => {
+    if (role !== 'admin') return;
+
+    const interval = window.setInterval(() => {
+      loadAdminNotifications(true);
+    }, 45000);
+
+    return () => window.clearInterval(interval);
+  }, [role, loadAdminNotifications]);
+
+  useEffect(() => {
+    if (role !== 'admin') return;
+
+    const handleRefresh = () => {
+      loadAdminNotifications(false);
+    };
+
+    window.addEventListener('admin-notifications:refresh', handleRefresh);
+    return () => window.removeEventListener('admin-notifications:refresh', handleRefresh);
+  }, [role, loadAdminNotifications]);
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -319,7 +384,18 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
                           <div className={`rounded-lg p-1.5 ${active ? 'bg-white/20' : 'bg-slate-800'}`}>
                             <Icon className="h-4 w-4" />
                           </div>
-                          {!sidebarCollapsed && <span className="flex-1 truncate">{item.label}</span>}
+                          {!sidebarCollapsed && (
+                            <>
+                              <span className="flex-1 truncate">{item.label}</span>
+                              {item.href === '/panel/bildirimler' && adminNotificationUnreadCount > 0 && (
+                                <span className={`inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
+                                  active ? 'bg-white/20 text-white' : 'bg-red-500 text-white'
+                                }`}>
+                                  {adminNotificationUnreadCount}
+                                </span>
+                              )}
+                            </>
+                          )}
                           {sidebarCollapsed && (
                             <div className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-lg bg-slate-800 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
                               {item.label}
@@ -385,30 +461,6 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
       </aside>
 
       <main className="mt-16 flex-1 overflow-auto pb-20 lg:mt-0 lg:pb-0">
-        {role === 'admin' && pendingRequestCount > 0 && !bannerDismissed && (
-          <div className="mx-4 mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm lg:mx-6">
-            <div className="shrink-0 rounded-lg bg-amber-100 p-1.5">
-              <Bell className="h-4 w-4 text-amber-600" />
-            </div>
-            <p className="flex-1 text-sm text-amber-800">
-              <span className="font-semibold">{pendingRequestCount}</span> bekleyen sınıf talebi var
-              {' '}(öğrenci silme veya sınıf değiştirme).
-            </p>
-            <Link
-              href="/panel/sinif-talepleri"
-              className="shrink-0 text-sm font-semibold text-amber-700 underline underline-offset-2 hover:text-amber-900"
-            >
-              İncele
-            </Link>
-            <button
-              onClick={() => setBannerDismissed(true)}
-              className="shrink-0 rounded-lg p-1 text-amber-500 hover:bg-amber-100"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-
         <div className="p-4 lg:p-6">{children}</div>
       </main>
 

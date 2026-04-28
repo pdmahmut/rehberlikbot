@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,10 +21,10 @@ import {
 } from "@/types";
 import {
   buildSourceRecordKey,
+  findAppointmentForApplicationRecord,
   getObservationProxyMeta,
   getPanelSourceLabel,
   getSourceTypeFromPanelLabel,
-  isAppointmentLinkedToSource,
 } from "@/lib/guidanceApplications";
 
 type ApplicationRecord = {
@@ -31,7 +32,7 @@ type ApplicationRecord = {
   student_name: string;
   class_display?: string | null;
   class_key?: string | null;
-  source: "Veli Talepleri" | "Öğretmen Yönlendirmeleri" | "Öğrenci Bildirimleri" | "Gözlem Havuzu" | "Bireysel Başvuru";
+  source: "Veli Talepleri" | "Öğretmen Yönlendirmeleri" | "Öğrenci Bildirimleri" | "Rehberlik İsteği" | "Bireysel Başvuru";
   source_type: ApplicationSourceType;
   source_record_id: string;
   legacy_observation_id?: string | null;
@@ -42,6 +43,7 @@ type ApplicationRecord = {
   note?: string | null;
   matched_appointment_id?: string | null;
   last_activity_at?: string | null;
+  event_timestamp: string;
 };
 
 type ApplicationStatus = ApplicationRecord["status"];
@@ -110,23 +112,6 @@ const formatClassDisplay = (classDisplay?: string | null): string => {
   return classDisplay;
 };
 
-const matchesAppointment = (
-  appointment: any,
-  studentName?: string | null,
-  classDisplay?: string | null,
-  classKey?: string | null
-) => {
-  const aName = normalizeStudentName(appointment.participant_name);
-  const sName = normalizeStudentName(studentName);
-  if (!aName || !sName) return false;
-  const nameMatch = aName === sName || aName.includes(sName) || sName.includes(aName);
-  if (!nameMatch) return false;
-  const aClass = normalizeClassText(appointment.participant_class);
-  const sClass = normalizeClassText(classDisplay || classKey);
-  if (!aClass || !sClass) return true;
-  return aClass === sClass || aClass.includes(sClass) || sClass.includes(aClass);
-};
-
 const getOutcomeLabel = (decisions: string[] | null | undefined): string | null => {
   if (!decisions || decisions.length === 0) return null;
   for (const d of decisions) {
@@ -136,30 +121,6 @@ const getOutcomeLabel = (decisions: string[] | null | undefined): string | null 
   }
   return null;
 };
-
-const findMatchedAppointment = (
-  attendedAppointments: any[],
-  studentName?: string | null,
-  classDisplay?: string | null,
-  classKey?: string | null
-): any | null => {
-  return attendedAppointments.find((apt) =>
-    matchesAppointment(apt, studentName, classDisplay, classKey)
-  ) || null;
-};
-
-const findMatchedAppointmentBySource = (
-  appointments: any[],
-  sourceType: ApplicationSourceType,
-  sourceRecordId: string,
-  studentName?: string | null,
-  classDisplay?: string | null,
-  classKey?: string | null
-) =>
-  appointments.find((apt) =>
-    isAppointmentLinkedToSource(apt, sourceType, sourceRecordId) ||
-    matchesAppointment(apt, studentName, classDisplay, classKey)
-  ) || null;
 
 const getLatestTimestamp = (...values: Array<string | null | undefined>) => {
   const validValues = values
@@ -183,10 +144,11 @@ const extractTopicFromNote = (note?: string | null) => {
 };
 
 export default function BasvurularPage() {
+  const searchParams = useSearchParams();
   const [applicationsSearchQuery, setApplicationsSearchQuery] = useState("");
   const [showEntryForm, setShowEntryForm] = useState(false);
   const [showNewEntryDropdown, setShowNewEntryDropdown] = useState(false);
-  const [entryFormSource, setEntryFormSource] = useState<ApplicationRecord["source"]>("Gözlem Havuzu");
+  const [entryFormSource, setEntryFormSource] = useState<ApplicationRecord["source"]>("Rehberlik İsteği");
   const [entryForm, setEntryForm] = useState({
     student_name: "",
     class_display: "",
@@ -259,12 +221,14 @@ export default function BasvurularPage() {
     };
 
     try {
-      const matched = findMatchedAppointment(
-        attendedAppointments,
-        outcomeModalRecord.student_name,
-        outcomeModalRecord.class_display,
-        outcomeModalRecord.class_key
-      );
+      const matched = findAppointmentForApplicationRecord(attendedAppointments, {
+        source_type: outcomeModalRecord.source_type,
+        source_record_id: outcomeModalRecord.source_record_id,
+        student_name: outcomeModalRecord.student_name,
+        class_display: outcomeModalRecord.class_display,
+        class_key: outcomeModalRecord.class_key,
+        created_at: outcomeModalRecord.event_timestamp,
+      });
 
       let appointmentId = matched?.id || null;
 
@@ -281,6 +245,8 @@ export default function BasvurularPage() {
             participant_name: outcomeModalRecord.student_name,
             participant_class: outcomeModalRecord.class_display || outcomeModalRecord.class_key || "",
             status: "attended",
+            source_application_id: outcomeModalRecord.source_record_id,
+            source_application_type: outcomeModalRecord.source_type,
             purpose: outcomeModalRecord.note || "Geçmiş görüşme kaydı",
             ...choiceMap[choice]
           })
@@ -297,6 +263,8 @@ export default function BasvurularPage() {
               participant_name: outcomeModalRecord.student_name,
               participant_class: outcomeModalRecord.class_display || outcomeModalRecord.class_key || "",
               status: "attended",
+              source_application_id: outcomeModalRecord.source_record_id,
+              source_application_type: outcomeModalRecord.source_type,
               purpose: outcomeModalRecord.note || "Geçmiş görüşme kaydı",
               outcome_decision: choiceMap[choice].outcome_decision
             })
@@ -362,7 +330,7 @@ export default function BasvurularPage() {
       if (deleteObservationId) {
         const { error } = await supabase.from("observation_pool").delete().eq("id", deleteObservationId);
         if (error) throw new Error(error.message);
-        toast.success('Gözlem kaydı silindi');
+      toast.success('Rehberlik isteği kaydı silindi');
       } else {
         const response = await fetch(`${endpoint}?id=${id}`, { method: 'DELETE' });
         if (!response.ok) throw new Error("İşlem başarısız");
@@ -422,7 +390,7 @@ export default function BasvurularPage() {
       
       let response;
 
-      if (entryFormSource === "Gözlem Havuzu") {
+      if (entryFormSource === "Rehberlik İsteği") {
         response = await fetch("/api/gozlem-havuzu", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, note: topicNote, observation_type: "behavior", priority: "medium", status: "pending", observed_at: today })
         });
@@ -458,7 +426,7 @@ export default function BasvurularPage() {
   };
 
   const ENTRY_CHANNELS: { source: ApplicationRecord["source"]; label: string; icon: string; color: string; referrerLabel?: string }[] = [
-    { source: "Gözlem Havuzu", label: "Gözlem Havuzu", icon: "👁", color: "bg-purple-100 text-purple-700 hover:bg-purple-200 border-purple-200" },
+    { source: "Rehberlik İsteği", label: "Rehberlik İsteği", icon: "👁", color: "bg-purple-100 text-purple-700 hover:bg-purple-200 border-purple-200" },
     { source: "Bireysel Başvuru", label: "Bireysel Başvuru", icon: "🙋", color: "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200" },
     { source: "Veli Talepleri", label: "Veli Talebi", icon: "👨‍👩‍👧", color: "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-200", referrerLabel: "Veli Adı" },
     { source: "Öğrenci Bildirimleri", label: "Öğrenci Bildirimi", icon: "📢", color: "bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-200", referrerLabel: "Bildirimi Yapan Öğrenci" },
@@ -497,6 +465,24 @@ export default function BasvurularPage() {
   };
 
   useEffect(() => { loadData(); }, []);
+
+  useEffect(() => {
+    const source = searchParams.get("source");
+    const student = searchParams.get("student");
+    const classDisplay = searchParams.get("class");
+
+    if (source === "teacher_referral") {
+      setApplicationsSourceFilter("Öğretmen Yönlendirmeleri");
+    }
+
+    if (student) {
+      setApplicationsSearchQuery(student);
+    }
+
+    if (classDisplay) {
+      setApplicationsClassFilter(classDisplay);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     setStatusOverrides(loadApplicationStatusOverrides());
@@ -572,23 +558,17 @@ export default function BasvurularPage() {
           : (arg2 || record.created_at || new Date().toISOString());
       const note = explicitSourceType ? arg5 : referrerFirstSourceType ? arg5 : arg3;
       const legacy_observation_id = explicitSourceType ? (arg6 || null) : null;
-      const matchedApt = findMatchedAppointmentBySource(
-        attendedAppointments,
+      const eventTimestamp = record.created_at || date || new Date().toISOString();
+      const sharedRecord = {
         source_type,
         source_record_id,
         student_name,
         class_display,
-        class_key
-      );
-      const matchedScheduledApt =
-        findMatchedAppointmentBySource(
-          scheduledAppointments,
-          source_type,
-          source_record_id,
-          student_name,
-          class_display,
-          class_key
-        );
+        class_key,
+        created_at: eventTimestamp,
+      };
+      const matchedApt = findAppointmentForApplicationRecord(attendedAppointments, sharedRecord);
+      const matchedScheduledApt = findAppointmentForApplicationRecord(scheduledAppointments, sharedRecord);
       const isAttended = !!matchedApt;
       const outcomeLabel = isAttended ? getOutcomeLabel(matchedApt?.outcome_decision) : null;
       const statusMap: Record<string, string> = {
@@ -631,7 +611,8 @@ export default function BasvurularPage() {
         outcome_label: outcomeLabel,
         matched_appointment_id: matchedApt?.id || null,
         note,
-        last_activity_at: lastActivityAt
+        last_activity_at: lastActivityAt,
+        event_timestamp: eventTimestamp
       };
     };
 
@@ -664,7 +645,7 @@ export default function BasvurularPage() {
 
     observations.forEach((o) => records.push(buildRecord(
       o, `observation-${o.id}`, o.student_name, o.class_display, o.class_key,
-      "Gözlem Havuzu", undefined,
+      "Rehberlik İsteği", undefined,
       o.created_at || o.observed_at || new Date().toISOString(), o.note
     )));
 
@@ -730,14 +711,13 @@ export default function BasvurularPage() {
         ];
       })
       .filter((r) => r.student_name)
-      .sort((a, b) => new Date(b.last_activity_at || b.date).getTime() - new Date(a.last_activity_at || a.date).getTime());
+      .sort((a, b) => new Date(b.event_timestamp).getTime() - new Date(a.event_timestamp).getTime());
   }, [incidents, referrals, observations, requests, individualRequests, attendedAppointments, scheduledAppointments]);
 
   const applicationRecordsWithOverrides = useMemo(() => {
     return applicationRecords.map((record) => ({
       ...record,
-      status: statusOverrides[record.id]?.status || record.status,
-      last_activity_at: statusOverrides[record.id]?.acted_at?.trim() ? statusOverrides[record.id].acted_at : record.last_activity_at
+      status: statusOverrides[record.id]?.status || record.status
     }));
   }, [applicationRecords, statusOverrides]);
 
@@ -759,7 +739,7 @@ export default function BasvurularPage() {
     });
 
     filtered.sort((a, b) => {
-      return new Date(b.last_activity_at || b.date).getTime() - new Date(a.last_activity_at || a.date).getTime();
+      return new Date(b.event_timestamp).getTime() - new Date(a.event_timestamp).getTime();
     });
 
     return filtered;
@@ -1024,7 +1004,7 @@ export default function BasvurularPage() {
                 <option value="Veli Talepleri">Veli Talepleri</option>
                 <option value="Öğretmen Yönlendirmeleri">Öğretmen Yönlendirmeleri</option>
                 <option value="Öğrenci Bildirimleri">Öğrenci Bildirimleri</option>
-                <option value="Gözlem Havuzu">Gözlem Havuzu</option>
+                <option value="Rehberlik İsteği">Rehberlik İsteği</option>
                 <option value="Bireysel Başvuru">Bireysel Başvuru</option>
               </select>
             </div>
@@ -1079,7 +1059,7 @@ export default function BasvurularPage() {
                   filteredApplications.map((item) => (
                     <tr key={item.id} className="group/row border-b border-slate-100 hover:bg-gradient-to-r hover:from-purple-50/50 hover:to-pink-50/50 transition-all duration-200">
                       <td className="px-4 py-3 text-slate-600 text-sm">
-                        {new Date(item.last_activity_at || item.date).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        {new Date(item.event_timestamp).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </td>
                       <td className="px-4 py-3 font-medium text-slate-800 group-hover/row:text-purple-700 transition-colors">{item.student_name}</td>
                       <td className="px-4 py-3">

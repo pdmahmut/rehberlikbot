@@ -173,26 +173,45 @@ export function removeTeacher(teacherId: string): boolean {
   return true;
 }
 
-export function assignTeacherToClass(teacherId: string, sinifSubeKey: string, sinifSubeDisplay: string): { success: boolean; error?: string } {
+function findTeacher(records: TeacherRecord[], teacherId?: string, teacherName?: string): TeacherRecord | null {
+  if (teacherId) {
+    const teacherById = records.find(r => r.teacherId === teacherId);
+    if (teacherById) return teacherById;
+  }
+
+  if (teacherName) {
+    const normalizedName = normalizeTr(teacherName);
+    return records.find(r => r.teacherNameNormalized === normalizedName) || null;
+  }
+
+  return null;
+}
+
+export function assignTeacherToClass(
+  teacherId: string | undefined,
+  sinifSubeKey: string,
+  sinifSubeDisplay: string,
+  teacherName?: string
+): { success: boolean; error?: string } {
   const records = loadTeachersFromStore();
-  // Önce bu sınıfa atanmış öğretmenin atamasını kaldır
+  // First clear any teacher already assigned to this class.
   for (const r of records) {
     if (r.sinifSubeKey === sinifSubeKey) {
       delete r.sinifSubeKey;
       delete r.sinifSubeDisplay;
     }
   }
-  const teacher = records.find(r => r.teacherId === teacherId);
-  if (!teacher) return { success: false, error: 'Öğretmen bulunamadı' };
+  const teacher = findTeacher(records, teacherId, teacherName);
+  if (!teacher) return { success: false, error: 'Ogretmen bulunamadi' };
   teacher.sinifSubeKey = sinifSubeKey;
   teacher.sinifSubeDisplay = sinifSubeDisplay;
   saveTeachersToStore(records);
   return { success: true };
 }
 
-export function removeTeacherClassAssignment(teacherId: string): boolean {
+export function removeTeacherClassAssignment(teacherId?: string, teacherName?: string): boolean {
   const records = loadTeachersFromStore();
-  const teacher = records.find(r => r.teacherId === teacherId);
+  const teacher = findTeacher(records, teacherId, teacherName);
   if (!teacher) return false;
   delete teacher.sinifSubeKey;
   delete teacher.sinifSubeDisplay;

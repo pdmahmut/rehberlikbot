@@ -24,15 +24,15 @@
     "teacherId": "t4",
     "teacherName": "Sami Kan",
     "teacherNameNormalized": "sami kan",
-    "sinifSubeKey": "6B",
-    "sinifSubeDisplay": "6. Sınıf / B Şubesi"
+    "sinifSubeKey": "6A",
+    "sinifSubeDisplay": "6. Sınıf / A Şubesi"
   },
   {
     "teacherId": "t5",
     "teacherName": "Ebru Can",
     "teacherNameNormalized": "ebru can",
-    "sinifSubeKey": "6A",
-    "sinifSubeDisplay": "6. Sınıf / A Şubesi"
+    "sinifSubeKey": "6B",
+    "sinifSubeDisplay": "6. Sınıf / B Şubesi"
   },
   {
     "teacherId": "t6",
@@ -127,5 +127,10 @@
     "teacherId": "t21",
     "teacherName": "Yunus Emre Kahveci",
     "teacherNameNormalized": "yunus emre kahveci"
+  },
+  {
+    "teacherId": "t1777407407231",
+    "teacherName": "Şerife Polat",
+    "teacherNameNormalized": "serife polat"
   }
 ]

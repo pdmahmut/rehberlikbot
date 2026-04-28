@@ -1,0 +1,29 @@
+[
+  {
+    "source_type": "class_student_request",
+    "source_id": "1777188944148-x3dxnl",
+    "viewer_role": "admin",
+    "read_at": "2026-04-28T19:42:12.131Z",
+    "popup_seen_at": "2026-04-28T17:42:57.649Z",
+    "created_at": "2026-04-28T17:42:58.414Z",
+    "updated_at": "2026-04-28T19:42:12.131Z"
+  },
+  {
+    "source_type": "class_student_request",
+    "source_id": "1777188679992-arpav7",
+    "viewer_role": "admin",
+    "read_at": "2026-04-28T19:41:59.858Z",
+    "popup_seen_at": "2026-04-28T17:42:57.649Z",
+    "created_at": "2026-04-28T17:42:58.414Z",
+    "updated_at": "2026-04-28T19:41:59.858Z"
+  },
+  {
+    "source_type": "class_student_request",
+    "source_id": "1777188315444-x2or5q",
+    "viewer_role": "admin",
+    "read_at": "2026-04-28T19:41:59.858Z",
+    "popup_seen_at": "2026-04-28T17:42:57.649Z",
+    "created_at": "2026-04-28T17:42:58.414Z",
+    "updated_at": "2026-04-28T19:41:59.858Z"
+  }
+]
