@@ -51,13 +51,11 @@ const menuCategories = [
   },
 ];
 
-const teacherMenuItems = [
+const baseTeacherMenuItems = [
   { href: '/panel/ogrenci-yonlendirmesi', label: 'Öğrenci Yönlendir', icon: Users },
   { href: '/panel/yonlendirmeler', label: 'Yönlendirmeler', icon: History },
   { href: '/panel/sinifim', label: 'Sınıfım', icon: GraduationCap },
 ];
-
-const allMenuItems = [...menuCategories.flatMap((category) => category.items), ...teacherMenuItems];
 
 export default function PanelLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -77,6 +75,20 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
     'Yönetim',
   ]);
   const [adminNotificationUnreadCount, setAdminNotificationUnreadCount] = useState(0);
+
+  const teacherMenuItems = useMemo(
+    () =>
+      baseTeacherMenuItems.filter((item) => isHomeroom || item.href !== '/panel/sinifim'),
+    [isHomeroom]
+  );
+
+  const availableMenuItems = useMemo(() => {
+    if (role === 'teacher') {
+      return teacherMenuItems;
+    }
+
+    return menuCategories.flatMap((category) => category.items);
+  }, [role, teacherMenuItems]);
 
   const loadAdminNotifications = useCallback(async (showPopups = true) => {
     try {
@@ -181,11 +193,11 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
   const filteredMenuItems = useMemo(() => {
     if (!searchQuery.trim()) return null;
     const query = searchQuery.toLowerCase();
-    return allMenuItems.filter((item) => item.label.toLowerCase().includes(query));
-  }, [searchQuery]);
+    return availableMenuItems.filter((item) => item.label.toLowerCase().includes(query));
+  }, [availableMenuItems, searchQuery]);
 
   const isActive = (href: string) => pathname.startsWith(href);
-  const currentPage = allMenuItems.find((item) => isActive(item.href))?.label || 'Panel';
+  const currentPage = availableMenuItems.find((item) => isActive(item.href))?.label || 'Panel';
 
   const toggleCategory = (title: string) => {
     setExpandedCategories((previous) =>
@@ -466,7 +478,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
 
       {role === 'teacher' && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-2 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden">
-          <div className="grid grid-cols-3 gap-1.5">
+            <div className={`grid gap-1.5 ${teacherMenuItems.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
             {teacherMenuItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);

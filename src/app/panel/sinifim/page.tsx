@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   GraduationCap, Users, History, BookOpen, Plus, Trash2,
   RefreshCw, UserCheck, ArrowRightLeft, ArrowLeft, ChevronDown, Award, AlertCircle,
@@ -145,7 +146,10 @@ const REQUEST_STATUS: Record<GuidanceRequest["status"], { label: string; cls: st
 };
 
 export default function SinifimPage() {
+  const router = useRouter();
   const [auth, setAuth] = useState<AuthInfo | null>(null);
+  const [authResolved, setAuthResolved] = useState(false);
+  const [hasHomeroomAccess, setHasHomeroomAccess] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>("class-list");
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [students, setStudents] = useState<StudentOption[]>([]);
@@ -184,13 +188,31 @@ export default function SinifimPage() {
   const [submittingFeedback, setSubmittingFeedback] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/auth/me").then(r => r.json()).then(d => {
-      if (d.teacherName) {
-        setAuth({ teacherName: d.teacherName, classKey: d.classKey || null, classDisplay: d.classDisplay || null, isHomeroom: d.isHomeroom || false });
-      }
-    });
+    fetch("/api/auth/me")
+      .then(r => r.json())
+      .then(d => {
+        if (d.role === "teacher" && !d.isHomeroom) {
+          setHasHomeroomAccess(false);
+          setAuthResolved(true);
+          router.replace("/panel/ogrenci-yonlendirmesi");
+          return;
+        }
+
+        if (d.teacherName) {
+          setAuth({
+            teacherName: d.teacherName,
+            classKey: d.classKey || null,
+            classDisplay: d.classDisplay || null,
+            isHomeroom: d.isHomeroom || false,
+          });
+        }
+
+        setAuthResolved(true);
+      })
+      .catch(() => setAuthResolved(true));
+
     fetch("/api/data").then(r => r.json()).then(d => setSinifList(d.sinifSubeList || []));
-  }, []);
+  }, [router]);
 
   const openStudentProfile = async (studentName: string) => {
     const cleanName = studentName.replace(/^\d+\s+/, "").trim();
@@ -549,7 +571,7 @@ export default function SinifimPage() {
   }, []);
 
   useEffect(() => {
-    if (!auth) return;
+    if (!auth || !hasHomeroomAccess) return;
     loadReferrals();
     if (auth.classKey) {
       loadStudents(auth.classKey);
@@ -837,6 +859,8 @@ export default function SinifimPage() {
       else s.add(name);
       return s;
     });
+
+  if (!authResolved || !hasHomeroomAccess) return null;
 
   if (!auth) return (
     <div className="flex items-center justify-center min-h-[300px]">
