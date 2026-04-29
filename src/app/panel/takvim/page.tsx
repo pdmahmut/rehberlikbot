@@ -263,6 +263,8 @@ const MONTHS_TR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temm
 const DAYS_TR = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 const DAYS_FULL_TR = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
 
+type AppointmentEntryContext = "direct_program" | "application" | "external" | "edit";
+
 const getLocalDateString = (date: Date) => {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, '0');
@@ -406,6 +408,7 @@ export default function TakvimPage() {
   const [parentName, setParentName] = useState("");
   const [selectedStudentName, setSelectedStudentName] = useState("");
   const [busySlots, setBusySlots] = useState<Set<string>>(new Set());
+  const [appointmentEntryContext, setAppointmentEntryContext] = useState<AppointmentEntryContext>("direct_program");
 
   const [formData, setFormData] = useState({
     appointment_date: getLocalDateString(new Date()),
@@ -486,6 +489,7 @@ export default function TakvimPage() {
         }
 
         setSelectedStudentName(sName);
+        setAppointmentEntryContext("application");
         setShowAppointmentModal(true);
         window.history.replaceState({}, document.title, window.location.pathname);
       }
@@ -528,6 +532,7 @@ export default function TakvimPage() {
         }
 
         setSelectedStudentName(participantName);
+        setAppointmentEntryContext("external");
         setShowAppointmentModal(true);
         window.history.replaceState({}, document.title, window.location.pathname);
       }
@@ -764,12 +769,14 @@ export default function TakvimPage() {
   const openAppointmentModal = () => {
     setEditingAppointment(null);
     resetAppointmentForm(getLocalDateString(currentDate));
+    setAppointmentEntryContext("direct_program");
     setShowAppointmentModal(true);
   };
 
   const openAppointmentModalForSlot = (date: string, startTime: string) => {
     setEditingAppointment(null);
     resetAppointmentForm(date);
+    setAppointmentEntryContext("direct_program");
     setFormData((prev) => ({
       ...prev,
       appointment_date: date,
@@ -799,6 +806,7 @@ export default function TakvimPage() {
     const matchedClass = classes.find((item) => normalizeClassValue(item.text) === normalizedClass);
 
     setEditingAppointment(appointment);
+    setAppointmentEntryContext("edit");
     setFormData({
       appointment_date: appointment.appointment_date || getLocalDateString(currentDate),
       start_time: normalizeLessonSlot(appointment.start_time) || "1",
@@ -852,6 +860,7 @@ export default function TakvimPage() {
     const sourceMeta = getApplicationSourceMeta(record);
 
     setEditingAppointment(null);
+    setAppointmentEntryContext("application");
     setFormData({
       appointment_date: overrides?.date || getLocalDateString(currentDate),
       start_time: overrides?.start_time || "1",
@@ -1040,6 +1049,11 @@ export default function TakvimPage() {
     setPendingSelectionSlot(null);
   };
 
+  const isDirectProgramStudentAppointment =
+    appointmentEntryContext === "direct_program" &&
+    !editingAppointment &&
+    formData.participant_type === "student";
+
   const handleSaveAppointment = async () => {
     let finalName = formData.participant_name;
     if (formData.participant_type === "parent") {
@@ -1057,14 +1071,14 @@ export default function TakvimPage() {
     if (!formData.participant_class) { toast.error('Sınıf seçimi gerekli'); return; }
     
     setAppointmentSaving(true);
+    let createdDirectSourceId = "";
     try {
       let resolvedSourceApplicationId = formData.source_application_id || "";
       let resolvedSourceApplicationType = formData.source_application_type || "";
       let resolvedSourceIndividualRequestId = formData.source_individual_request_id || "";
 
       const needsFollowUpSource =
-        !editingAppointment &&
-        formData.participant_type === "student" &&
+        isDirectProgramStudentAppointment &&
         !resolvedSourceApplicationId &&
         !resolvedSourceApplicationType &&
         !resolvedSourceIndividualRequestId;
@@ -1088,7 +1102,7 @@ export default function TakvimPage() {
             note: noteParts.join(" ").trim() || null,
             observation_type: "behavior",
             priority: "medium",
-            status: "pending",
+            status: "converted",
             observed_at: getLocalDateString(new Date()),
           }),
         });
@@ -1099,6 +1113,7 @@ export default function TakvimPage() {
 
         resolvedSourceApplicationId = sourceResult.data.id;
         resolvedSourceApplicationType = "observation";
+        createdDirectSourceId = sourceResult.data.id;
       }
 
       const appointmentData = {
@@ -1129,12 +1144,20 @@ export default function TakvimPage() {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        if (createdDirectSourceId) {
+          await fetch(`/api/gozlem-havuzu?id=${createdDirectSourceId}`, { method: "DELETE" }).catch(() => null);
+          createdDirectSourceId = "";
+        }
         console.error('Appointment API error:', result);
         throw new Error(result.error || result.details || 'Bilinmeyen veritabanı hatası');
       }
 
       const savedAppointment = result?.appointment;
       if (!savedAppointment?.id) {
+        if (createdDirectSourceId) {
+          await fetch(`/api/gozlem-havuzu?id=${createdDirectSourceId}`, { method: "DELETE" }).catch(() => null);
+          createdDirectSourceId = "";
+        }
         throw new Error('Randevu veritabanına yazıldı ancak veri döndü');
       }
       
@@ -1142,6 +1165,10 @@ export default function TakvimPage() {
       closeAppointmentModal();
       await loadData();
     } catch (error: any) {
+      if (createdDirectSourceId) {
+        await fetch(`/api/gozlem-havuzu?id=${createdDirectSourceId}`, { method: "DELETE" }).catch(() => null);
+        createdDirectSourceId = "";
+      }
       console.error('Appointment save error:', error);
       const errorMsg = error?.message || error?.error_description || JSON.stringify(error) || 'Bilinmeyen hata';
       toast.error(`Randevu kaydedilirken hata oluştu: ${errorMsg}`);
@@ -1963,10 +1990,10 @@ export default function TakvimPage() {
 
             <div className="p-6 space-y-4">
               {/* Görüşme Türü */}
-              <div>
-                <label className="text-xs font-medium text-slate-600 mb-1 block">Görüşme Türü *</label>
-                <select
-                  value={formData.participant_type}
+                <div>
+                  <label className="text-xs font-medium text-slate-600 mb-1 block">Görüşme Türü *</label>
+                  <select
+                    value={formData.participant_type}
                   onChange={(e) => {
                     const newType = e.target.value as ParticipantType;
                     setFormData({ ...formData, participant_type: newType, participant_name: "", participant_class: "" });
@@ -1980,11 +2007,26 @@ export default function TakvimPage() {
                   {PARTICIPANT_TYPES.map(p => (
                     <option key={p.value} value={p.value}>{p.label}</option>
                   ))}
-                </select>
-              </div>
+                  </select>
+                </div>
 
-              {/* Öğrenci / Veli seçimi */}
-              {(formData.participant_type === "student" || formData.participant_type === "parent") && (
+                {isDirectProgramStudentAppointment && (
+                  <div>
+                    <label className="text-xs font-medium text-slate-600 mb-1 block">Geliş Türü</label>
+                    <Input
+                      value="Rehberlik İsteği"
+                      readOnly
+                      disabled
+                      className="h-10 border-slate-200 bg-slate-50 text-slate-600 disabled:cursor-not-allowed disabled:opacity-100"
+                    />
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Programım üzerinden doğrudan verilen öğrenci randevuları başvurulara Rehberlik İsteği kaynağıyla eklenir.
+                    </p>
+                  </div>
+                )}
+
+                {/* Öğrenci / Veli seçimi */}
+                {(formData.participant_type === "student" || formData.participant_type === "parent") && (
                 <>
                   <div>
                     <label className="text-xs font-medium text-slate-600 mb-1 block">Sınıf Seçin</label>

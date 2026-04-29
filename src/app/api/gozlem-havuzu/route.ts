@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
+const normalizeObservationStatus = (value: unknown) => {
+  if (value === "randevu_verildi" || value === "scheduled") return "converted";
+  if (value === "active") return "active_follow";
+  if (value === "regular" || value === "regular_meeting") return "active_follow";
+
+  if (
+    value === "pending" ||
+    value === "converted" ||
+    value === "active_follow" ||
+    value === "completed"
+  ) {
+    return value;
+  }
+
+  return "pending";
+};
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -28,7 +45,7 @@ export async function POST(request: NextRequest) {
         note: note?.trim() || null,
         observation_type: observation_type || "behavior",
         priority: priority || "medium",
-        status: status || "pending",
+        status: normalizeObservationStatus(status),
         observed_at: observed_at || new Date().toISOString().slice(0, 10)
       })
       .select()
