@@ -77,6 +77,24 @@ const toMinutes = (time: string) => {
 const getLessonTimelineMeta = (slot: string) =>
   DEFAULT_LESSON_TIMELINE.find((item) => item.value === slot);
 
+const stripParticipantSuffix = (title: string) =>
+  title.replace(/\s*\((Öğrenci|Veli|Öğretmen)\)\s*$/i, "").trim();
+
+const formatShortAppointmentTitle = (title: string) => {
+  const normalizedTitle = stripParticipantSuffix(title);
+  const classMatch = normalizedTitle.match(/^(\d+)\s*\.?\s*Sınıf\s*\/\s*([A-Za-zÇĞİÖŞÜçğıöşü]+)\s*Şubesi\s*(.*)$/i);
+
+  if (!classMatch) {
+    return normalizedTitle;
+  }
+
+  const [, grade, sectionRaw, remainderRaw] = classMatch;
+  const section = sectionRaw.toLocaleUpperCase("tr-TR");
+  const remainder = remainderRaw.replace(/^\d+\s+/, "").trim();
+
+  return remainder ? `${grade}/${section} ${remainder}` : `${grade}/${section}`;
+};
+
 const getCurrentLessonSlot = (date: Date, timeline = DEFAULT_LESSON_TIMELINE) => {
   if (new Date().toDateString() !== date.toDateString()) return null;
 
@@ -170,7 +188,9 @@ const getTimelineStatusMeta = (event: CalendarEvent) => {
 };
 
 const getTimelineTitle = (event: CalendarEvent) =>
-  event.title.replace(/\s*\((Öğrenci|Veli|Öğretmen)\)\s*$/i, "").trim();
+  event.type === "appointment"
+    ? formatShortAppointmentTitle(event.title)
+    : stripParticipantSuffix(event.title);
 
 const getTimelineSubtitle = (event: CalendarEvent) => {
   if (event.type === "appointment") {
@@ -360,6 +380,7 @@ export default function TakvimPage() {
   const [pendingApplications, setPendingApplications] = useState<PendingApplicationRecord[]>([]);
   const [pendingSelectionSlot, setPendingSelectionSlot] = useState<{ date: string; start_time: string } | null>(null);
   const [expandedEmptySlots, setExpandedEmptySlots] = useState<Record<string, boolean>>({});
+  const [weeklyEmptySlotModal, setWeeklyEmptySlotModal] = useState<{ date: Date; slot: string } | null>(null);
 
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [taskSaving, setTaskSaving] = useState(false);
@@ -649,25 +670,42 @@ export default function TakvimPage() {
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchStudentsByClass = async (classKey: string) => {
       if (!classKey) { setStudents([]); return; }
       try {
         setLoadingStudents(true);
-        const res = await fetch(`/api/students?sinifSube=${encodeURIComponent(classKey)}`);
+        const res = await fetch(`/api/students?sinifSube=${encodeURIComponent(classKey)}`, {
+          signal: controller.signal,
+        });
         if (res.ok) {
           const data = await res.json();
           setStudents(Array.isArray(data) ? data : []);
+        } else {
+          setStudents([]);
         }
-      } catch (error) {
-        console.error(error);
+      } catch (error: any) {
+        if (error?.name === "AbortError") return;
+        setStudents([]);
+        console.warn("Öğrenci listesi alınamadı:", error);
       } finally {
-        setLoadingStudents(false);
+        if (!controller.signal.aborted) {
+          setLoadingStudents(false);
+        }
       }
     };
 
     if (selectedClass && (formData.participant_type === "student" || formData.participant_type === "parent")) {
       fetchStudentsByClass(selectedClass);
+    } else {
+      setStudents([]);
+      setLoadingStudents(false);
     }
+
+    return () => {
+      controller.abort();
+    };
   }, [selectedClass, formData.participant_type]);
 
   useEffect(() => {
@@ -746,6 +784,14 @@ export default function TakvimPage() {
       ...prev,
       [key]: !prev[key],
     }));
+  };
+
+  const openWeeklyEmptySlotModal = (date: Date, slot: string) => {
+    setWeeklyEmptySlotModal({ date, slot });
+  };
+
+  const closeWeeklyEmptySlotModal = () => {
+    setWeeklyEmptySlotModal(null);
   };
 
   const openAppointmentEditModal = (appointment: Appointment) => {
@@ -1689,19 +1735,16 @@ export default function TakvimPage() {
                               <div key={e.id} className={`relative rounded-lg border p-4 transition-colors ${presentation.containerClass}`}>
                                 <div className="flex items-start justify-between gap-4">
                                   <div className="min-w-0 flex-1">
-                                    <div className="mb-2 flex items-center gap-2 flex-wrap">
-                                      <p className={`text-[11px] font-black uppercase tracking-[0.12em] ${presentation.kindClass}`}>
-                                        {presentation.kindLabel}
-                                      </p>
-                                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${presentation.badgeClass}`}>
-                                        {presentation.badgeLabel}
-                                      </span>
-                                      {e.type === "appointment" && (
-                                        <span className="rounded-full border border-blue-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-blue-700">
-                                          Görüşme
+                                    {e.type !== "appointment" && (
+                                      <div className="mb-2 flex items-center gap-2 flex-wrap">
+                                        <p className={`text-[11px] font-black uppercase tracking-[0.12em] ${presentation.kindClass}`}>
+                                          {presentation.kindLabel}
+                                        </p>
+                                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${presentation.badgeClass}`}>
+                                          {presentation.badgeLabel}
                                         </span>
-                                      )}
-                                    </div>
+                                      </div>
+                                    )}
                                     <p className={`text-sm font-semibold ${presentation.titleClass}`}>
                                       {e.title}
                                     </p>
@@ -2350,7 +2393,7 @@ export default function TakvimPage() {
                     {displayedEvs.map(e => (
                       <div key={e.id} className={`text-[9px] px-1 py-0.5 rounded truncate ${colorMap[e.color]?.bg || 'bg-slate-50'} ${colorMap[e.color]?.text || 'text-slate-700'}`}>
                         {e.time && <span className="font-bold">{normalizeLessonSlot(e.time)}.</span>}{' '}
-                        {e.title.replace(/\s*\((Öğrenci|Veli|Öğretmen)\)\s*$/i, "")}
+                        {getTimelineTitle(e)}
                       </div>
                     ))}
                     {extraCount > 0 && (
@@ -2365,7 +2408,7 @@ export default function TakvimPage() {
           {viewType === 'week' && (
             <Card className="border-slate-200 overflow-hidden shadow-sm">
               <CardContent className="p-0">
-                <table className="w-full border-collapse">
+                <table className="w-full table-fixed border-collapse">
                   <thead>
                     <tr>
                       <th className="w-[52px] border-b border-r border-slate-200 bg-slate-50 p-1" />
@@ -2397,6 +2440,7 @@ export default function TakvimPage() {
                               normalizeLessonSlot(e.time) === String(lessonNum)
                             );
                             const isTodayCol = isToday(date);
+                            const periodStr = String(lessonNum);
 
                             return (
                               <td
@@ -2406,8 +2450,15 @@ export default function TakvimPage() {
                                 }`}
                               >
                                 {periodEvents.length === 0 ? (
-                                  <div className="flex h-[56px] items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50">
-                                    <p className="text-[10px] text-slate-300">Bu saat boş</p>
+                                  <div className="w-full rounded-lg border border-dashed border-slate-200 bg-slate-50/50">
+                                    <button
+                                      type="button"
+                                      onClick={() => openWeeklyEmptySlotModal(date, periodStr)}
+                                      className="flex h-[56px] w-full items-center justify-between gap-2 px-3 text-left transition-colors hover:bg-white/80"
+                                    >
+                                      <p className="text-[10px] text-slate-300">Bu saat boş</p>
+                                      <Plus className="h-3.5 w-3.5 text-slate-300 transition-transform duration-200" />
+                                    </button>
                                   </div>
                                 ) : (
                                   <div className="space-y-1">
@@ -2418,19 +2469,18 @@ export default function TakvimPage() {
                                       const cardBg = isAppointment
                                         ? isCompleted ? 'border-slate-200 bg-slate-50' : 'border-sky-200 bg-sky-50'
                                         : isClassReq ? 'border-violet-200 bg-violet-50' : 'border-amber-200 bg-amber-50';
-                                      const titleText = e.title.replace(/\s*\((Öğrenci|Veli|Öğretmen)\)\s*$/i, '');
+                                      const titleText = getTimelineTitle(e);
                                       const guidanceClass = e.data?.class_display || titleText;
                                       const guidanceTopic = e.data?.topic_title || e.data?.admin_category || e.data?.topic || '';
                                       const guidanceTeacher = e.data?.lesson_teacher || e.data?.teacher_name || '';
 
                                       return (
-                                        <div key={e.id} className={`min-h-[56px] rounded-lg border p-1.5 ${cardBg} ${isCompleted ? 'opacity-60' : ''}`}>
+                                        <div key={e.id} className={`min-h-[56px] w-full rounded-lg border p-1.5 ${cardBg} ${isCompleted ? 'opacity-60' : ''}`}>
                                           {isAppointment ? (
                                             <div className="flex h-full flex-col items-center justify-center text-center">
                                               <p className={`text-[11px] font-bold leading-tight ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-800'}`} title={titleText}>
                                                 {titleText}
                                               </p>
-                                              {isCompleted && <p className="text-[9px] text-emerald-600 mt-0.5">✓ Tamamlandı</p>}
                                             </div>
                                           ) : (
                                             <div className="flex h-full flex-col justify-center text-center">
@@ -2465,7 +2515,7 @@ export default function TakvimPage() {
           )}
 
           {viewType === 'day' && (
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
               <Card className="overflow-hidden border-slate-200 shadow-sm">
                 <CardContent className="p-0">
                   <div className="divide-y divide-slate-100">
@@ -2575,17 +2625,16 @@ export default function TakvimPage() {
                                         <div className="min-w-0 flex-1">
                                           <div className="flex flex-wrap items-center gap-1.5">
                                             <p className="truncate text-sm font-semibold text-slate-900">{title}</p>
-                                            {event.type === "appointment" && (
-                                              <span className="rounded-full bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 ring-1 ring-inset ring-sky-200">
-                                                Görüşme
+                                            {(!isCompleted || event.type !== "appointment") && (
+                                              <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${statusMeta.badgeClass}`}>
+                                                <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dotClass}`} />
+                                                {statusMeta.label}
                                               </span>
                                             )}
-                                            <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${statusMeta.badgeClass}`}>
-                                              <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dotClass}`} />
-                                              {statusMeta.label}
-                                            </span>
                                           </div>
-                                          <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
+                                          {event.type !== "appointment" && (
+                                            <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
+                                          )}
                                         </div>
 
                                         <div className="flex items-center gap-1.5 pl-2">
@@ -2734,6 +2783,63 @@ export default function TakvimPage() {
             </div>
           )}
         </>
+      )}
+
+      {weeklyEmptySlotModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
+          <div className="absolute inset-0" onClick={closeWeeklyEmptySlotModal} aria-hidden="true" />
+          <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-teal-50 via-white to-emerald-50 px-5 py-4">
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-wider text-teal-600">Boş Ders Saati</p>
+                <h3 className="mt-1 text-base font-bold text-slate-800">
+                  {DAYS_FULL_TR[weeklyEmptySlotModal.date.getDay() === 0 ? 6 : weeklyEmptySlotModal.date.getDay() - 1]}
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  {weeklyEmptySlotModal.date.getDate()} {MONTHS_TR[weeklyEmptySlotModal.date.getMonth()]} {weeklyEmptySlotModal.date.getFullYear()} • {formatLessonSlotLabel(weeklyEmptySlotModal.slot)}
+                  {getTimelineMeta(weeklyEmptySlotModal.slot)?.timeLabel ? ` • ${getTimelineMeta(weeklyEmptySlotModal.slot)?.timeLabel}` : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeWeeklyEmptySlotModal}
+                className="rounded-full p-2 text-slate-400 transition-colors hover:bg-white hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 p-5">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const slotDate = getLocalDateString(weeklyEmptySlotModal.date);
+                  const slot = weeklyEmptySlotModal.slot;
+                  closeWeeklyEmptySlotModal();
+                  openAppointmentModalForSlot(slotDate, slot);
+                }}
+                className="h-11 w-full justify-start rounded-xl border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Randevu ekle
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  const slotDate = getLocalDateString(weeklyEmptySlotModal.date);
+                  const slot = weeklyEmptySlotModal.slot;
+                  closeWeeklyEmptySlotModal();
+                  void openPendingApplicationsModal(slotDate, slot);
+                }}
+                className="h-11 w-full justify-start rounded-xl px-4 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+              >
+                Bekleyen başvurular
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Görev Detay Modalı */}
