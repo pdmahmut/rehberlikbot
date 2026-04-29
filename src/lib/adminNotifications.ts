@@ -19,6 +19,8 @@ export interface AdminNotificationItem {
   teacherName?: string | null;
   classDisplay?: string | null;
   studentName?: string | null;
+  reason?: string | null;
+  note?: string | null;
 }
 
 export interface AdminNotificationListResponse {

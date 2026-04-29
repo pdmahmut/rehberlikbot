@@ -2,24 +2,25 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, ChevronRight, Clock, Eye, History, RefreshCw } from "lucide-react";
+import { Bell, ChevronRight, Eye, History, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { NotificationDetailModal } from "@/components/NotificationDetailModal";
 import type { AdminNotificationItem, AdminNotificationListResponse } from "@/lib/adminNotifications";
-import {
-  ADMIN_NOTIFICATION_KIND_LABELS,
-  isPendingAdminNotification,
-} from "@/lib/adminNotifications";
+import { ADMIN_NOTIFICATION_KIND_LABELS } from "@/lib/adminNotifications";
 
-type NotificationTab = "new" | "pending" | "history";
+type NotificationTab = "new" | "history";
 
 const STATUS_LABELS: Record<string, string> = {
   Bekliyor: "Bekliyor",
   pending: "Bekliyor",
-  scheduled: "Planlandı",
-  completed: "Tamamlandı",
+  scheduled: "Randevu verildi",
+  "Randevu verildi": "Randevu verildi",
+  completed: "Görüşüldü",
+  active_follow: "Görüşüldü",
+  "Görüşüldü": "Görüşüldü",
   rejected: "Reddedildi",
   approved: "Onaylandı",
 };
@@ -28,7 +29,10 @@ const STATUS_CLASSES: Record<string, string> = {
   Bekliyor: "bg-amber-100 text-amber-700",
   pending: "bg-amber-100 text-amber-700",
   scheduled: "bg-blue-100 text-blue-700",
+  "Randevu verildi": "bg-blue-100 text-blue-700",
   completed: "bg-emerald-100 text-emerald-700",
+  active_follow: "bg-emerald-100 text-emerald-700",
+  "Görüşüldü": "bg-emerald-100 text-emerald-700",
   rejected: "bg-red-100 text-red-700",
   approved: "bg-green-100 text-green-700",
 };
@@ -49,6 +53,8 @@ export default function BildirimlerPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<NotificationTab>("new");
+  const [selectedNotification, setSelectedNotification] = useState<AdminNotificationItem | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const initialReadMarkedRef = useRef(false);
 
   const fetchNotifications = async (options?: { silent?: boolean }) => {
@@ -108,17 +114,12 @@ export default function BildirimlerPage() {
       return notifications.filter((item) => !item.read);
     }
 
-    if (activeTab === "pending") {
-      return notifications.filter((item) => isPendingAdminNotification(item));
-    }
-
     return notifications;
   }, [activeTab, notifications]);
 
   const counts = useMemo(
     () => ({
       new: notifications.filter((item) => !item.read).length,
-      pending: notifications.filter((item) => isPendingAdminNotification(item)).length,
       history: notifications.length,
     }),
     [notifications]
@@ -147,6 +148,11 @@ export default function BildirimlerPage() {
     if (!item.read) {
       await markAsRead([item.id]);
     }
+    if (item.kind === "teacher_referral") {
+      setSelectedNotification(item);
+      setIsDetailModalOpen(true);
+      return;
+    }
     router.push(item.targetUrl);
   };
 
@@ -157,6 +163,16 @@ export default function BildirimlerPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
+      <NotificationDetailModal
+        open={isDetailModalOpen}
+        item={selectedNotification}
+        onOpenChange={(open) => {
+          setIsDetailModalOpen(open);
+          if (!open) {
+            setSelectedNotification(null);
+          }
+        }}
+      />
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-sky-500 via-blue-500 to-cyan-500 p-6 text-white shadow-xl">
         <div className="absolute -top-16 -right-16 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
         <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -199,7 +215,6 @@ export default function BildirimlerPage() {
       <div className="flex flex-wrap gap-2 rounded-2xl bg-slate-100 p-1.5">
         {([
           { id: "new", label: "Yeni", count: counts.new },
-          { id: "pending", label: "Bekleyen", count: counts.pending },
           { id: "history", label: "Geçmiş", count: counts.history },
         ] as const).map((tab) => (
           <button
@@ -211,7 +226,7 @@ export default function BildirimlerPage() {
                 : "text-slate-500 hover:text-slate-700"
             }`}
           >
-            {tab.id === "new" ? <Bell className="h-4 w-4" /> : tab.id === "pending" ? <Clock className="h-4 w-4" /> : <History className="h-4 w-4" />}
+            {tab.id === "new" ? <Bell className="h-4 w-4" /> : <History className="h-4 w-4" />}
             {tab.label}
             <Badge variant="secondary" className="bg-slate-200 text-slate-700">
               {tab.count}
@@ -273,7 +288,9 @@ export default function BildirimlerPage() {
                     {item.studentName && item.kind !== "teacher_referral" && (
                       <span>Öğrenci: {item.studentName}</span>
                     )}
-                    <span className="font-medium text-sky-700">{item.targetLabel}</span>
+                    <span className="font-medium text-sky-700">
+                      {item.kind === "teacher_referral" ? "Detayı görüntüle" : item.targetLabel}
+                    </span>
                   </CardContent>
                 </Card>
               </button>

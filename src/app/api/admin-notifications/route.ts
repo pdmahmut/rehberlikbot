@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   AdminNotificationItem,
   AdminNotificationKind,
@@ -7,6 +6,8 @@ import {
   parseAdminNotificationId,
 } from "@/lib/adminNotifications";
 import { getSession, type SessionUser } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
+import { findAppointmentForApplicationRecord } from "@/lib/guidanceApplications";
 import {
   listAdminNotificationStates,
   markAdminNotificationsPopupSeen,
@@ -21,11 +22,27 @@ type ReferralRow = {
   id: string;
   student_name: string | null;
   class_display: string | null;
+  class_key?: string | null;
   teacher_name: string | null;
   reason: string | null;
+  note?: string | null;
   status: string | null;
   created_at: string;
   updated_at?: string | null;
+};
+
+type AppointmentRow = {
+  id: string;
+  participant_name?: string | null;
+  participant_class?: string | null;
+  appointment_date?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  status?: string | null;
+  outcome_decision?: string[] | null;
+  source_individual_request_id?: string | null;
+  source_application_id?: string | null;
+  source_application_type?: string | null;
 };
 
 type ClassRequestRow = {
@@ -38,23 +55,6 @@ type ClassRequestRow = {
   status: string | null;
   created_at: string;
   updated_at?: string | null;
-};
-
-const createScopedSupabase = (session: SessionUser): SupabaseClient | null => {
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) return null;
-
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        "x-app-role": session.role,
-        ...(session.teacherName ? { "x-teacher-name": session.teacherName } : {}),
-        ...(session.classKey ? { "x-class-key": session.classKey } : {}),
-      },
-    },
-  });
 };
 
 const buildTargetUrl = (kind: AdminNotificationKind, row: any) => {
@@ -89,25 +89,100 @@ const buildTargetUrl = (kind: AdminNotificationKind, row: any) => {
   return `/panel/sinif-talepleri?${params.toString()}`;
 };
 
-const buildNotifications = async (session: SessionUser) => {
-  const db = createScopedSupabase(session);
-  const [stateRows, classStudentRequests, referralsResult, classRequestsResult] = await Promise.all([
+const normalizeDecisionText = (value?: string | null) =>
+  String(value || "")
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const resolveReferralNotificationStatus = (
+  row: ReferralRow,
+  attendedAppointments: AppointmentRow[],
+  scheduledAppointments: AppointmentRow[]
+) => {
+  const sharedRecord = {
+    source_type: "teacher_referral",
+    source_record_id: row.id,
+    student_name: row.student_name,
+    class_display: row.class_display,
+    class_key: row.class_key,
+    created_at: row.created_at,
+  };
+  const recordDate = (row.created_at || "").slice(0, 10);
+  const matchedAttended = findAppointmentForApplicationRecord(attendedAppointments, sharedRecord);
+  const matchedScheduled = findAppointmentForApplicationRecord(scheduledAppointments, sharedRecord);
+
+  if (matchedScheduled?.appointment_date && (!recordDate || matchedScheduled.appointment_date >= recordDate)) {
+    return "Randevu verildi";
+  }
+
+  if (matchedAttended?.appointment_date && (!recordDate || matchedAttended.appointment_date >= recordDate)) {
+    return "Görüşüldü";
+  }
+
+  const normalizedStatus = normalizeDecisionText(row.status);
+  if (
+    normalizedStatus.includes("aktif takip") ||
+    normalizedStatus.includes("duzenli gorusme") ||
+    normalizedStatus === "active_follow"
+  ) {
+    return "Görüşüldü";
+  }
+  if (
+    normalizedStatus.includes("tamamlandi") ||
+    normalizedStatus.includes("gorusuldu") ||
+    normalizedStatus === "completed"
+  ) {
+    return "Görüşüldü";
+  }
+  if (
+    normalizedStatus.includes("randevu verildi") ||
+    normalizedStatus === "scheduled"
+  ) {
+    return "Randevu verildi";
+  }
+  return row.status || "Bekliyor";
+};
+
+const buildNotifications = async (_session: SessionUser) => {
+  const [stateRows, classStudentRequests, referralsResult, classRequestsResult, attendedAppointmentsResult, scheduledAppointmentsResult] = await Promise.all([
     listAdminNotificationStates(),
     Promise.resolve(getRequests({})),
-    db
-      ? db
+    supabase
+      ? supabase
           .from("referrals")
-          .select("id, student_name, class_display, teacher_name, reason, status, created_at, updated_at")
+          .select("*")
           .order("created_at", { ascending: false })
           .limit(250)
       : Promise.resolve({ data: [] as ReferralRow[], error: null }),
-    db
-      ? db
+    supabase
+      ? supabase
           .from("class_requests")
-          .select("id, teacher_name, class_display, teacher_description, admin_category, topic, status, created_at, updated_at")
+          .select("*")
           .order("created_at", { ascending: false })
           .limit(250)
       : Promise.resolve({ data: [] as ClassRequestRow[], error: null }),
+    supabase
+      ? supabase
+          .from("appointments")
+          .select("*")
+          .eq("status", "attended")
+          .eq("participant_type", "student")
+          .order("appointment_date", { ascending: false })
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] as AppointmentRow[], error: null }),
+    supabase
+      ? supabase
+          .from("appointments")
+          .select("*")
+          .neq("status", "pending")
+          .neq("status", "attended")
+          .neq("status", "cancelled")
+          .eq("participant_type", "student")
+          .order("appointment_date", { ascending: false })
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] as AppointmentRow[], error: null }),
   ]);
 
   const stateMap = new Map(
@@ -115,6 +190,8 @@ const buildNotifications = async (session: SessionUser) => {
   );
 
   const notifications: AdminNotificationItem[] = [];
+  const attendedAppointments = (attendedAppointmentsResult.data || []) as AppointmentRow[];
+  const scheduledAppointments = (scheduledAppointmentsResult.data || []) as AppointmentRow[];
 
   (referralsResult.data || []).forEach((row: ReferralRow) => {
     const state = stateMap.get(`teacher_referral:${row.id}`);
@@ -124,16 +201,18 @@ const buildNotifications = async (session: SessionUser) => {
       sourceId: row.id,
       title: row.student_name || "Yeni yönlendirme",
       summary: [row.class_display, row.teacher_name, row.reason].filter(Boolean).join(" • "),
-      status: row.status || "Bekliyor",
+      status: resolveReferralNotificationStatus(row, attendedAppointments, scheduledAppointments),
       createdAt: row.created_at,
       updatedAt: row.updated_at || null,
       read: Boolean(state?.read_at),
       popupSeen: Boolean(state?.popup_seen_at),
       targetUrl: buildTargetUrl("teacher_referral", row),
-      targetLabel: "Başvurulara git",
+      targetLabel: "Detayı görüntüle",
       teacherName: row.teacher_name,
       classDisplay: row.class_display,
       studentName: row.student_name,
+      reason: row.reason || null,
+      note: row.note || null,
     });
   });
 
