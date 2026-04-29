@@ -16,6 +16,7 @@ export interface AdminNotificationStateRecord {
   viewer_role: string;
   read_at: string | null;
   popup_seen_at: string | null;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -53,6 +54,7 @@ CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
   viewer_role TEXT NOT NULL DEFAULT '${VIEWER_ROLE}',
   read_at TIMESTAMPTZ NULL,
   popup_seen_at TIMESTAMPTZ NULL,
+  deleted_at TIMESTAMPTZ NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (source_type, source_id, viewer_role)
@@ -117,6 +119,7 @@ export async function upsertAdminNotificationStates(
     AdminNotificationStateRef & {
       readAt?: string;
       popupSeenAt?: string;
+      deletedAt?: string | null;
     }
   >
 ) {
@@ -141,6 +144,10 @@ export async function upsertAdminNotificationStates(
       viewer_role: VIEWER_ROLE,
       read_at: update.readAt ?? existing?.read_at ?? null,
       popup_seen_at: update.popupSeenAt ?? existing?.popup_seen_at ?? null,
+      deleted_at:
+        Object.prototype.hasOwnProperty.call(update, "deletedAt")
+          ? update.deletedAt ?? null
+          : existing?.deleted_at ?? null,
       created_at: existing?.created_at ?? now,
       updated_at: now,
     } satisfies AdminNotificationStateRecord;
@@ -182,5 +189,12 @@ export async function markAdminNotificationsPopupSeen(refs: AdminNotificationSta
   const timestamp = new Date().toISOString();
   await upsertAdminNotificationStates(
     refs.map((ref) => ({ ...ref, popupSeenAt: timestamp }))
+  );
+}
+
+export async function deleteAdminNotifications(refs: AdminNotificationStateRef[]) {
+  const timestamp = new Date().toISOString();
+  await upsertAdminNotificationStates(
+    refs.map((ref) => ({ ...ref, deletedAt: timestamp }))
   );
 }

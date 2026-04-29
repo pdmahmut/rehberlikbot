@@ -18,6 +18,23 @@ import {
 
 export const runtime = "nodejs";
 
+function resolveTeacherName(teacherId?: string, teacherName?: string) {
+  const records = loadTeachersFromStore();
+
+  if (teacherId) {
+    const teacherById = records.find((record) => record.teacherId === teacherId);
+    if (teacherById) {
+      return teacherById.teacherName;
+    }
+  }
+
+  if (teacherName) {
+    return matchTeacherByName(teacherName, records)?.teacherName || teacherName;
+  }
+
+  return undefined;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -92,11 +109,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Eksik parametre" }, { status: 400 });
       }
 
-      const result = assignTeacherToClass(teacherId, sinifSubeKey, sinifSubeDisplay, teacherName);
+      const resolvedTeacherName = resolveTeacherName(teacherId, teacherName);
+      const result = assignTeacherToClass(teacherId, sinifSubeKey, sinifSubeDisplay, resolvedTeacherName);
       if (!result.success) return NextResponse.json({ error: result.error }, { status: 404 });
 
-      if (teacherName) {
-        await syncTeacherAccountClassAssignment(teacherName, sinifSubeKey, sinifSubeDisplay);
+      if (resolvedTeacherName) {
+        await syncTeacherAccountClassAssignment(resolvedTeacherName, sinifSubeKey, sinifSubeDisplay);
       }
 
       return NextResponse.json({ success: true });
@@ -108,11 +126,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "teacherId veya teacherName gerekli" }, { status: 400 });
       }
 
-      const ok = removeTeacherClassAssignment(teacherId, teacherName);
+      const resolvedTeacherName = resolveTeacherName(teacherId, teacherName);
+      const ok = removeTeacherClassAssignment(teacherId, resolvedTeacherName);
       if (!ok) return NextResponse.json({ error: "Öğretmen bulunamadı" }, { status: 404 });
 
-      if (teacherName) {
-        await clearTeacherAccountClassAssignment(teacherName);
+      if (resolvedTeacherName) {
+        await clearTeacherAccountClassAssignment(resolvedTeacherName);
       }
 
       return NextResponse.json({ success: true });

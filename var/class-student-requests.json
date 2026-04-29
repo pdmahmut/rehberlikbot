@@ -40,5 +40,19 @@
     "status": "approved",
     "created_at": "2026-04-26T07:35:44.148Z",
     "updated_at": "2026-04-26T07:36:14.214Z"
+  },
+  {
+    "teacher_name": "Sami Kan",
+    "class_key": "6A",
+    "class_display": "6. Sınıf / A Şubesi",
+    "student_name": "mirac",
+    "student_value": "local_1777474057508-j71cy1",
+    "request_type": "delete",
+    "new_class_key": null,
+    "new_class_display": null,
+    "id": "1777474065682-jiax3y",
+    "status": "approved",
+    "created_at": "2026-04-29T14:47:45.682Z",
+    "updated_at": "2026-04-29T14:48:38.216Z"
   }
 ]

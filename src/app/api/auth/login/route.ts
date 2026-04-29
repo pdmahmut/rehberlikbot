@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { buildTeacherSessionUser, COOKIE_NAME, createSessionToken } from '@/lib/auth';
 import { verifyAdminPassword } from '@/lib/adminPassword';
-
-const COOKIE_NAME = 'rehberlik_session';
-
-function encodeSession(user: object): string {
-  const payload = JSON.stringify({ ...user, exp: Date.now() + 8 * 60 * 60 * 1000 });
-  return Buffer.from(payload).toString('base64url');
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,7 +11,7 @@ export async function POST(request: NextRequest) {
       if (!verifyAdminPassword(String(password || ''))) {
         return NextResponse.json({ error: 'Yanlış şifre' }, { status: 401 });
       }
-      const token = encodeSession({ role: 'admin' });
+      const token = createSessionToken({ role: 'admin' });
       const response = NextResponse.json({ success: true, role: 'admin' });
       response.cookies.set(COOKIE_NAME, token, {
         httpOnly: true,
@@ -67,15 +61,15 @@ export async function POST(request: NextRequest) {
         if (!maybeTeacher) {
           return NextResponse.json({ error: 'Şifre hatalı' }, { status: 401 });
         }
-        const token = encodeSession({
-          role: 'teacher',
-          teacherId: maybeTeacher.id,
-          username: maybeTeacher.username,
-          teacherName: maybeTeacher.teacher_name,
-          classKey: maybeTeacher.class_key || null,
-          classDisplay: maybeTeacher.class_display || null,
-          isHomeroom: !!(maybeTeacher.class_key),
-        });
+        const token = createSessionToken(
+          buildTeacherSessionUser({
+            teacherId: maybeTeacher.id,
+            username: maybeTeacher.username,
+            teacherName: maybeTeacher.teacher_name,
+            classKey: maybeTeacher.class_key || null,
+            classDisplay: maybeTeacher.class_display || null,
+          })
+        );
         const response = NextResponse.json({ success: true, role: 'teacher' });
         response.cookies.set(COOKIE_NAME, token, {
           httpOnly: true,
@@ -90,15 +84,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Şifre hatalı' }, { status: 401 });
       }
 
-      const token = encodeSession({
-        role: 'teacher',
-        teacherId: teacher.id,
-        username: teacher.username,
-        teacherName: teacher.teacher_name,
-        classKey: teacher.class_key || null,
-        classDisplay: teacher.class_display || null,
-        isHomeroom: !!(teacher.class_key),
-      });
+      const token = createSessionToken(
+        buildTeacherSessionUser({
+          teacherId: teacher.id,
+          username: teacher.username,
+          teacherName: teacher.teacher_name,
+          classKey: teacher.class_key || null,
+          classDisplay: teacher.class_display || null,
+        })
+      );
 
       const response = NextResponse.json({ success: true, role: 'teacher' });
       response.cookies.set(COOKIE_NAME, token, {

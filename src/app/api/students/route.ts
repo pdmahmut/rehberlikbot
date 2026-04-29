@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOgrenciListBySinif, getSinifSubeList, loadStudentData } from '@/lib/data';
 import { supabase } from '@/lib/supabase';
+import { listLocalClassStudents } from '@/lib/classStudentsStore';
 
 type StudentLookupOption = {
   value: string;
@@ -9,21 +10,65 @@ type StudentLookupOption = {
   class_display?: string;
 };
 
+type ParsedStudentText = {
+  number: string | null;
+  name: string;
+};
+
 function normalizeText(value: string) {
   return value
     .toLowerCase()
-    .replace(/İ/g, 'i').replace(/I/g, 'i') // Türkçe büyük İ ve I
-    .replace(/\u0131/g, 'i')               // Türkçe ı (noktasız i) → i
+    .replace(/İ/g, 'i')
+    .replace(/I/g, 'i')
+    .replace(/\u0131/g, 'i')
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/ğ/g, 'g').replace(/ş/g, 's')
-    .replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c')
+    .replace(/ğ/g, 'g')
+    .replace(/ş/g, 's')
+    .replace(/ü/g, 'u')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c')
     .trim();
 }
 
 function getClassDisplayByKey(classKey: string) {
   const classList = getSinifSubeList();
-  return classList.find((item) => item.value === classKey || item.value.startsWith(`${classKey}#`))?.text || classKey;
+  return (
+    classList.find((item) => item.value === classKey || item.value.startsWith(`${classKey}#`))
+      ?.text || classKey
+  );
+}
+
+function parseStudentText(text: string): ParsedStudentText {
+  const trimmed = String(text || '').trim();
+  const match = trimmed.match(/^(\d+)\s+(.+)$/);
+  if (!match) {
+    return { number: null, name: trimmed };
+  }
+
+  return {
+    number: match[1],
+    name: match[2].trim(),
+  };
+}
+
+function compareStudentOptions(a: StudentLookupOption, b: StudentLookupOption) {
+  const parsedA = parseStudentText(a.text);
+  const parsedB = parseStudentText(b.text);
+
+  const nameCompare = parsedA.name.localeCompare(parsedB.name, 'tr', {
+    sensitivity: 'base',
+  });
+  if (nameCompare !== 0) return nameCompare;
+
+  if (parsedA.number && parsedB.number) {
+    return parsedA.number.localeCompare(parsedB.number, 'tr', { numeric: true });
+  }
+
+  if (parsedA.number && !parsedB.number) return -1;
+  if (!parsedA.number && parsedB.number) return 1;
+
+  return a.text.localeCompare(b.text, 'tr', { sensitivity: 'base' });
 }
 
 function buildJsonStudentOptions(): StudentLookupOption[] {
@@ -51,12 +96,25 @@ function buildJsonStudentOptions(): StudentLookupOption[] {
         value: fullName,
         text: okulNo ? `${okulNo} ${fullName}` : fullName,
         class_key: classKey,
-        class_display: classText
+        class_display: classText,
       });
     });
   });
 
   return options;
+}
+
+function buildLocalStudentOptions(classKey?: string): StudentLookupOption[] {
+  return listLocalClassStudents(classKey)
+    .filter((student) => student.student_number !== '__SINIF_DISI__')
+    .map((student) => ({
+      value: `local_${student.id}`,
+      text: student.student_number
+        ? `${student.student_number} ${student.student_name}`
+        : student.student_name,
+      class_key: student.class_key,
+      class_display: student.class_display || getClassDisplayByKey(student.class_key),
+    }));
 }
 
 export async function GET(request: NextRequest) {
@@ -73,6 +131,7 @@ export async function GET(request: NextRequest) {
       }));
 
       let supabaseOgrenciList: StudentLookupOption[] = [];
+      const localOgrenciList = buildLocalStudentOptions(sinifSube);
 
       if (supabase) {
         try {
@@ -83,59 +142,75 @@ export async function GET(request: NextRequest) {
             .order('student_name', { ascending: true });
 
           if (!error && data) {
-            supabaseOgrenciList = data.map((s) => ({
-              value: `supabase_${s.id}`,
-              text: s.student_number ? `${s.student_number} ${s.student_name}` : s.student_name,
-              class_key: s.class_key,
-              class_display: s.class_display || getClassDisplayByKey(s.class_key),
-            }));
+            supabaseOgrenciList = data
+              .filter((student) => student.student_number !== '__SINIF_DISI__')
+              .map((student) => ({
+                value: `supabase_${student.id}`,
+                text: student.student_number
+                  ? `${student.student_number} ${student.student_name}`
+                  : student.student_name,
+                class_key: student.class_key,
+                class_display: student.class_display || getClassDisplayByKey(student.class_key),
+              }));
           }
         } catch (err) {
           console.error('Supabase students fetch error:', err);
         }
       }
 
-      const existingTexts = new Set(jsonOgrenciList.map((o) => o.text.toLowerCase()));
-      const uniqueSupabaseList = supabaseOgrenciList.filter((s) => !existingTexts.has(s.text.toLowerCase()));
+      const deduped = new Map<string, StudentLookupOption>();
+      [...jsonOgrenciList, ...supabaseOgrenciList, ...localOgrenciList].forEach((student) => {
+        const key = normalizeText(`${student.class_key || ''}|${student.text}`);
+        if (!deduped.has(key)) deduped.set(key, student);
+      });
 
-      // Onaylanmış talepleri uygula: silme, eski sınıftan çıkarma, yeni sınıfa ekleme
-      let combinedList = [...jsonOgrenciList, ...uniqueSupabaseList];
+      let combinedList = Array.from(deduped.values());
       try {
         const { getRequests } = require('@/lib/classStudentRequests');
         const allApproved = getRequests({ status: 'approved' });
 
-        // 1. Bu sınıftan silinen veya başka sınıfa taşınan öğrencileri çıkar
         const removedFromThis = allApproved
-          .filter((r: any) => r.class_key === sinifSube && (r.request_type === 'delete' || r.request_type === 'class_change'))
+          .filter(
+            (r: any) =>
+              r.class_key === sinifSube &&
+              (r.request_type === 'delete' || r.request_type === 'class_change')
+          )
           .map((r: any) => normalizeText((r.student_name || '').replace(/^\d+\s+/, '')));
+
         if (removedFromThis.length > 0) {
-          combinedList = combinedList.filter(s => {
-            const name = normalizeText(s.text.replace(/^\d+\s+/, ''));
-            return !removedFromThis.some((d: string) => d === name);
+          combinedList = combinedList.filter((student) => {
+            const name = normalizeText(student.text.replace(/^\d+\s+/, ''));
+            return !removedFromThis.some((removed: string) => removed === name);
           });
         }
 
-        // 2. Başka sınıftan bu sınıfa taşınan öğrencileri ekle
-        const movedToThis = allApproved.filter((r: any) =>
-          r.request_type === 'class_change' &&
-          r.new_class_key === sinifSube &&
-          r.class_key !== sinifSube
+        const movedToThis = allApproved.filter(
+          (r: any) =>
+            r.request_type === 'class_change' &&
+            r.new_class_key === sinifSube &&
+            r.class_key !== sinifSube
         );
-        movedToThis.forEach((r: any) => {
-          const name = normalizeText((r.student_name || '').replace(/^\d+\s+/, ''));
-          const alreadyExists = combinedList.some(s => normalizeText(s.text.replace(/^\d+\s+/, '')) === name);
+
+        movedToThis.forEach((request: any) => {
+          const name = normalizeText((request.student_name || '').replace(/^\d+\s+/, ''));
+          const alreadyExists = combinedList.some(
+            (student) => normalizeText(student.text.replace(/^\d+\s+/, '')) === name
+          );
+
           if (!alreadyExists) {
             combinedList.push({
-              value: r.student_name,
-              text: r.student_name,
+              value: request.student_value || request.student_name,
+              text: request.student_name,
               class_key: sinifSube,
               class_display: getClassDisplayByKey(sinifSube),
             });
           }
         });
-      } catch { /* */ }
+      } catch {
+        // ignore local request overlays
+      }
 
-      return NextResponse.json(combinedList);
+      return NextResponse.json(combinedList.sort(compareStudentOptions));
     }
 
     if (query) {
@@ -153,6 +228,12 @@ export async function GET(request: NextRequest) {
           results.set(normalizeText(`${student.class_key || ''}|${student.text}`), student);
         });
 
+      buildLocalStudentOptions().forEach((student) => {
+        if (matchesQuery(student)) {
+          results.set(normalizeText(`${student.class_key || ''}|${student.text}`), student);
+        }
+      });
+
       if (supabase) {
         try {
           const { data, error } = await supabase
@@ -161,25 +242,29 @@ export async function GET(request: NextRequest) {
             .order('student_name', { ascending: true });
 
           if (!error && data) {
-            data.forEach((student) => {
-              const option: StudentLookupOption = {
-                value: `supabase_${student.id}`,
-                text: student.student_number ? `${student.student_number} ${student.student_name}` : student.student_name,
-                class_key: student.class_key,
-                class_display: student.class_display || getClassDisplayByKey(student.class_key),
-              };
+            data
+              .filter((student) => student.student_number !== '__SINIF_DISI__')
+              .forEach((student) => {
+                const option: StudentLookupOption = {
+                  value: `supabase_${student.id}`,
+                  text: student.student_number
+                    ? `${student.student_number} ${student.student_name}`
+                    : student.student_name,
+                  class_key: student.class_key,
+                  class_display: student.class_display || getClassDisplayByKey(student.class_key),
+                };
 
-              if (matchesQuery(option)) {
-                results.set(normalizeText(`${option.class_key || ''}|${option.text}`), option);
-              }
-            });
+                if (matchesQuery(option)) {
+                  results.set(normalizeText(`${option.class_key || ''}|${option.text}`), option);
+                }
+              });
           }
         } catch (err) {
           console.error('Supabase global students fetch error:', err);
         }
       }
 
-      return NextResponse.json(Array.from(results.values()));
+      return NextResponse.json(Array.from(results.values()).sort(compareStudentOptions));
     }
 
     return NextResponse.json([]);

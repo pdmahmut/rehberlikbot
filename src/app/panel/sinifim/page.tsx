@@ -596,11 +596,12 @@ export default function SinifimPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ classKey: auth.classKey, classDisplay: auth.classDisplay || auth.classKey, studentName: newStudentName.trim(), studentNumber: newStudentNumber.trim() || undefined }),
       });
-      if (!res.ok) throw new Error();
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "Öğrenci eklenemedi");
       toast.success("Öğrenci eklendi");
       setNewStudentName(""); setNewStudentNumber("");
       loadStudents(auth.classKey);
-    } catch { toast.error("Öğrenci eklenemedi"); }
+    } catch (error: any) { toast.error(error?.message || "Öğrenci eklenemedi"); }
     finally { setAddingStudent(false); }
   };
 

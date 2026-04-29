@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, ChevronRight, Eye, History, RefreshCw } from "lucide-react";
+import { Bell, ChevronRight, Eye, History, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -161,6 +161,41 @@ export default function BildirimlerPage() {
     await markAsRead(unreadIds);
   };
 
+  const handleDeleteNotification = async (item: AdminNotificationItem) => {
+    try {
+      const response = await fetch("/api/admin-notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [item.id], deleted: true }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || "Bildirim silinemedi");
+      }
+
+      const wasUnread = !item.read;
+      setNotifications((prev) => prev.filter((current) => current.id !== item.id));
+      if (wasUnread) {
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      }
+      window.dispatchEvent(new CustomEvent("admin-notifications:refresh"));
+      toast.success("Bildirim silindi");
+    } catch (error: any) {
+      toast.error(error?.message || "Bildirim silinemedi");
+    }
+  };
+
+  const handleNotificationCardKeyDown = (
+    event: KeyboardEvent<HTMLDivElement>,
+    item: AdminNotificationItem
+  ) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      void handleOpenNotification(item);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <NotificationDetailModal
@@ -254,15 +289,16 @@ export default function BildirimlerPage() {
             const kindLabel = ADMIN_NOTIFICATION_KIND_LABELS[item.kind];
 
             return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleOpenNotification(item)}
-                className="w-full text-left"
-              >
-                <Card className={`overflow-hidden border transition-all hover:-translate-y-0.5 hover:shadow-md ${
+              <div key={item.id} className="w-full">
+                <Card
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => void handleOpenNotification(item)}
+                  onKeyDown={(event) => handleNotificationCardKeyDown(event, item)}
+                  className={`cursor-pointer overflow-hidden border text-left transition-all hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-sky-500/30 ${
                   item.read ? "border-slate-200 bg-white" : "border-sky-200 bg-sky-50/30"
-                }`}>
+                }`}
+                >
                   <CardHeader className="pb-3">
                     <CardTitle className="flex flex-col gap-3 text-base sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
@@ -278,6 +314,18 @@ export default function BildirimlerPage() {
                       </div>
                       <div className="flex items-center gap-2 text-sm text-slate-400">
                         <span className="whitespace-nowrap">{formatDate(item.createdAt)}</span>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            event.preventDefault();
+                            handleDeleteNotification(item);
+                          }}
+                          className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                          title="Bildirimi sil"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                         <ChevronRight className="h-4 w-4" />
                       </div>
                     </CardTitle>
@@ -293,7 +341,7 @@ export default function BildirimlerPage() {
                     </span>
                   </CardContent>
                 </Card>
-              </button>
+              </div>
             );
           })}
         </div>

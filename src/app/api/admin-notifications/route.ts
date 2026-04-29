@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  AdminNotificationItem,
-  AdminNotificationKind,
+  type AdminNotificationItem,
+  type AdminNotificationKind,
   buildAdminNotificationId,
   parseAdminNotificationId,
 } from "@/lib/adminNotifications";
@@ -9,12 +9,16 @@ import { getSession, type SessionUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { findAppointmentForApplicationRecord } from "@/lib/guidanceApplications";
 import {
+  deleteAdminNotifications,
   listAdminNotificationStates,
   markAdminNotificationsPopupSeen,
   markAdminNotificationsRead,
 } from "@/lib/adminNotificationStates";
 import { getRequests } from "@/lib/classStudentRequests";
-import { getClassRequestDisplayCategory, getClassRequestTeacherNote } from "@/lib/classRequests";
+import {
+  getClassRequestDisplayCategory,
+  getClassRequestTeacherNote,
+} from "@/lib/classRequests";
 
 export const dynamic = "force-dynamic";
 
@@ -113,11 +117,17 @@ const resolveReferralNotificationStatus = (
   const matchedAttended = findAppointmentForApplicationRecord(attendedAppointments, sharedRecord);
   const matchedScheduled = findAppointmentForApplicationRecord(scheduledAppointments, sharedRecord);
 
-  if (matchedScheduled?.appointment_date && (!recordDate || matchedScheduled.appointment_date >= recordDate)) {
+  if (
+    matchedScheduled?.appointment_date &&
+    (!recordDate || matchedScheduled.appointment_date >= recordDate)
+  ) {
     return "Randevu verildi";
   }
 
-  if (matchedAttended?.appointment_date && (!recordDate || matchedAttended.appointment_date >= recordDate)) {
+  if (
+    matchedAttended?.appointment_date &&
+    (!recordDate || matchedAttended.appointment_date >= recordDate)
+  ) {
     return "Görüşüldü";
   }
 
@@ -146,7 +156,14 @@ const resolveReferralNotificationStatus = (
 };
 
 const buildNotifications = async (_session: SessionUser) => {
-  const [stateRows, classStudentRequests, referralsResult, classRequestsResult, attendedAppointmentsResult, scheduledAppointmentsResult] = await Promise.all([
+  const [
+    stateRows,
+    classStudentRequests,
+    referralsResult,
+    classRequestsResult,
+    attendedAppointmentsResult,
+    scheduledAppointmentsResult,
+  ] = await Promise.all([
     listAdminNotificationStates(),
     Promise.resolve(getRequests({})),
     supabase
@@ -186,7 +203,7 @@ const buildNotifications = async (_session: SessionUser) => {
   ]);
 
   const stateMap = new Map(
-    stateRows.map((item) => [`${item.source_type}:${item.source_id}`, item])
+    stateRows.map((item) => [`${item.source_type}:${item.source_id}`, item] as const)
   );
 
   const notifications: AdminNotificationItem[] = [];
@@ -195,6 +212,8 @@ const buildNotifications = async (_session: SessionUser) => {
 
   (referralsResult.data || []).forEach((row: ReferralRow) => {
     const state = stateMap.get(`teacher_referral:${row.id}`);
+    if (state?.deleted_at) return;
+
     notifications.push({
       id: buildAdminNotificationId("teacher_referral", row.id),
       kind: "teacher_referral",
@@ -218,6 +237,8 @@ const buildNotifications = async (_session: SessionUser) => {
 
   (classRequestsResult.data || []).forEach((row: ClassRequestRow) => {
     const state = stateMap.get(`class_request:${row.id}`);
+    if (state?.deleted_at) return;
+
     const category = getClassRequestDisplayCategory(row);
     const teacherNote = getClassRequestTeacherNote(row);
     notifications.push({
@@ -240,6 +261,8 @@ const buildNotifications = async (_session: SessionUser) => {
 
   classStudentRequests.forEach((row) => {
     const state = stateMap.get(`class_student_request:${row.id}`);
+    if (state?.deleted_at) return;
+
     const actionLabel =
       row.request_type === "class_change" ? "Sınıf değiştirme talebi" : "Öğrenci silme talebi";
     notifications.push({
@@ -295,15 +318,18 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => null);
-  const ids = Array.isArray(body?.ids) ? body.ids.filter((value: unknown) => typeof value === "string") : [];
+  const ids = Array.isArray(body?.ids)
+    ? body.ids.filter((value: unknown) => typeof value === "string")
+    : [];
   const markRead = body?.read === true;
   const markPopupSeen = body?.popupSeen === true;
+  const markDeleted = body?.deleted === true;
 
   if (ids.length === 0) {
     return NextResponse.json({ error: "Geçerli bildirim id listesi gerekli" }, { status: 400 });
   }
 
-  if (!markRead && !markPopupSeen) {
+  if (!markRead && !markPopupSeen && !markDeleted) {
     return NextResponse.json({ error: "Güncellenecek alan bulunamadı" }, { status: 400 });
   }
 
@@ -333,6 +359,10 @@ export async function PATCH(request: NextRequest) {
 
   if (markPopupSeen) {
     await markAdminNotificationsPopupSeen(refs);
+  }
+
+  if (markDeleted) {
+    await deleteAdminNotifications(refs);
   }
 
   return NextResponse.json({ success: true });

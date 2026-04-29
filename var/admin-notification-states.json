@@ -349,5 +349,15 @@
     "popup_seen_at": null,
     "created_at": "2026-04-29T12:24:39.705Z",
     "updated_at": "2026-04-29T12:24:42.174Z"
+  },
+  {
+    "source_type": "class_student_request",
+    "source_id": "1777474065682-jiax3y",
+    "viewer_role": "admin",
+    "read_at": "2026-04-29T14:48:29.741Z",
+    "popup_seen_at": "2026-04-29T14:48:23.074Z",
+    "deleted_at": "2026-04-29T15:15:00.068Z",
+    "created_at": "2026-04-29T14:48:22.159Z",
+    "updated_at": "2026-04-29T15:15:00.069Z"
   }
 ]

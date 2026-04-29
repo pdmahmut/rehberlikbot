@@ -3,6 +3,7 @@ import {
   getRequests, createRequest, updateRequest, getRequest, hasPendingRequest,
 } from '@/lib/classStudentRequests';
 import { supabase } from '@/lib/supabase';
+import { deleteLocalClassStudent, updateLocalClassStudent } from '@/lib/classStudentsStore';
 
 export const runtime = 'nodejs';
 
@@ -48,9 +49,19 @@ export async function PATCH(request: NextRequest) {
   }
 
   // Execute action for Supabase-backed students when approved
-  if (status === 'approved' && supabase) {
+  if (status === 'approved') {
     const req = getRequest(id);
-    if (req?.student_value?.startsWith('supabase_')) {
+    if (req?.student_value?.startsWith('local_')) {
+      const localStudentId = req.student_value.replace('local_', '');
+      if (req.request_type === 'delete') {
+        deleteLocalClassStudent(localStudentId);
+      } else if (req.request_type === 'class_change' && req.new_class_key) {
+        updateLocalClassStudent(localStudentId, {
+          class_key: req.new_class_key,
+          class_display: req.new_class_display || req.new_class_key,
+        });
+      }
+    } else if (req?.student_value?.startsWith('supabase_') && supabase) {
       const studentId = req.student_value.replace('supabase_', '');
       if (req.request_type === 'delete') {
         await supabase.from('class_students').delete().eq('id', studentId);
