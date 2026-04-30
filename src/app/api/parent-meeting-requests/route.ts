@@ -9,10 +9,25 @@ export async function POST(request: NextRequest) {
       class_display,
       class_key,
       parent_name,
+      subject,
       detail,
-      request_date,
-      status
+      request_date
     } = body;
+
+    const parseTopicFromDetail = (value?: string | null) => {
+      if (!value) return "";
+      const match = value.trim().match(/^\[(.+?)\]/);
+      return match?.[1]?.trim() || "";
+    };
+
+    const normalizedSubject =
+      subject?.trim() ||
+      parseTopicFromDetail(detail) ||
+      "Genel Veli Talebi";
+
+    const normalizedDetail =
+      detail?.trim() ||
+      (normalizedSubject ? `[${normalizedSubject}]` : null);
 
     if (!student_name?.trim()) {
       return NextResponse.json({ error: "Öğrenci adı gerekli" }, { status: 400 });
@@ -25,9 +40,9 @@ export async function POST(request: NextRequest) {
         class_display: class_display || null,
         class_key: class_key || null,
         parent_name: parent_name?.trim() || null,
-        detail: detail?.trim() || null,
-        request_date: request_date || new Date().toISOString().slice(0, 10),
-        status: status || "pending"
+        subject: normalizedSubject,
+        detail: normalizedDetail,
+        request_date: request_date || new Date().toISOString().slice(0, 10)
       })
       .select()
       .single();

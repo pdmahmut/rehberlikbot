@@ -400,7 +400,7 @@ export default function BasvurularPage() {
         });
       } else if (entryFormSource === "Veli Talepleri") {
         response = await fetch("/api/parent-meeting-requests", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, parent_name: entryForm.referrer, detail: topicNote, request_date: today, status: "pending" })
+          body: JSON.stringify({ student_name: entryForm.student_name, class_display: entryForm.class_display, class_key: entryForm.class_key, parent_name: entryForm.referrer, subject: entryForm.topic, detail: topicNote, request_date: today })
         });
       } else if (entryFormSource === "Öğrenci Bildirimleri") {
         response = await fetch("/api/student-incidents", { method: "POST", headers: { "Content-Type": "application/json" },
