@@ -40,7 +40,7 @@ interface TeacherUser {
   teacher_name: string;
   class_key: string | null;
   class_display: string | null;
-  password_hash: string | null;
+  password: string | null;
   created_at: string;
 }
 
@@ -220,8 +220,8 @@ export default function OgretmenYonetimiPage() {
   };
 
   const handleAddAccount = async () => {
-    if (!newAccountName.trim() || !newAccountPassword.trim()) {
-      toast.error("Ad ve şifre zorunlu");
+    if (!newAccountName.trim()) {
+      toast.error("Öğretmen adı zorunlu");
       return;
     }
     setAddingAccount(true);
@@ -239,7 +239,7 @@ export default function OgretmenYonetimiPage() {
       setUsers((prev) => [...prev, data.user]);
       setNewAccountName("");
       setNewAccountPassword("");
-      toast.success("Öğretmen hesabı eklendi");
+      toast.success(data.user?.password ? `Hesap eklendi. Şifre: ${data.user.password}` : "Öğretmen hesabı eklendi");
     } catch (err: any) {
       toast.error(err.message || "Hesap eklenemedi");
     } finally {
@@ -281,7 +281,7 @@ export default function OgretmenYonetimiPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Şifre güncellenemedi");
       setUsers((prev) =>
-        prev.map((u) => (u.id === id ? { ...u, password_hash: newPassValue.trim() } : u))
+        prev.map((u) => (u.id === id ? { ...u, password: newPassValue.trim() } : u))
       );
       toast.success("Şifre güncellendi");
       setChangingPassId(null);
@@ -585,7 +585,7 @@ export default function OgretmenYonetimiPage() {
                 <CardContent className="pt-4">
                   <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                     <Input placeholder="Ad soyad" value={newAccountName} onChange={e => setNewAccountName(e.target.value)} />
-                    <Input placeholder="Giriş şifresi (en az 4 karakter)" value={newAccountPassword} onChange={e => setNewAccountPassword(e.target.value)} />
+                    <Input placeholder="Şifre — boş bırakın, otomatik üretilsin" value={newAccountPassword} onChange={e => setNewAccountPassword(e.target.value)} />
                   </div>
                   <div className="mt-3 flex justify-end">
                     <Button onClick={handleAddAccount} disabled={addingAccount} className="bg-violet-600 hover:bg-violet-700 text-white">
@@ -650,9 +650,7 @@ export default function OgretmenYonetimiPage() {
                               <div className="mb-2 flex items-center gap-2 text-xs text-slate-600">
                                 <span>Mevcut şifre:</span>
                                 <span className="font-mono font-semibold text-slate-800">
-                                  {user.password_hash?.trim()
-                                    ? user.password_hash.trim()
-                                    : user.teacher_name.split(" ")[0].toLocaleLowerCase("tr-TR")}
+                                  {user.password?.trim() || "—"}
                                 </span>
                               </div>
                               <div className="flex flex-col gap-2 sm:flex-row">

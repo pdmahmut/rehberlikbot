@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { requireAdmin } from '@/lib/apiAuth';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DisiplinRecord } from '@/types';
 
 export const runtime = 'nodejs';
 
 // Disiplin kaydı oluştur
 export async function POST(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     const data: DisiplinRecord = await request.json();
     
@@ -67,6 +72,10 @@ export async function POST(request: NextRequest) {
 
 // Öğrencinin disiplin geçmişini getir
 export async function GET(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     const { searchParams } = new URL(request.url);
     const studentId = searchParams.get('studentId');
@@ -133,6 +142,10 @@ export async function GET(request: NextRequest) {
 
 // Disiplin kaydı sil
 export async function DELETE(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');

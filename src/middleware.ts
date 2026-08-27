@@ -1,24 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { COOKIE_NAME, verifySession } from '@/lib/session';
 
-const COOKIE_NAME = 'rehberlik_session';
-
-function base64urlDecode(str: string): string {
-  const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
-  return atob(padded);
-}
-
-function getSessionFromToken(token: string): { role: string } | null {
-  try {
-    const payload = JSON.parse(base64urlDecode(token));
-    if (payload.exp < Date.now()) return null;
-    return payload;
-  } catch {
-    return null;
-  }
-}
-
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Public routes
@@ -26,24 +9,26 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // API routes - panel dışı
+  // API rotalari kendi guard'larini calistirir (bkz. src/lib/apiAuth.ts)
   if (pathname.startsWith('/api/')) {
     return NextResponse.next();
   }
 
-  // Panel koruması
+  // Panel korumasi
   if (pathname.startsWith('/panel')) {
     const token = request.cookies.get(COOKIE_NAME)?.value;
     if (!token) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    const session = getSessionFromToken(token);
+    const session = await verifySession(token);
     if (!session) {
-      return NextResponse.redirect(new URL('/login', request.url));
+      const response = NextResponse.redirect(new URL('/login', request.url));
+      response.cookies.delete(COOKIE_NAME);
+      return response;
     }
 
-    // Öğretmen sadece belirli sayfalara erişebilir
+    // Ogretmen sadece belirli sayfalara erisebilir
     const teacherAllowed = [
       '/panel/ogrenci-yonlendirmesi',
       '/panel/yonlendirme-gecmisi',
@@ -59,7 +44,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Ana sayfa → login'e yönlendir
+  // Ana sayfa -> login'e yonlendir
   if (pathname === '/') {
     return NextResponse.redirect(new URL('/login', request.url));
   }

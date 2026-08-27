@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { requireAdmin, requireSession } from '@/lib/apiAuth';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
 
 export async function GET() {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) {
       return NextResponse.json({ error: 'Veritabanı bağlantısı yok' }, { status: 500 });
@@ -21,6 +26,10 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) {
       return NextResponse.json({ error: 'Veritabanı bağlantısı yok' }, { status: 500 });

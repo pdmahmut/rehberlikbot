@@ -1,5 +1,12 @@
 import { cookies } from 'next/headers';
 import { getTeachersData, matchTeacherByName } from '@/lib/teachers';
+import {
+  COOKIE_NAME,
+  SESSION_TTL_MS,
+  signSession,
+  verifySession,
+  type SessionPayload,
+} from '@/lib/session';
 
 export type UserRole = 'admin' | 'teacher';
 
@@ -11,25 +18,6 @@ export interface SessionUser {
   classKey?: string | null;
   classDisplay?: string | null;
   isHomeroom?: boolean;
-}
-
-const COOKIE_NAME = 'rehberlik_session';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
-
-// Basit base64 token (edge middleware için)
-function encodeSession(user: SessionUser): string {
-  const payload = JSON.stringify({ ...user, exp: Date.now() + 8 * 60 * 60 * 1000 });
-  return Buffer.from(payload).toString('base64url');
-}
-
-function decodeSession(token: string): SessionUser | null {
-  try {
-    const payload = JSON.parse(Buffer.from(token, 'base64url').toString());
-    if (payload.exp < Date.now()) return null;
-    return payload as SessionUser;
-  } catch {
-    return null;
-  }
 }
 
 function resolveTeacherAssignment(teacherName?: string | null) {
@@ -80,20 +68,25 @@ export function reconcileSessionUser(session: SessionUser): SessionUser {
   });
 }
 
-export function verifyAdminPassword(password: string): boolean {
-  return password === ADMIN_PASSWORD;
+function toSessionUser(payload: SessionPayload): SessionUser {
+  const { exp: _exp, ...user } = payload;
+  return user as SessionUser;
 }
 
-export function createSessionToken(user: SessionUser): string {
-  return encodeSession(user);
+/** Imzali oturum token'i uretir. */
+export async function createSessionToken(user: SessionUser): Promise<string> {
+  return signSession({ ...user, exp: Date.now() + SESSION_TTL_MS } as SessionPayload);
 }
 
-export function getRawSessionFromToken(token: string): SessionUser | null {
-  return decodeSession(token);
+/** Token'i dogrular; ogretmen atamasini tazelemeden ham haliyle dondurur. */
+export async function getRawSessionFromToken(token: string): Promise<SessionUser | null> {
+  const payload = await verifySession(token);
+  return payload ? toSessionUser(payload) : null;
 }
 
-export function getSessionFromToken(token: string): SessionUser | null {
-  const session = decodeSession(token);
+/** Token'i dogrular ve ogretmenin guncel sinif atamasiyla tazeler. */
+export async function getSessionFromToken(token: string): Promise<SessionUser | null> {
+  const session = await getRawSessionFromToken(token);
   if (!session) return null;
   return reconcileSessionUser(session);
 }
@@ -105,4 +98,13 @@ export async function getSession(): Promise<SessionUser | null> {
   return getSessionFromToken(token);
 }
 
-export { COOKIE_NAME, ADMIN_PASSWORD };
+/** Login response'unda kullanilacak standart cookie ayarlari. */
+export const SESSION_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  path: '/',
+  maxAge: SESSION_TTL_MS / 1000,
+};
+
+export { COOKIE_NAME };

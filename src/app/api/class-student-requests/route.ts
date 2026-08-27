@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAdmin, requireSession } from '@/lib/apiAuth';
 import {
   getRequests, createRequest, updateRequest, getRequest, hasPendingRequest,
 } from '@/lib/classStudentRequests';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { deleteLocalClassStudent, updateLocalClassStudent } from '@/lib/classStudentsStore';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   const { searchParams } = new URL(request.url);
   const status = searchParams.get('status') || undefined;
   const classKey = searchParams.get('classKey') || undefined;
@@ -15,6 +20,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   const body = await request.json();
   const { teacherName, classKey, classDisplay, studentName, studentValue, requestType, newClassKey, newClassDisplay } = body;
 
@@ -41,6 +50,10 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   const body = await request.json();
   const { id, status, adminNote } = body;
 

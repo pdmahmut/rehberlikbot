@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
   }
 
   const { oldPassword, newPassword } = await request.json().catch(() => ({}));
-  const result = updateAdminPassword(oldPassword, newPassword);
+  const result = await updateAdminPassword(oldPassword, newPassword);
   if (!result.success) {
     return NextResponse.json({ error: result.error || "Güncellenemedi" }, { status: 400 });
   }

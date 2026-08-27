@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { COOKIE_NAME, verifySession } from '@/lib/session';
 import { supabase } from '@/lib/supabase';
 
-const COOKIE_NAME = 'rehberlik_session';
 
-function getSession(request: NextRequest) {
-  try {
-    const token = request.cookies.get(COOKIE_NAME)?.value;
-    if (!token) return null;
-    const payload = JSON.parse(Buffer.from(token, 'base64url').toString());
-    if (payload.exp < Date.now()) return null;
-    return payload;
-  } catch {
-    return null;
-  }
+// Imzali oturum token'ini dogrular (bkz. src/lib/session.ts)
+async function getSession(request: NextRequest) {
+  const token = request.cookies.get(COOKIE_NAME)?.value;
+  if (!token) return null;
+  return verifySession(token);
 }
 
 // Listele
@@ -40,7 +35,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   if (!supabase) return NextResponse.json({ error: 'Supabase yok' }, { status: 500 });
 
-  const session = getSession(request);
+  const session = await getSession(request);
   if (!session) return NextResponse.json({ error: 'Oturum bulunamadı' }, { status: 401 });
 
   const body = await request.json();
@@ -74,7 +69,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   if (!supabase) return NextResponse.json({ error: 'Supabase yok' }, { status: 500 });
 
-  const session = getSession(request);
+  const session = await getSession(request);
   if (!session || session.role !== 'admin') {
     return NextResponse.json({ error: 'Yetki yok' }, { status: 403 });
   }

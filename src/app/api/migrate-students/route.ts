@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { requireAdmin } from '@/lib/apiAuth';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { loadStudentData, getSinifSubeList } from '@/lib/data';
 
 export const runtime = 'nodejs';
@@ -8,6 +9,10 @@ export const runtime = 'nodejs';
 // data.json içindeki mevcut öğrencileri Supabase class_students tablosuna taşır.
 
 export async function POST(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   if (!supabase) {
     return NextResponse.json(
       { error: 'Supabase configuration missing' },

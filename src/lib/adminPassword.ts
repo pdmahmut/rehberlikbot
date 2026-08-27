@@ -1,70 +1,104 @@
-import fs from "fs";
-import path from "path";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { hashPassword, normalizePassword, validatePasswordStrength, verifyPassword } from "@/lib/password";
 
-type AdminPasswordStore = {
-  currentPassword: string;
-  previousPasswords: string[];
-};
+// Yonetici sifresi app_settings tablosunda hash'li olarak tutulur.
+//
+// Onceki surumde var/admin-password.json icinde DUZ METIN olarak sakalaniyordu;
+// bu hem repoya sizmisti hem de Vercel'in salt-okunur dosya sisteminde
+// sifre degisiklikleri kalici olmuyordu.
 
-const DEFAULT_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+const HASH_KEY = "admin_password_hash";
+const HISTORY_KEY = "admin_password_history";
+const MAX_HISTORY = 20;
 
-function getStorePath() {
-  const dir = path.join(process.cwd(), "var");
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return path.join(dir, "admin-password.json");
+async function readSetting(key: string): Promise<string | null> {
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", key)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.value ?? null;
 }
 
-function readStore(): AdminPasswordStore {
+async function writeSetting(key: string, value: string): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  const { error } = await supabase
+    .from("app_settings")
+    .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+
+  if (error) throw error;
+}
+
+async function readHistory(): Promise<string[]> {
+  const raw = await readSetting(HISTORY_KEY);
+  if (!raw) return [];
   try {
-    const file = getStorePath();
-    if (!fs.existsSync(file)) {
-      const initial: AdminPasswordStore = {
-        currentPassword: DEFAULT_ADMIN_PASSWORD,
-        previousPasswords: [],
-      };
-      fs.writeFileSync(file, JSON.stringify(initial, null, 2), "utf8");
-      return initial;
-    }
-    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
-    if (parsed && typeof parsed.currentPassword === "string" && Array.isArray(parsed.previousPasswords)) {
-      return parsed as AdminPasswordStore;
-    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    // fall through to default
+    return [];
   }
-  return {
-    currentPassword: DEFAULT_ADMIN_PASSWORD,
-    previousPasswords: [],
-  };
 }
 
-function writeStore(store: AdminPasswordStore) {
-  const file = getStorePath();
-  fs.writeFileSync(file, JSON.stringify(store, null, 2), "utf8");
+/**
+ * Ilk kurulumda app_settings bos olur. Bu durumda ADMIN_PASSWORD ortam
+ * degiskeni ile karsilastirilir ve dogruysa hash'i kaydedilir (tek seferlik).
+ */
+async function bootstrapFromEnv(password: string): Promise<boolean> {
+  const envPassword = process.env.ADMIN_PASSWORD;
+  if (!envPassword) return false;
+  if (normalizePassword(password) !== normalizePassword(envPassword)) return false;
+
+  await writeSetting(HASH_KEY, hashPassword(password));
+  return true;
 }
 
-export function verifyAdminPassword(password: string): boolean {
-  const store = readStore();
-  return password === store.currentPassword;
+export async function verifyAdminPassword(password: string): Promise<boolean> {
+  const entered = String(password || "").trim();
+  if (!entered) return false;
+
+  const stored = await readSetting(HASH_KEY);
+  if (!stored) return bootstrapFromEnv(entered);
+
+  return verifyPassword(entered, stored);
 }
 
-export function updateAdminPassword(oldPassword: string, newPassword: string): { success: boolean; error?: string } {
+export async function updateAdminPassword(
+  oldPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; error?: string }> {
   const trimmedOld = String(oldPassword || "").trim();
   const trimmedNew = String(newPassword || "").trim();
-  if (!trimmedOld || !trimmedNew) return { success: false, error: "Tüm alanlar zorunlu" };
-  if (trimmedNew.length < 4) return { success: false, error: "Yeni şifre en az 4 karakter olmalı" };
 
-  const store = readStore();
-  if (trimmedOld !== store.currentPassword) return { success: false, error: "Mevcut şifre yanlış" };
-  if (trimmedNew === store.currentPassword) return { success: false, error: "Yeni şifre mevcut şifreyle aynı olamaz" };
-  if (store.previousPasswords.includes(trimmedNew)) {
+  if (!trimmedOld || !trimmedNew) {
+    return { success: false, error: "Tüm alanlar zorunlu" };
+  }
+  if (!(await verifyAdminPassword(trimmedOld))) {
+    return { success: false, error: "Mevcut şifre yanlış" };
+  }
+
+  const strength = validatePasswordStrength(trimmedNew);
+  if (!strength.ok) {
+    return { success: false, error: strength.error };
+  }
+  if (normalizePassword(trimmedNew) === normalizePassword(trimmedOld)) {
+    return { success: false, error: "Yeni şifre mevcut şifreyle aynı olamaz" };
+  }
+
+  const history = await readHistory();
+  if (history.some((hash) => verifyPassword(trimmedNew, hash))) {
     return { success: false, error: "Bu şifre daha önce kullanılmış. Farklı bir şifre seçin." };
   }
 
-  const nextStore: AdminPasswordStore = {
-    currentPassword: trimmedNew,
-    previousPasswords: [store.currentPassword, ...store.previousPasswords].slice(0, 20),
-  };
-  writeStore(nextStore);
+  const currentHash = await readSetting(HASH_KEY);
+  await writeSetting(HASH_KEY, hashPassword(trimmedNew));
+  await writeSetting(
+    HISTORY_KEY,
+    JSON.stringify([currentHash, ...history].filter(Boolean).slice(0, MAX_HISTORY))
+  );
+
   return { success: true };
 }

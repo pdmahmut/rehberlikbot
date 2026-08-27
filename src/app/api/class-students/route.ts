@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { requireSession } from '@/lib/apiAuth';
+import { type SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseAdmin, hasSupabaseAdmin } from '@/lib/supabaseAdmin';
 import type { StudentStatus } from '@/app/panel/types';
 import {
   createLocalClassStudent,
@@ -24,10 +25,7 @@ function isValidStatus(value: unknown): value is StudentStatus {
 }
 
 function getClassStudentsWriteSupabase(): SupabaseClient | null {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key);
+  return hasSupabaseAdmin() ? getSupabaseAdmin() : null;
 }
 
 function normalizeVisibleStudents<T extends { student_number?: string | null; student_name?: string | null; status?: unknown }>(
@@ -45,6 +43,10 @@ function normalizeVisibleStudents<T extends { student_number?: string | null; st
 }
 
 export async function GET(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     const { searchParams } = new URL(request.url);
     const classKey = searchParams.get('classKey');
@@ -97,6 +99,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+
   try {
     const body = await request.json();
     const { classKey, classDisplay, studentName, studentNumber } = body as {
@@ -176,6 +181,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
@@ -207,6 +215,9 @@ export async function DELETE(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+
   try {
     const { id, class_key, class_display } = await request.json();
     if (!id || !class_key) {
@@ -242,6 +253,9 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+
   try {
     const body = await request.json();
     const id = body.id as string | undefined;

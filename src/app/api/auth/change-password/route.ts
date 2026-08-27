@@ -1,22 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { COOKIE_NAME, verifySession } from '@/lib/session';
+import { getSupabaseAdmin, hasSupabaseAdmin } from '@/lib/supabaseAdmin';
+import {
+  decryptPassword,
+  encryptPassword,
+  normalizePassword,
+  passwordLookup,
+  safeEqual,
+  validatePasswordStrength,
+} from '@/lib/password';
 
-const COOKIE_NAME = 'rehberlik_session';
+export const runtime = 'nodejs';
 
-function getSession(request: NextRequest) {
-  try {
-    const token = request.cookies.get(COOKIE_NAME)?.value;
-    if (!token) return null;
-    const payload = JSON.parse(Buffer.from(token, 'base64url').toString());
-    if (payload.exp < Date.now()) return null;
-    return payload;
-  } catch {
-    return null;
-  }
+// Imzali oturum token'ini dogrular (bkz. src/lib/session.ts)
+async function getSession(request: NextRequest) {
+  const token = request.cookies.get(COOKIE_NAME)?.value;
+  if (!token) return null;
+  return verifySession(token);
 }
 
 export async function POST(request: NextRequest) {
-  const session = getSession(request);
+  const session = await getSession(request);
   if (!session || session.role !== 'teacher') {
     return NextResponse.json({ error: 'Oturum bulunamadı' }, { status: 401 });
   }
@@ -24,58 +28,49 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Geçersiz oturum' }, { status: 401 });
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseKey) {
+  if (!hasSupabaseAdmin()) {
     return NextResponse.json({ error: 'Sunucu yapılandırma hatası' }, { status: 500 });
   }
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  const supabase = getSupabaseAdmin();
 
   const { oldPassword, newPassword } = await request.json();
+  const trimmedOld = String(oldPassword || '').trim();
+  const trimmedNew = String(newPassword || '').trim();
 
-  if (!oldPassword?.trim() || !newPassword?.trim()) {
+  if (!trimmedOld || !trimmedNew) {
     return NextResponse.json({ error: 'Tüm alanlar zorunlu' }, { status: 400 });
   }
-  if (newPassword.trim().length < 4) {
-    return NextResponse.json({ error: 'Yeni şifre en az 4 karakter olmalı' }, { status: 400 });
+
+  const strength = validatePasswordStrength(trimmedNew);
+  if (!strength.ok) {
+    return NextResponse.json({ error: strength.error }, { status: 400 });
   }
 
-  const normalizedOld = oldPassword.trim().toLocaleLowerCase('tr-TR');
-  const normalizedNew = newPassword.trim().toLocaleLowerCase('tr-TR');
-
-  // Öğretmeni bul
   const teacherLookup = session.teacherId
-    ? supabase.from('teacher_users').select('*').eq('id', session.teacherId).single()
-    : supabase.from('teacher_users').select('*').eq('username', session.username).single();
-  const { data: teacher, error } = await teacherLookup;
+    ? supabase.from('teacher_users').select('id, teacher_name, password_cipher').eq('id', session.teacherId).single()
+    : supabase.from('teacher_users').select('id, teacher_name, password_cipher').eq('username', session.username).single();
 
+  const { data: teacher, error } = await teacherLookup;
   if (error || !teacher) {
     return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 });
   }
 
-  // Mevcut şifreyi doğrula:
-  // 1) password_hash doluysa onu kontrol et
-  // 2) Boşsa ilk adı kontrol et (varsayılan şifre)
-  const firstName = (teacher.teacher_name ?? '').split(' ')[0].toLocaleLowerCase('tr-TR');
-  const storedHash = teacher.password_hash?.trim();
-
-  const isValid = storedHash
-    ? storedHash.toLocaleLowerCase('tr-TR') === normalizedOld
-    : firstName === normalizedOld;
-
-  if (!isValid) {
+  const storedPassword = decryptPassword(teacher.password_cipher);
+  if (!storedPassword || !safeEqual(normalizePassword(trimmedOld), normalizePassword(storedPassword))) {
     return NextResponse.json({ error: 'Mevcut şifre yanlış' }, { status: 401 });
   }
 
-  if (normalizedOld === normalizedNew) {
+  if (normalizePassword(trimmedOld) === normalizePassword(trimmedNew)) {
     return NextResponse.json({ error: 'Yeni şifre mevcut şifreyle aynı olamaz' }, { status: 400 });
   }
 
+  // Sadece-sifre girisi oldugu icin sifre sistem genelinde benzersiz olmali.
+  const nextLookup = passwordLookup(trimmedNew);
+
   const { data: sameOnAnotherUser } = await supabase
     .from('teacher_users')
-    .select('id,password_hash')
-    .not('password_hash', 'is', null)
-    .eq('password_hash', newPassword.trim())
+    .select('id')
+    .eq('password_lookup', nextLookup)
     .neq('id', teacher.id)
     .maybeSingle();
 
@@ -86,18 +81,20 @@ export async function POST(request: NextRequest) {
   const { data: existsInHistory } = await supabase
     .from('teacher_password_history')
     .select('id')
-    .eq('normalized_password', normalizedNew)
+    .eq('password_lookup', nextLookup)
     .maybeSingle();
 
   if (existsInHistory) {
     return NextResponse.json({ error: 'Bu şifre daha önce kullanılmış. Farklı bir şifre seçin.' }, { status: 409 });
   }
 
-  // Yeni şifreyi kaydet
   const { error: updateErr } = await supabase
     .from('teacher_users')
-    .update({ password_hash: newPassword.trim() })
-    .eq('id', session.teacherId);
+    .update({
+      password_lookup: nextLookup,
+      password_cipher: encryptPassword(trimmedNew),
+    })
+    .eq('id', teacher.id);
 
   if (updateErr) {
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
@@ -105,7 +102,7 @@ export async function POST(request: NextRequest) {
 
   await supabase.from('teacher_password_history').insert({
     teacher_user_id: teacher.id,
-    normalized_password: normalizedNew,
+    password_lookup: nextLookup,
   });
 
   return NextResponse.json({ success: true });

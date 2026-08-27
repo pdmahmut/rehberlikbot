@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/apiAuth';
 import { getOgrenciListBySinif, getSinifSubeList, loadStudentData } from '@/lib/data';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { listLocalClassStudents } from '@/lib/classStudentsStore';
 
 type StudentLookupOption = {
@@ -118,6 +119,10 @@ function buildLocalStudentOptions(classKey?: string): StudentLookupOption[] {
 }
 
 export async function GET(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     const { searchParams } = new URL(request.url);
     const sinifSube = searchParams.get('sinifSube');

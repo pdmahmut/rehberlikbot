@@ -1,5 +1,12 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { type SupabaseClient } from "@supabase/supabase-js";
 import { normalizeTr } from "@/lib/teachers";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import {
+  decryptPassword,
+  encryptPassword,
+  generatePassword,
+  passwordLookup,
+} from "@/lib/password";
 
 export interface TeacherUserRecord {
   id: string;
@@ -7,15 +14,22 @@ export interface TeacherUserRecord {
   teacher_name: string;
   class_key: string | null;
   class_display: string | null;
-  password_hash: string | null;
+  password_cipher: string | null;
   created_at: string;
 }
 
-const TEACHER_USER_COLUMNS =
-  "id, username, teacher_name, class_key, class_display, password_hash, created_at";
+/** Yoneticiye donulen kayit: sifre cozulmus haliyle eklenir. */
+export interface TeacherUserWithPassword extends TeacherUserRecord {
+  password: string | null;
+}
 
-const normalizeTeacherPassword = (value: string) =>
-  String(value || "").trim().toLocaleLowerCase("tr-TR");
+const TEACHER_USER_COLUMNS =
+  "id, username, teacher_name, class_key, class_display, password_cipher, created_at";
+
+/** Kaydi yoneticiye gosterilebilecek bicime cevirir (sifreyi cozer). */
+export function withDecryptedPassword(user: TeacherUserRecord): TeacherUserWithPassword {
+  return { ...user, password: decryptPassword(user.password_cipher) };
+}
 
 const isRlsPolicyError = (error: unknown) => {
   const message = String(
@@ -39,35 +53,9 @@ const generateSystemUsername = (teacherName: string) => {
   return `${base}.${Date.now()}`;
 };
 
-const getPasswordBaseFromTeacherName = (teacherName: string) => {
-  const firstName =
-    String(teacherName || "")
-      .trim()
-      .split(/\s+/)[0]
-      ?.toLocaleLowerCase("tr-TR")
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]/gi, "") || "ogretmen";
-
-  if (firstName.length >= 4) {
-    return firstName;
-  }
-
-  return `${firstName}${"1234".slice(0, 4 - firstName.length)}`;
-};
-
 export function getTeacherAccountsSupabase(): SupabaseClient {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !key) {
-    throw new Error("Supabase yapılandırması eksik");
-  }
-
-  return createClient(url, key);
+  // teacher_users / teacher_password_history RLS ile kilitli; anon anahtar yetmez.
+  return getSupabaseAdmin();
 }
 
 export async function findTeacherAccountByName(
@@ -89,41 +77,38 @@ export async function findTeacherAccountByName(
   );
 }
 
-async function buildAutoPassword(supabase: SupabaseClient, teacherName: string) {
-  const base = getPasswordBaseFromTeacherName(teacherName);
-
+/**
+ * Kullanilmamis rastgele bir sifre uretir.
+ *
+ * Sadece-sifre girisi kullanildigi icin sifreler sistem genelinde benzersiz
+ * olmak ZORUNDA: ayni sifreye sahip iki ogretmen olursa giriste hangisi
+ * oldugu ayirt edilemez. Carpisma kontrolu kor indeks uzerinden yapilir,
+ * gecmiste kullanilmis sifreler de haric tutulur.
+ */
+async function buildAutoPassword(supabase: SupabaseClient): Promise<string> {
   const [{ data: users, error: usersError }, { data: history, error: historyError }] =
     await Promise.all([
-      supabase.from("teacher_users").select("password_hash"),
-      supabase.from("teacher_password_history").select("normalized_password"),
+      supabase.from("teacher_users").select("password_lookup"),
+      supabase.from("teacher_password_history").select("password_lookup"),
     ]);
 
   if (usersError) throw usersError;
   if (historyError && !isRlsPolicyError(historyError)) throw historyError;
 
-  const usedPasswords = new Set<string>();
-
+  const used = new Set<string>();
   for (const user of users || []) {
-    if (user.password_hash?.trim()) {
-      usedPasswords.add(normalizeTeacherPassword(user.password_hash));
-    }
+    if (user.password_lookup) used.add(user.password_lookup);
   }
-
   for (const row of history || []) {
-    if (row.normalized_password?.trim()) {
-      usedPasswords.add(normalizeTeacherPassword(row.normalized_password));
-    }
+    if (row.password_lookup) used.add(row.password_lookup);
   }
 
-  let candidate = base;
-  let suffix = 1;
-
-  while (usedPasswords.has(normalizeTeacherPassword(candidate))) {
-    suffix += 1;
-    candidate = `${base}${suffix}`;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const candidate = generatePassword();
+    if (!used.has(passwordLookup(candidate))) return candidate;
   }
 
-  return candidate;
+  throw new Error("Benzersiz şifre üretilemedi");
 }
 
 export async function ensureTeacherAccount(
@@ -141,14 +126,15 @@ export async function ensureTeacherAccount(
     return { user: existingUser, created: false };
   }
 
-  const generatedPassword = await buildAutoPassword(supabase, trimmedTeacherName);
+  const generatedPassword = await buildAutoPassword(supabase);
   const generatedUsername = generateSystemUsername(trimmedTeacherName);
 
   const { data, error } = await supabase
     .from("teacher_users")
     .insert({
       username: generatedUsername,
-      password_hash: generatedPassword,
+      password_lookup: passwordLookup(generatedPassword),
+      password_cipher: encryptPassword(generatedPassword),
       teacher_name: trimmedTeacherName,
     })
     .select(TEACHER_USER_COLUMNS)
@@ -158,7 +144,7 @@ export async function ensureTeacherAccount(
 
   const { error: historyError } = await supabase.from("teacher_password_history").insert({
     teacher_user_id: data.id,
-    normalized_password: normalizeTeacherPassword(generatedPassword),
+    password_lookup: passwordLookup(generatedPassword),
   });
 
   if (historyError && !isRlsPolicyError(historyError)) {

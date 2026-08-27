@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { requireAdmin } from '@/lib/apiAuth';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 // GET - Randevu görevlerini listele
 export async function GET(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) {
       return NextResponse.json(
@@ -50,6 +55,10 @@ export async function GET(request: NextRequest) {
 
 // POST - Yeni görev oluştur
 export async function POST(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) {
       return NextResponse.json(
@@ -104,6 +113,10 @@ export async function POST(request: NextRequest) {
 
 // PUT - Görev güncelle (tamamlandı olarak işaretle)
 export async function PUT(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) {
       return NextResponse.json(
@@ -154,6 +167,10 @@ export async function PUT(request: NextRequest) {
 
 // DELETE - Görev sil
 export async function DELETE(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) {
       return NextResponse.json(

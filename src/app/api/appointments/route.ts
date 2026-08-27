@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { normalizeLessonSlot } from "@/lib/lessonSlots";
 import {
   getSourceTable,
@@ -7,6 +7,7 @@ import {
   normalizeSourceTypeOrNull,
 } from "@/lib/guidanceApplications";
 
+import { requireSession } from '@/lib/apiAuth';
 const isMissingColumnError = (error: { message?: string } | null | undefined, columnName: string) => {
   const message = error?.message || "";
   return message.toLowerCase().includes("column") && message.toLowerCase().includes(columnName.toLowerCase());
@@ -54,7 +55,8 @@ const syncApplicationStatus = async (
   status?: string,
   appointmentId?: string | null
 ) => {
-  if (!supabase || !sourceApplicationId || !status) return;
+  if (!sourceApplicationId || !status) return;
+  const supabase = getSupabaseAdmin();
 
   try {
     const normalizedType = normalizeSourceTypeOrNull(sourceApplicationType);
@@ -151,6 +153,10 @@ const syncApplicationStatus = async (
 
 // GET - Randevuları listele
 export async function GET(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) {
       return NextResponse.json(
@@ -224,6 +230,10 @@ export async function GET(request: NextRequest) {
 
 // POST - Yeni randevu oluştur
 export async function POST(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) {
       return NextResponse.json(
@@ -398,6 +408,10 @@ export async function POST(request: NextRequest) {
 
 // PUT - Randevu güncelle
 export async function PUT(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) {
       return NextResponse.json(
@@ -585,6 +599,10 @@ export async function PUT(request: NextRequest) {
 
 // DELETE - Randevu sil
 export async function DELETE(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) {
       return NextResponse.json(

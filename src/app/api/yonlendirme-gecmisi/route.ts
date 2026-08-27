@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { COOKIE_NAME, verifySession } from '@/lib/session';
 import { createClient } from '@supabase/supabase-js';
 
-const COOKIE_NAME = 'rehberlik_session';
 
-function getSession(request: NextRequest) {
+// Imzali oturum token'ini dogrular (bkz. src/lib/session.ts)
+async function getSession(request: NextRequest) {
   const token = request.cookies.get(COOKIE_NAME)?.value;
   if (!token) return null;
-  try {
-    const payload = JSON.parse(Buffer.from(token, 'base64url').toString());
-    if (payload.exp < Date.now()) return null;
-    return payload;
-  } catch {
-    return null;
-  }
+  return verifySession(token);
 }
 
 function getSupabase() {
@@ -23,7 +18,7 @@ function getSupabase() {
 }
 
 export async function GET(request: NextRequest) {
-  const session = getSession(request);
+  const session = await getSession(request);
   if (!session) return NextResponse.json({ error: 'Oturum bulunamadı' }, { status: 401 });
 
   try {

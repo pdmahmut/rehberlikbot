@@ -4,6 +4,7 @@ import {
   createSessionToken,
   getRawSessionFromToken,
   reconcileSessionUser,
+  SESSION_COOKIE_OPTIONS,
   type SessionUser,
 } from '@/lib/auth';
 
@@ -22,19 +23,14 @@ export async function GET(request: NextRequest) {
   const token = request.cookies.get(COOKIE_NAME)?.value;
   if (!token) return NextResponse.json({ error: 'Oturum yok' }, { status: 401 });
 
-  const storedSession = getRawSessionFromToken(token);
+  const storedSession = await getRawSessionFromToken(token);
   if (!storedSession) return NextResponse.json({ error: 'Geçersiz oturum' }, { status: 401 });
 
   const freshSession = reconcileSessionUser(storedSession);
   const response = NextResponse.json(freshSession);
 
   if (didSessionChange(storedSession, freshSession)) {
-    response.cookies.set(COOKIE_NAME, createSessionToken(freshSession), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 8 * 60 * 60,
-    });
+    response.cookies.set(COOKIE_NAME, await createSessionToken(freshSession), SESSION_COOKIE_OPTIONS);
   }
 
   return response;

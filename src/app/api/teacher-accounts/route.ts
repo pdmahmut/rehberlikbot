@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/apiAuth";
 import {
   findTeacherAccountByName,
   getTeacherAccountsSupabase,
+  withDecryptedPassword,
+  type TeacherUserRecord,
 } from "@/lib/teacherAccounts";
+import {
+  encryptPassword,
+  generatePassword,
+  passwordLookup,
+  validatePasswordStrength,
+} from "@/lib/password";
 
-const normalizeTeacherPassword = (value: string) =>
-  String(value || "").trim().toLocaleLowerCase("tr-TR");
+export const runtime = "nodejs";
 
 const isRlsPolicyError = (error: unknown) => {
   const message = String(
@@ -17,74 +25,90 @@ const isRlsPolicyError = (error: unknown) => {
   return message.includes("row-level security policy");
 };
 
+const errorMessage = (err: unknown) =>
+  err instanceof Error ? err.message : "Beklenmeyen hata";
+
+/**
+ * Sifrenin sistemde (aktif hesaplarda veya gecmiste) kullanilip kullanilmadigini
+ * kor indeks uzerinden kontrol eder. Sadece-sifre girisi oldugu icin ayni sifreye
+ * iki hesap sahip olamaz.
+ */
+async function findPasswordConflict(
+  supabase: ReturnType<typeof getTeacherAccountsSupabase>,
+  password: string,
+  exceptUserId?: string
+): Promise<string | null> {
+  const lookup = passwordLookup(password);
+
+  let userQuery = supabase.from("teacher_users").select("id").eq("password_lookup", lookup);
+  if (exceptUserId) userQuery = userQuery.neq("id", exceptUserId);
+
+  const { data: sameUser } = await userQuery.maybeSingle();
+  if (sameUser) return "Bu şifre başka bir öğretmende kullanılıyor";
+
+  const { data: inHistory } = await supabase
+    .from("teacher_password_history")
+    .select("id")
+    .eq("password_lookup", lookup)
+    .maybeSingle();
+  if (inHistory) return "Bu şifre daha önce kullanılmış. Farklı bir şifre girin.";
+
+  return null;
+}
+
 export async function GET() {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+
   try {
     const supabase = getTeacherAccountsSupabase();
     const { data, error } = await supabase
       .from("teacher_users")
-      .select("id, username, teacher_name, class_key, class_display, password_hash, created_at")
+      .select("id, username, teacher_name, class_key, class_display, password_cipher, created_at")
       .order("teacher_name");
 
     if (error) throw error;
-    return NextResponse.json({ users: data || [] });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+
+    // Sifreler yoneticiye cozulmus halde donulur (dagitim icin).
+    const users = (data as TeacherUserRecord[] | null || []).map(withDecryptedPassword);
+    return NextResponse.json({ users });
+  } catch (err) {
+    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { password, teacher_name } = body;
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
 
-    if (!password || !teacher_name) {
-      return NextResponse.json(
-        { error: "Öğretmen adı ve şifre zorunludur" },
-        { status: 400 }
-      );
+  try {
+    const { password, teacher_name } = await request.json();
+
+    if (!teacher_name) {
+      return NextResponse.json({ error: "Öğretmen adı zorunludur" }, { status: 400 });
     }
-    if (String(password).trim().length < 4) {
-      return NextResponse.json({ error: "Şifre en az 4 karakter olmalı" }, { status: 400 });
+
+    // Sifre verilmezse sistem rastgele uretir.
+    const finalPassword = String(password || "").trim() || generatePassword();
+
+    if (password) {
+      const strength = validatePasswordStrength(finalPassword);
+      if (!strength.ok) {
+        return NextResponse.json({ error: strength.error }, { status: 400 });
+      }
     }
 
     const supabase = getTeacherAccountsSupabase();
-    const normalizedPassword = normalizeTeacherPassword(password);
     const trimmedTeacherName = String(teacher_name).trim();
 
-    const existingUserByTeacherName = await findTeacherAccountByName(
-      supabase,
-      trimmedTeacherName
-    );
-
-    if (existingUserByTeacherName) {
-      return NextResponse.json(
-        { error: "Bu öğretmen için zaten bir hesap var" },
-        { status: 409 }
-      );
+    if (await findTeacherAccountByName(supabase, trimmedTeacherName)) {
+      return NextResponse.json({ error: "Bu öğretmen için zaten bir hesap var" }, { status: 409 });
     }
 
-    const { data: existingUserByPassword } = await supabase
-      .from("teacher_users")
-      .select("id,password_hash")
-      .not("password_hash", "is", null)
-      .eq("password_hash", String(password).trim())
-      .maybeSingle();
+    const conflict = await findPasswordConflict(supabase, finalPassword);
+    if (conflict) return NextResponse.json({ error: conflict }, { status: 409 });
 
-    if (existingUserByPassword) {
-      return NextResponse.json({ error: "Bu şifre başka bir öğretmende kullanılıyor" }, { status: 409 });
-    }
-
-    const { data: existingInHistory } = await supabase
-      .from("teacher_password_history")
-      .select("id")
-      .eq("normalized_password", normalizedPassword)
-      .maybeSingle();
-
-    if (existingInHistory) {
-      return NextResponse.json({ error: "Bu şifre daha önce kullanılmış. Farklı bir şifre girin." }, { status: 409 });
-    }
-
-    const generatedUsername =
+    const usernameBase =
       trimmedTeacherName
         .toLocaleLowerCase("tr-TR")
         .trim()
@@ -95,18 +119,19 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .from("teacher_users")
       .insert({
-        username: `${generatedUsername}.${Date.now()}`,
-        password_hash: String(password).trim(),
+        username: `${usernameBase}.${Date.now()}`,
+        password_lookup: passwordLookup(finalPassword),
+        password_cipher: encryptPassword(finalPassword),
         teacher_name: trimmedTeacherName,
       })
-      .select("id, teacher_name, class_key, class_display, password_hash, created_at")
+      .select("id, username, teacher_name, class_key, class_display, password_cipher, created_at")
       .single();
 
     if (error) throw error;
 
     const { error: historyError } = await supabase.from("teacher_password_history").insert({
       teacher_user_id: data.id,
-      normalized_password: normalizedPassword,
+      password_lookup: passwordLookup(finalPassword),
     });
 
     if (historyError && !isRlsPolicyError(historyError)) {
@@ -114,17 +139,21 @@ export async function POST(request: NextRequest) {
       throw historyError;
     }
 
-    return NextResponse.json({ success: true, user: data });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({
+      success: true,
+      user: withDecryptedPassword(data as TeacherUserRecord),
+    });
+  } catch (err) {
+    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }
 }
 
 export async function PATCH(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { id, password, action, class_key, class_display } = body;
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
 
+  try {
+    const { id, password, action, class_key, class_display } = await request.json();
     if (!id) return NextResponse.json({ error: "ID zorunludur" }, { status: 400 });
 
     const supabase = getTeacherAccountsSupabase();
@@ -138,78 +167,62 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    if (!password) return NextResponse.json({ error: "Yeni şifre zorunludur" }, { status: 400 });
-    if (String(password).trim().length < 4) {
-      return NextResponse.json({ error: "Şifre en az 4 karakter olmalı" }, { status: 400 });
+    // Sifre verilmezse yeni bir tane uret (yoneticinin "yeni sifre" butonu).
+    const nextPassword = String(password || "").trim() || generatePassword();
+
+    if (password) {
+      const strength = validatePasswordStrength(nextPassword);
+      if (!strength.ok) {
+        return NextResponse.json({ error: strength.error }, { status: 400 });
+      }
     }
 
-    const nextPassword = String(password).trim();
-    const normalizedNextPassword = normalizeTeacherPassword(nextPassword);
-
-    const { data: existingById } = await supabase
+    const { data: existing } = await supabase
       .from("teacher_users")
-      .select("id,password_hash")
+      .select("id")
       .eq("id", id)
       .maybeSingle();
-    if (!existingById) return NextResponse.json({ error: "Öğretmen hesabı bulunamadı" }, { status: 404 });
-
-    if ((existingById.password_hash || "").toLocaleLowerCase("tr-TR") === normalizedNextPassword) {
-      return NextResponse.json({ error: "Yeni şifre mevcut şifreyle aynı olamaz" }, { status: 400 });
+    if (!existing) {
+      return NextResponse.json({ error: "Öğretmen hesabı bulunamadı" }, { status: 404 });
     }
 
-    const { data: samePasswordOnAnotherUser } = await supabase
-      .from("teacher_users")
-      .select("id,password_hash")
-      .not("password_hash", "is", null)
-      .eq("password_hash", nextPassword)
-      .neq("id", id)
-      .maybeSingle();
-
-    if (samePasswordOnAnotherUser) {
-      return NextResponse.json({ error: "Bu şifre başka bir öğretmende kullanılıyor" }, { status: 409 });
-    }
-
-    const { data: existsInHistory } = await supabase
-      .from("teacher_password_history")
-      .select("id")
-      .eq("normalized_password", normalizedNextPassword)
-      .maybeSingle();
-
-    if (existsInHistory) {
-      return NextResponse.json({ error: "Bu şifre daha önce kullanılmış. Farklı bir şifre girin." }, { status: 409 });
-    }
+    const conflict = await findPasswordConflict(supabase, nextPassword, id);
+    if (conflict) return NextResponse.json({ error: conflict }, { status: 409 });
 
     const { error } = await supabase
       .from("teacher_users")
-      .update({ password_hash: nextPassword })
+      .update({
+        password_lookup: passwordLookup(nextPassword),
+        password_cipher: encryptPassword(nextPassword),
+      })
       .eq("id", id);
     if (error) throw error;
 
     await supabase.from("teacher_password_history").insert({
       teacher_user_id: id,
-      normalized_password: normalizedNextPassword,
+      password_lookup: passwordLookup(nextPassword),
     });
 
-    return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ success: true, password: nextPassword });
+  } catch (err) {
+    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }
 }
 
 export async function DELETE(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+
   try {
     const { id } = await request.json();
-
-    if (!id) {
-      return NextResponse.json({ error: "ID zorunludur" }, { status: 400 });
-    }
+    if (!id) return NextResponse.json({ error: "ID zorunludur" }, { status: 400 });
 
     const supabase = getTeacherAccountsSupabase();
     const { error } = await supabase.from("teacher_users").delete().eq("id", id);
 
     if (error) throw error;
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }
 }

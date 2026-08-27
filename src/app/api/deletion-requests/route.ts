@@ -1,22 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { COOKIE_NAME, verifySession } from '@/lib/session';
+import { requireAdmin, requireSession } from '@/lib/apiAuth';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
-const COOKIE_NAME = 'rehberlik_session';
 
-function getSession(request: NextRequest) {
-  try {
-    const token = request.cookies.get(COOKIE_NAME)?.value;
-    if (!token) return null;
-    const payload = JSON.parse(Buffer.from(token, 'base64url').toString());
-    if (payload.exp < Date.now()) return null;
-    return payload;
-  } catch {
-    return null;
-  }
+// Imzali oturum token'ini dogrular (bkz. src/lib/session.ts)
+async function getSession(request: NextRequest) {
+  const token = request.cookies.get(COOKIE_NAME)?.value;
+  if (!token) return null;
+  return verifySession(token);
 }
 
 // Listele
 export async function GET(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   if (!supabase) return NextResponse.json({ error: 'Supabase yok' }, { status: 500 });
 
   const { searchParams } = new URL(request.url);
@@ -38,9 +38,13 @@ export async function GET(request: NextRequest) {
 
 // Yeni silme isteği oluştur (öğretmen)
 export async function POST(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   if (!supabase) return NextResponse.json({ error: 'Supabase yok' }, { status: 500 });
 
-  const session = getSession(request);
+  const session = await getSession(request);
   if (!session) return NextResponse.json({ error: 'Oturum bulunamadı' }, { status: 401 });
 
   const body = await request.json();
@@ -83,9 +87,13 @@ export async function POST(request: NextRequest) {
 
 // Onayla / Reddet (admin)
 export async function PATCH(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   if (!supabase) return NextResponse.json({ error: 'Supabase yok' }, { status: 500 });
 
-  const session = getSession(request);
+  const session = await getSession(request);
   if (!session || session.role !== 'admin') {
     return NextResponse.json({ error: 'Yetki yok' }, { status: 403 });
   }
@@ -134,6 +142,10 @@ export async function PATCH(request: NextRequest) {
 
 // İptal et (öğretmen kendi isteğini geri çekebilir)
 export async function DELETE(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   if (!supabase) return NextResponse.json({ error: 'Supabase yok' }, { status: 500 });
 
   const { searchParams } = new URL(request.url);
