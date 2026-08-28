@@ -1,30 +1,16 @@
 import { NextResponse } from "next/server";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { getSession, type SessionUser } from "@/lib/auth";
+import { type SupabaseClient } from "@supabase/supabase-js";
+import { getSession } from "@/lib/auth";
 import { normalizeClassRequestCategory } from "@/lib/classRequests";
+import { getSupabaseAdmin, hasSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 
-const getActorTeacherName = (session: SessionUser | null) =>
-  session?.teacherName || session?.username || null;
-
-const createRequestScopedSupabase = (session: SessionUser): SupabaseClient | null => {
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) return null;
-
-  const actorTeacherName = getActorTeacherName(session);
-
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        "x-app-role": session.role,
-        ...(actorTeacherName ? { "x-teacher-name": actorTeacherName } : {}),
-        ...(session.classKey ? { "x-class-key": session.classKey } : {}),
-      },
-    },
-  });
+// Yetki kontrolu handler icinde yapiliyor (yalnizca admin). Onceki surumde
+// anon anahtar + HTTP basliklari ile RLS'e birakilmisti; basliklar taklit
+// edilebildigi icin gercek bir sinir degildi.
+const createRequestScopedSupabase = (): SupabaseClient | null => {
+  return hasSupabaseAdmin() ? getSupabaseAdmin() : null;
 };
 
 export async function GET() {
@@ -37,7 +23,7 @@ export async function GET() {
     return NextResponse.json({ error: "Bu alan sadece yönetici içindir" }, { status: 403 });
   }
 
-  const supabase = createRequestScopedSupabase(session);
+  const supabase = createRequestScopedSupabase();
   if (!supabase) {
     return NextResponse.json({ error: "Supabase yapılandırılmamış" }, { status: 500 });
   }
@@ -66,7 +52,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Bu alan sadece yönetici içindir" }, { status: 403 });
   }
 
-  const supabase = createRequestScopedSupabase(session);
+  const supabase = createRequestScopedSupabase();
   if (!supabase) {
     return NextResponse.json({ error: "Supabase yapılandırılmamış" }, { status: 500 });
   }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { type SupabaseClient } from "@supabase/supabase-js";
 import { getSession, type SessionUser } from "@/lib/auth";
+import { getSupabaseAdmin, hasSupabaseAdmin } from "@/lib/supabaseAdmin";
 import {
   cleanClassRequestText,
   getClassRequestDisplayCategory,
@@ -12,23 +13,25 @@ export const dynamic = "force-dynamic";
 const getActorTeacherName = (session: SessionUser | null) =>
   session?.teacherName || session?.username || null;
 
-const createRequestScopedSupabase = (session: SessionUser): SupabaseClient | null => {
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Onceden anon anahtar + "x-app-role" gibi HTTP basliklari kullaniliyordu ve
+// yetki karari veritabanindaki RLS politikalarina birakilmisti. Anon anahtar
+// tarayicida gorunur oldugu icin bu basliklar taklit edilebiliyordu; yani RLS
+// gercek bir sinir degildi. Artik service_role kullaniliyor ve ogretmen
+// kisitlari asagida KOD ICINDE uygulaniyor.
+const createRequestScopedSupabase = (): SupabaseClient | null => {
+  return hasSupabaseAdmin() ? getSupabaseAdmin() : null;
+};
 
-  if (!supabaseUrl || !supabaseAnonKey) return null;
-
-  const actorTeacherName = getActorTeacherName(session);
-
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        "x-app-role": session.role,
-        ...(actorTeacherName ? { "x-teacher-name": actorTeacherName } : {}),
-        ...(session.classKey ? { "x-class-key": session.classKey } : {}),
-      },
-    },
-  });
+/** Ogretmen yalnizca kendi sinifi icin actigi talepleri gorebilir/degistirebilir. */
+const assertOwnedByTeacher = (
+  session: SessionUser,
+  row: { teacher_name?: string | null; class_key?: string | null }
+): boolean => {
+  if (session.role !== "teacher") return true;
+  const actor = getActorTeacherName(session);
+  if (!actor || row.teacher_name !== actor) return false;
+  if (session.classKey && row.class_key && row.class_key !== session.classKey) return false;
+  return true;
 };
 
 const resolveAdminCategoryValue = async (
@@ -82,7 +85,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
-  const supabase = createRequestScopedSupabase(session);
+  const supabase = createRequestScopedSupabase();
   if (!supabase) {
     return NextResponse.json({ error: "Supabase yapılandırılmamış" }, { status: 500 });
   }
@@ -106,6 +109,12 @@ export async function GET(request: NextRequest) {
   if (session.role === "admin") {
     if (teacherName) query = query.eq("teacher_name", teacherName);
     if (classKey) query = query.eq("class_key", classKey);
+  } else {
+    // Ogretmen yalnizca kendi taleplerini gorur. Bu kisit onceden RLS
+    // tarafindan uygulaniyordu; RLS kaldirildigi icin burada zorunlu.
+    const actorTeacherName = getActorTeacherName(session);
+    query = query.eq("teacher_name", actorTeacherName || "__no_teacher__");
+    if (session.classKey) query = query.eq("class_key", session.classKey);
   }
   if (status && status !== "all") query = query.eq("status", status);
   if (scheduledDate) query = query.eq("scheduled_date", scheduledDate);
@@ -124,7 +133,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
-  const supabase = createRequestScopedSupabase(session);
+  const supabase = createRequestScopedSupabase();
   if (!supabase) {
     return NextResponse.json({ error: "Supabase yapılandırılmamış" }, { status: 500 });
   }
@@ -168,7 +177,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
-  const supabase = createRequestScopedSupabase(session);
+  const supabase = createRequestScopedSupabase();
   if (!supabase) {
     return NextResponse.json({ error: "Supabase yapılandırılmamış" }, { status: 500 });
   }
@@ -179,12 +188,15 @@ export async function DELETE(request: NextRequest) {
 
   const { data: existing, error: fetchError } = await supabase
     .from("class_requests")
-    .select("id, status")
+    .select("id, status, teacher_name, class_key")
     .eq("id", id)
     .maybeSingle();
 
   if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
   if (!existing) return NextResponse.json({ error: "Talep bulunamadı" }, { status: 404 });
+  if (!assertOwnedByTeacher(session, existing)) {
+    return NextResponse.json({ error: "Bu talep üzerinde yetkiniz yok" }, { status: 403 });
+  }
   if (session.role === "teacher" && existing.status !== "pending") {
     return NextResponse.json({ error: "Sadece bekleyen talepler iptal edilebilir" }, { status: 400 });
   }
@@ -200,7 +212,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
-  const supabase = createRequestScopedSupabase(session);
+  const supabase = createRequestScopedSupabase();
   if (!supabase) {
     return NextResponse.json({ error: "Supabase yapılandırılmamış" }, { status: 500 });
   }
@@ -229,6 +241,9 @@ export async function PATCH(request: NextRequest) {
 
   if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
   if (!existing) return NextResponse.json({ error: "Talep bulunamadı" }, { status: 404 });
+  if (!assertOwnedByTeacher(session, existing)) {
+    return NextResponse.json({ error: "Bu talep üzerinde yetkiniz yok" }, { status: 403 });
+  }
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
