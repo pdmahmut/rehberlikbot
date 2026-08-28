@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/apiAuth';
 import { writeToGoogleSheets } from '@/lib/sheets';
 import { YonlendirilenOgrenci, ReferralRecord } from '@/types';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getTeachersData, validateTeacherClass, resolveKeyFromDisplay } from '@/lib/teachers';
 import { groupGuidanceStudents, normalizeGuidanceStudent } from '@/lib/guidance';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     const { students }: { students: YonlendirilenOgrenci[] } = await request.json();
 

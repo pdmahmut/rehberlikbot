@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
           accountCreated: accountResult.created,
         });
       } catch (accountError) {
-        removeTeacher(result.teacher.teacherId);
+        await removeTeacher(result.teacher.teacherId);
         console.error("Teacher account sync failed:", accountError);
         return NextResponse.json(
           { error: "Öğretmen eklendi ama hesap oluşturulamadığı için işlem geri alındı" },

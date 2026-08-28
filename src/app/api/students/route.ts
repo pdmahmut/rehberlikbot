@@ -172,7 +172,7 @@ export async function GET(request: NextRequest) {
       let combinedList = Array.from(deduped.values());
       try {
         const { getRequests } = require('@/lib/classStudentRequests');
-        const allApproved = getRequests({ status: 'approved' });
+        const allApproved = await getRequests({ status: 'approved' });
 
         const removedFromThis = allApproved
           .filter(

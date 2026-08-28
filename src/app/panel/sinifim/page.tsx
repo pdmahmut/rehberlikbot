@@ -20,7 +20,7 @@ import {
   TeacherDistributionChart,
   ReferralTimeline,
 } from "@/components/charts/StudentCharts";
-import { supabase } from "@/lib/supabase";
+import { db as supabase } from "@/lib/dbClient";
 import {
   buildSourceRecordKey,
   findAppointmentForApplicationRecord,

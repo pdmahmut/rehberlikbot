@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { normalizeGuidanceReasons } from '@/lib/guidance';
 
+import { requireSession } from '@/lib/apiAuth';
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   if (!supabase) {
     return NextResponse.json(
       { error: 'Supabase configuration missing' },

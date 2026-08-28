@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { requireAdmin } from '@/lib/apiAuth';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
 
 // Bireysel başvuruları listele
 export async function GET(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) return NextResponse.json({ individualRequests: [] });
 
@@ -29,6 +34,10 @@ export async function GET(request: NextRequest) {
 
 // Bireysel başvuru oluştur
 export async function POST(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) return NextResponse.json({ error: 'Veritabanı bağlantısı yok' }, { status: 500 });
 
@@ -62,6 +71,10 @@ export async function POST(request: NextRequest) {
 
 // Bireysel başvuru güncelle
 export async function PUT(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) return NextResponse.json({ error: 'Veritabanı bağlantısı yok' }, { status: 500 });
 
@@ -87,6 +100,10 @@ export async function PUT(request: NextRequest) {
 
 // Bireysel başvuru sil
 export async function DELETE(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) return NextResponse.json({ error: 'Veritabanı bağlantısı yok' }, { status: 500 });
 

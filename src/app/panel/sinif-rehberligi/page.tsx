@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { db as supabase } from "@/lib/dbClient";
 import { Plus, CheckCircle2, Clock, Calendar, BookOpen, X, AlertTriangle, Sparkles, CircleDashed, Trash2, MessageSquare, ChevronDown, RefreshCw, Send } from "lucide-react"
 import { toast } from "sonner"
 import { normalizeLessonSlot } from "@/lib/lessonSlots"
@@ -238,7 +238,7 @@ export default function SinifRehberligiPage() {
       if (error) throw error
 
       const topicsWithPlans = await Promise.all(
-        (topicsData || []).map(async (topic) => {
+        (topicsData || []).map(async (topic: any) => {
           const { data: plans } = await supabase
             .from('guidance_plans')
             .select('*')
@@ -395,21 +395,18 @@ export default function SinifRehberligiPage() {
 
   // guidance_plans veya guidance_topics tablosu değişince kartları otomatik yenile
   useEffect(() => {
-    const channel = supabase
-      .channel('guidance-sync')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'guidance_plans' },
-        () => { fetchTopics() }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'guidance_topics' },
-        () => { fetchTopics() }
-      )
-      .subscribe()
+    // Onceden Supabase realtime kanali kullaniliyordu. Sorgular artik
+    // /api/db gecidi uzerinden gittigi ve tarayici veritabanina dogrudan
+    // baglanmadigi icin canli kanal yerine periyodik yenileme kullaniliyor.
+    const interval = setInterval(() => { fetchTopics() }, 30000)
 
-    return () => { supabase.removeChannel(channel) }
+    const onFocus = () => { fetchTopics() }
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [fetchTopics])
 
   const handleCreateTopic = async () => {
@@ -654,8 +651,8 @@ export default function SinifRehberligiPage() {
       console.log('All plans:', allPlans)
 
       // Tüm planların tamamlandı olup olmadığını kontrol et
-      const allDone = allPlans?.every(p => p.status === 'completed')
-      console.log('All done?', allDone, 'Plans:', allPlans?.map(p => ({ id: p.id, status: p.status })))
+      const allDone = allPlans?.every((p: any) => p.status === 'completed')
+      console.log('All done?', allDone, 'Plans:', allPlans?.map((p: any) => ({ id: p.id, status: p.status })))
       
       if (allDone) {
         console.log('Marking topic as completed...')
@@ -728,7 +725,7 @@ export default function SinifRehberligiPage() {
         .eq('topic_id', topicId)
       
       if (plans && plans.length > 0) {
-        const planIds = plans.map(p => p.id)
+        const planIds = plans.map((p: any) => p.id)
         await supabase.from('tasks').delete().in('related_guidance_plan_id', planIds)
         await supabase.from('guidance_plans').delete().eq('topic_id', topicId)
       }
@@ -795,7 +792,7 @@ export default function SinifRehberligiPage() {
           .in('class_key', classKeysToRemove)
 
         if (plansToDelete && plansToDelete.length > 0) {
-          const planIds = plansToDelete.map(p => p.id)
+          const planIds = plansToDelete.map((p: any) => p.id)
           // Tasks'ları sil
           await supabase.from('tasks').delete().in('related_guidance_plan_id', planIds)
           // Plans'ları sil

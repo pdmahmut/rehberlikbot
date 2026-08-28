@@ -6,7 +6,7 @@ import {
   parseAdminNotificationId,
 } from "@/lib/adminNotifications";
 import { getSession, type SessionUser } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { findAppointmentForApplicationRecord } from "@/lib/guidanceApplications";
 import {
   deleteAdminNotifications,
@@ -156,6 +156,7 @@ const resolveReferralNotificationStatus = (
 };
 
 const buildNotifications = async (_session: SessionUser) => {
+  const supabase = getSupabaseAdmin();
   const [
     stateRows,
     classStudentRequests,
@@ -165,7 +166,7 @@ const buildNotifications = async (_session: SessionUser) => {
     scheduledAppointmentsResult,
   ] = await Promise.all([
     listAdminNotificationStates(),
-    Promise.resolve(getRequests({})),
+    getRequests({}),
     supabase
       ? supabase
           .from("referrals")
@@ -292,6 +293,7 @@ const buildNotifications = async (_session: SessionUser) => {
 };
 
 export async function GET() {
+
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
@@ -308,6 +310,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: NextRequest) {
+
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });

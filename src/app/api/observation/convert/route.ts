@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { requireAdmin } from '@/lib/apiAuth';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 type ObservationStatus = "pending" | "scheduled" | "converted" | "active_follow" | "completed";
 
@@ -40,6 +41,10 @@ const isMissingColumnError = (error: { message?: string } | null | undefined, co
 };
 
 export async function POST(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   if (!supabase) {
     return NextResponse.json({ error: "Supabase yapılandırması eksik" }, { status: 500 });
   }

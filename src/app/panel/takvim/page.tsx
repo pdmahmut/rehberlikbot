@@ -24,7 +24,7 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
+import { db as supabase } from "@/lib/dbClient";
 import { 
   Appointment, 
   ApplicationSourceType,
@@ -731,10 +731,10 @@ export default function TakvimPage() {
         }
         
         const { data: plans } = await supabase.from('guidance_plans').select('lesson_period').eq('plan_date', date).in('status', ['planned', 'completed']);
-        plans?.forEach(p => allBusySlots.add(normalizeLessonSlot(p.lesson_period)));
+        plans?.forEach((p: any) => allBusySlots.add(normalizeLessonSlot(p.lesson_period)));
 
         const { data: activities } = await supabase.from('class_activities').select('activity_time').eq('activity_date', date);
-        activities?.forEach(a => allBusySlots.add(normalizeLessonSlot(a.activity_time)));
+        activities?.forEach((a: any) => allBusySlots.add(normalizeLessonSlot(a.activity_time)));
 
         setBusySlots(allBusySlots);
       } catch (e) {

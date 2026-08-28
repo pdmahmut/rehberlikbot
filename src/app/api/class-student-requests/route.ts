@@ -11,18 +11,16 @@ export const runtime = 'nodejs';
 export async function GET(request: NextRequest) {
   const guard = await requireSession();
   if (!guard.ok) return guard.response;
-  const supabase = getSupabaseAdmin();
 
   const { searchParams } = new URL(request.url);
   const status = searchParams.get('status') || undefined;
   const classKey = searchParams.get('classKey') || undefined;
-  return NextResponse.json({ requests: getRequests({ status, classKey }) });
+  return NextResponse.json({ requests: await getRequests({ status, classKey }) });
 }
 
 export async function POST(request: NextRequest) {
   const guard = await requireSession();
   if (!guard.ok) return guard.response;
-  const supabase = getSupabaseAdmin();
 
   const body = await request.json();
   const { teacherName, classKey, classDisplay, studentName, studentValue, requestType, newClassKey, newClassDisplay } = body;
@@ -67,9 +65,9 @@ export async function PATCH(request: NextRequest) {
     if (req?.student_value?.startsWith('local_')) {
       const localStudentId = req.student_value.replace('local_', '');
       if (req.request_type === 'delete') {
-        deleteLocalClassStudent(localStudentId);
+        await deleteLocalClassStudent(localStudentId);
       } else if (req.request_type === 'class_change' && req.new_class_key) {
-        updateLocalClassStudent(localStudentId, {
+        await updateLocalClassStudent(localStudentId, {
           class_key: req.new_class_key,
           class_display: req.new_class_display || req.new_class_key,
         });

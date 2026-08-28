@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { COOKIE_NAME, verifySession } from '@/lib/session';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 
 // Imzali oturum token'ini dogrular (bkz. src/lib/session.ts)
@@ -12,6 +12,8 @@ async function getSession(request: NextRequest) {
 
 // Listele
 export async function GET(request: NextRequest) {
+  const supabase = getSupabaseAdmin();
+
   if (!supabase) return NextResponse.json({ error: 'Supabase yok' }, { status: 500 });
 
   const { searchParams } = new URL(request.url);
@@ -33,6 +35,8 @@ export async function GET(request: NextRequest) {
 
 // Yeni çalışma isteği oluştur (öğretmen)
 export async function POST(request: NextRequest) {
+  const supabase = getSupabaseAdmin();
+
   if (!supabase) return NextResponse.json({ error: 'Supabase yok' }, { status: 500 });
 
   const session = await getSession(request);
@@ -67,6 +71,8 @@ export async function POST(request: NextRequest) {
 
 // Planla / Durum güncelle (admin)
 export async function PATCH(request: NextRequest) {
+  const supabase = getSupabaseAdmin();
+
   if (!supabase) return NextResponse.json({ error: 'Supabase yok' }, { status: 500 });
 
   const session = await getSession(request);
@@ -136,6 +142,8 @@ export async function PATCH(request: NextRequest) {
 
 // Sil (admin veya isteği gönderen öğretmen)
 export async function DELETE(request: NextRequest) {
+  const supabase = getSupabaseAdmin();
+
   if (!supabase) return NextResponse.json({ error: 'Supabase yok' }, { status: 500 });
 
   const { searchParams } = new URL(request.url);

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/lib/supabase";
+import { db as supabase } from "@/lib/dbClient";
 import { MessageSquare, Search, Loader2, Filter, User, Trash2, Plus, X, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { AppointmentOutcomeModal, type AppointmentOutcomeChoice } from "@/components/AppointmentOutcomeModal";

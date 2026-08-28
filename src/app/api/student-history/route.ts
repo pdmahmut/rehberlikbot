@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { requireSession } from '@/lib/apiAuth';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
 
 // Belirli bir öğrencinin yönlendirme geçmişini getir
 export async function GET(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   if (!supabase) {
     return NextResponse.json(
       { error: 'Supabase yapılandırması eksik' },
@@ -97,6 +102,10 @@ export async function GET(request: NextRequest) {
 
 // Yönlendirme kaydını sil
 export async function DELETE(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   if (!supabase) {
     return NextResponse.json(
       { error: 'Supabase yapılandırması eksik' },

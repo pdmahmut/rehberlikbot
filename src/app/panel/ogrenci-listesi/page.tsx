@@ -26,7 +26,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
+import { db as supabase } from "@/lib/dbClient";
 import {
   ReasonDistributionChart,
   TeacherDistributionChart,

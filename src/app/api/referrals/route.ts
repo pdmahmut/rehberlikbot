@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { requireSession } from '@/lib/apiAuth';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
 
 // Öğretmen yönlendirmelerini listele
 export async function GET(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) return NextResponse.json({ referrals: [] });
 
@@ -29,6 +34,10 @@ export async function GET(request: NextRequest) {
 
 // Öğretmen yönlendirmesi oluştur
 export async function POST(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) return NextResponse.json({ error: 'Veritabanı bağlantısı yok' }, { status: 500 });
 
@@ -63,6 +72,10 @@ export async function POST(request: NextRequest) {
 
 // Öğretmen yönlendirmesi güncelle
 export async function PUT(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) return NextResponse.json({ error: 'Veritabanı bağlantısı yok' }, { status: 500 });
 
@@ -88,6 +101,10 @@ export async function PUT(request: NextRequest) {
 
 // Öğretmen yönlendirmesi sil
 export async function DELETE(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+  const supabase = getSupabaseAdmin();
+
   try {
     if (!supabase) return NextResponse.json({ error: 'Veritabanı bağlantısı yok' }, { status: 500 });
 
