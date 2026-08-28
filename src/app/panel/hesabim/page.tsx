@@ -32,8 +32,8 @@ export default function HesabimPage() {
       toast.error("Tüm alanları doldurun");
       return;
     }
-    if (newPassword.trim().length < 4) {
-      toast.error("Yeni şifre en az 4 karakter olmalı");
+    if (newPassword.trim().length < 8) {
+      toast.error("Yeni şifre en az 8 karakter olmalı");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -91,7 +91,7 @@ export default function HesabimPage() {
           <div className="space-y-1.5">
             <Label className="text-xs">Yeni Şifre</Label>
             <div className="relative">
-              <Input type={showNewPassword ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="En az 4 karakter" />
+              <Input type={showNewPassword ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="En az 8 karakter" />
               <button type="button" onClick={() => setShowNewPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
                 {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
