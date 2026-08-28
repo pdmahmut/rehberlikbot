@@ -20,10 +20,10 @@ export interface SessionUser {
   isHomeroom?: boolean;
 }
 
-function resolveTeacherAssignment(teacherName?: string | null) {
+async function resolveTeacherAssignment(teacherName?: string | null) {
   if (!teacherName) return null;
 
-  const { records } = getTeachersData();
+  const { records } = await getTeachersData();
   const teacher = matchTeacherByName(teacherName, records);
   if (!teacher) return null;
 
@@ -34,14 +34,14 @@ function resolveTeacherAssignment(teacherName?: string | null) {
   };
 }
 
-export function buildTeacherSessionUser(user: {
+export async function buildTeacherSessionUser(user: {
   teacherId: string;
   username: string;
   teacherName: string;
   classKey?: string | null;
   classDisplay?: string | null;
-}): SessionUser {
-  const currentAssignment = resolveTeacherAssignment(user.teacherName);
+}): Promise<SessionUser> {
+  const currentAssignment = await resolveTeacherAssignment(user.teacherName);
 
   return {
     role: 'teacher',
@@ -54,7 +54,7 @@ export function buildTeacherSessionUser(user: {
   };
 }
 
-export function reconcileSessionUser(session: SessionUser): SessionUser {
+export async function reconcileSessionUser(session: SessionUser): Promise<SessionUser> {
   if (session.role !== 'teacher') {
     return session;
   }
@@ -69,7 +69,9 @@ export function reconcileSessionUser(session: SessionUser): SessionUser {
 }
 
 function toSessionUser(payload: SessionPayload): SessionUser {
-  const { exp: _exp, ...user } = payload;
+  // exp yalnizca token dogrulamasinda kullanilir, oturum nesnesine tasinmaz.
+  const user = { ...payload } as Partial<SessionPayload>;
+  delete user.exp;
   return user as SessionUser;
 }
 

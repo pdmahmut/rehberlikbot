@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   const storedSession = await getRawSessionFromToken(token);
   if (!storedSession) return NextResponse.json({ error: 'Geçersiz oturum' }, { status: 401 });
 
-  const freshSession = reconcileSessionUser(storedSession);
+  const freshSession = await reconcileSessionUser(storedSession);
   const response = NextResponse.json(freshSession);
 
   if (didSessionChange(storedSession, freshSession)) {

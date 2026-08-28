@@ -105,8 +105,8 @@ function buildJsonStudentOptions(): StudentLookupOption[] {
   return options;
 }
 
-function buildLocalStudentOptions(classKey?: string): StudentLookupOption[] {
-  return listLocalClassStudents(classKey)
+async function buildLocalStudentOptions(classKey?: string): Promise<StudentLookupOption[]> {
+  return (await listLocalClassStudents(classKey))
     .filter((student) => student.student_number !== '__SINIF_DISI__')
     .map((student) => ({
       value: `local_${student.id}`,
@@ -136,7 +136,7 @@ export async function GET(request: NextRequest) {
       }));
 
       let supabaseOgrenciList: StudentLookupOption[] = [];
-      const localOgrenciList = buildLocalStudentOptions(sinifSube);
+      const localOgrenciList = await buildLocalStudentOptions(sinifSube);
 
       if (supabase) {
         try {
@@ -233,7 +233,7 @@ export async function GET(request: NextRequest) {
           results.set(normalizeText(`${student.class_key || ''}|${student.text}`), student);
         });
 
-      buildLocalStudentOptions().forEach((student) => {
+      (await buildLocalStudentOptions()).forEach((student) => {
         if (matchesQuery(student)) {
           results.set(normalizeText(`${student.class_key || ''}|${student.text}`), student);
         }

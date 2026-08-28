@@ -130,27 +130,27 @@ export function listTeachersForUI(records: TeacherRecord[]) {
   return records.map(r => ({ value: r.teacherName, label: r.teacherName }));
 }
 
-export function getTeachersData() {
+export async function getTeachersData() {
   // Prefer cached store for speed
-  let records = loadTeachersFromStore();
+  let records = await loadTeachersFromStore();
   if (!records || records.length === 0) {
     // Try to import from Excel
     records = loadTeachersFromExcel();
     if (records.length > 0) {
-      try { saveTeachersToStore(records); } catch {}
+      try { await saveTeachersToStore(records); } catch {}
     }
   }
   return { records, list: listTeachersForUI(records) };
 }
 
-export function importTeachersFromExcelToStore() {
+export async function importTeachersFromExcelToStore() {
   const records = loadTeachersFromExcel();
-  if (records.length > 0) saveTeachersToStore(records);
+  if (records.length > 0) await saveTeachersToStore(records);
   return records.length;
 }
 
-export function addTeacher(teacherName: string): { success: boolean; teacher?: TeacherRecord; error?: string } {
-  const records = loadTeachersFromStore();
+export async function addTeacher(teacherName: string): Promise<{ success: boolean; teacher?: TeacherRecord; error?: string }> {
+  const records = await loadTeachersFromStore();
   const norm = normalizeTr(teacherName.trim());
   if (records.find(r => r.teacherNameNormalized === norm)) {
     return { success: false, error: 'Bu öğretmen zaten kayıtlı' };
@@ -161,15 +161,15 @@ export function addTeacher(teacherName: string): { success: boolean; teacher?: T
     teacherNameNormalized: norm,
   };
   records.push(newTeacher);
-  saveTeachersToStore(records);
+  await saveTeachersToStore(records);
   return { success: true, teacher: newTeacher };
 }
 
-export function removeTeacher(teacherId: string): boolean {
-  const records = loadTeachersFromStore();
+export async function removeTeacher(teacherId: string): Promise<boolean> {
+  const records = await loadTeachersFromStore();
   const filtered = records.filter(r => r.teacherId !== teacherId);
   if (filtered.length === records.length) return false;
-  saveTeachersToStore(filtered);
+  await saveTeachersToStore(filtered);
   return true;
 }
 
@@ -187,13 +187,13 @@ function findTeacher(records: TeacherRecord[], teacherId?: string, teacherName?:
   return null;
 }
 
-export function assignTeacherToClass(
+export async function assignTeacherToClass(
   teacherId: string | undefined,
   sinifSubeKey: string,
   sinifSubeDisplay: string,
   teacherName?: string
-): { success: boolean; error?: string } {
-  const records = loadTeachersFromStore();
+): Promise<{ success: boolean; error?: string }> {
+  const records = await loadTeachersFromStore();
   // First clear any teacher already assigned to this class.
   for (const r of records) {
     if (r.sinifSubeKey === sinifSubeKey) {
@@ -205,16 +205,16 @@ export function assignTeacherToClass(
   if (!teacher) return { success: false, error: 'Ogretmen bulunamadi' };
   teacher.sinifSubeKey = sinifSubeKey;
   teacher.sinifSubeDisplay = sinifSubeDisplay;
-  saveTeachersToStore(records);
+  await saveTeachersToStore(records);
   return { success: true };
 }
 
-export function removeTeacherClassAssignment(teacherId?: string, teacherName?: string): boolean {
-  const records = loadTeachersFromStore();
+export async function removeTeacherClassAssignment(teacherId?: string, teacherName?: string): Promise<boolean> {
+  const records = await loadTeachersFromStore();
   const teacher = findTeacher(records, teacherId, teacherName);
   if (!teacher) return false;
   delete teacher.sinifSubeKey;
   delete teacher.sinifSubeDisplay;
-  saveTeachersToStore(records);
+  await saveTeachersToStore(records);
   return true;
 }

@@ -1,6 +1,15 @@
-import fs from 'fs';
-import path from 'path';
 import type { StudentStatus } from '@/app/panel/types';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+
+// Sinif ogrenci kayitlari.
+//
+// Onceden var/class-students-local.json dosyasindaydi. Supabase'deki
+// class_students tablosunda `status` kolonu eksik oldugu icin veritabanina
+// yazma sessizce basarisiz oluyor, kayitlar dosyaya dusuyordu; Vercel'de de
+// dosya kalici olmadigi icin eklenen ogrenciler kayboluyordu.
+// Migration 028 kolonlari tamamladi; artik tek kaynak veritabani.
+
+const TABLE = 'class_students';
 
 export interface LocalClassStudentRecord {
   id: string;
@@ -13,131 +22,103 @@ export interface LocalClassStudentRecord {
   updated_at: string | null;
 }
 
-const FILE_PATH = path.join(process.cwd(), 'var', 'class-students-local.json');
-
-function ensureDir() {
-  fs.mkdirSync(path.dirname(FILE_PATH), { recursive: true });
-}
-
-function load(): LocalClassStudentRecord[] {
-  try {
-    if (!fs.existsSync(FILE_PATH)) return [];
-    const raw = fs.readFileSync(FILE_PATH, 'utf-8');
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data)) return [];
-
-    const normalized = data.map((item) => normalizeRecord(item as LocalClassStudentRecord));
-    const changed =
-      normalized.length !== data.length ||
-      normalized.some((item, index) => JSON.stringify(item) !== JSON.stringify(data[index]));
-
-    if (changed) {
-      save(normalized);
-    }
-
-    return normalized;
-  } catch {
-    return [];
-  }
-}
-
-function save(data: LocalClassStudentRecord[]) {
-  ensureDir();
-  fs.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2), 'utf-8');
-}
-
-function makeId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function normalizeName(value: string) {
-  return String(value || '').trim().toLocaleLowerCase('tr-TR');
-}
-
 function formatStudentName(value: string) {
   return String(value || '').trim().toLocaleUpperCase('tr-TR');
 }
 
-function normalizeRecord(record: LocalClassStudentRecord): LocalClassStudentRecord {
-  return {
-    ...record,
-    student_name: formatStudentName(record.student_name),
-    student_number: record.student_number?.trim() || null,
-  };
+export async function listLocalClassStudents(classKey?: string): Promise<LocalClassStudentRecord[]> {
+  let query = getSupabaseAdmin().from(TABLE).select('*').order('student_name');
+  if (classKey) query = query.eq('class_key', classKey);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []) as LocalClassStudentRecord[];
 }
 
-export function listLocalClassStudents(classKey?: string) {
-  const data = load();
-  return classKey ? data.filter((item) => item.class_key === classKey) : data;
+export async function getLocalClassStudent(id: string): Promise<LocalClassStudentRecord | null> {
+  const { data, error } = await getSupabaseAdmin()
+    .from(TABLE)
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as LocalClassStudentRecord) || null;
 }
 
-export function getLocalClassStudent(id: string) {
-  return load().find((item) => item.id === id) || null;
-}
-
-export function createLocalClassStudent(input: {
+export async function createLocalClassStudent(input: {
   class_key: string;
   class_display: string;
   student_name: string;
   student_number?: string | null;
   status?: StudentStatus;
-}) {
-  const data = load();
-  const formattedStudentName = formatStudentName(input.student_name);
-  const normalizedName = normalizeName(formattedStudentName);
-  const existing = data.find(
-    (item) =>
-      item.class_key === input.class_key &&
-      normalizeName(item.student_name) === normalizedName
-  );
+}): Promise<{ record: LocalClassStudentRecord; created: boolean }> {
+  const supabase = getSupabaseAdmin();
+  const studentName = formatStudentName(input.student_name);
 
-  if (existing) {
-    return { record: existing, created: false as const };
+  // Ayni sinifta ayni isim varsa yenisini olusturma
+  const { data: existing, error: existingError } = await supabase
+    .from(TABLE)
+    .select('*')
+    .eq('class_key', input.class_key)
+    .ilike('student_name', studentName)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (existing) return { record: existing as LocalClassStudentRecord, created: false };
+
+  const { data, error } = await supabase
+    .from(TABLE)
+    .insert({
+      class_key: input.class_key,
+      class_display: input.class_display,
+      student_name: studentName,
+      student_number: input.student_number?.trim() || null,
+      status: input.status || 'tumu',
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return { record: data as LocalClassStudentRecord, created: true };
+}
+
+export async function updateLocalClassStudent(
+  id: string,
+  updates: Partial<
+    Pick<
+      LocalClassStudentRecord,
+      'class_key' | 'class_display' | 'student_name' | 'student_number' | 'status'
+    >
+  >
+): Promise<LocalClassStudentRecord | null> {
+  const payload: Record<string, unknown> = { ...updates, updated_at: new Date().toISOString() };
+
+  if (typeof updates.student_name === 'string') {
+    payload.student_name = formatStudentName(updates.student_name);
+  }
+  if (typeof updates.student_number === 'string') {
+    payload.student_number = updates.student_number.trim() || null;
   }
 
-  const record: LocalClassStudentRecord = {
-    id: makeId(),
-    class_key: input.class_key,
-    class_display: input.class_display,
-    student_name: formattedStudentName,
-    student_number: input.student_number?.trim() || null,
-    status: input.status || 'tumu',
-    created_at: new Date().toISOString(),
-    updated_at: null,
-  };
+  const { data, error } = await getSupabaseAdmin()
+    .from(TABLE)
+    .update(payload)
+    .eq('id', id)
+    .select('*')
+    .maybeSingle();
 
-  data.push(record);
-  save(data);
-  return { record, created: true as const };
+  if (error) throw error;
+  return (data as LocalClassStudentRecord) || null;
 }
 
-export function updateLocalClassStudent(
-  id: string,
-  updates: Partial<Pick<LocalClassStudentRecord, 'class_key' | 'class_display' | 'student_name' | 'student_number' | 'status'>>
-) {
-  const data = load();
-  const index = data.findIndex((item) => item.id === id);
-  if (index === -1) return null;
+export async function deleteLocalClassStudent(id: string): Promise<boolean> {
+  const { data, error } = await getSupabaseAdmin()
+    .from(TABLE)
+    .delete()
+    .eq('id', id)
+    .select('id');
 
-  data[index] = {
-    ...data[index],
-    ...updates,
-    ...(typeof updates.student_name === 'string'
-      ? { student_name: formatStudentName(updates.student_name) }
-      : {}),
-    ...(typeof updates.student_number === 'string'
-      ? { student_number: updates.student_number.trim() || null }
-      : {}),
-    updated_at: new Date().toISOString(),
-  };
-  save(data);
-  return data[index];
-}
-
-export function deleteLocalClassStudent(id: string) {
-  const data = load();
-  const filtered = data.filter((item) => item.id !== id);
-  if (filtered.length === data.length) return false;
-  save(filtered);
-  return true;
+  if (error) throw error;
+  return (data || []).length > 0;
 }

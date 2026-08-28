@@ -18,8 +18,8 @@ import {
 
 export const runtime = "nodejs";
 
-function resolveTeacherName(teacherId?: string, teacherName?: string) {
-  const records = loadTeachersFromStore();
+async function resolveTeacherName(teacherId?: string, teacherName?: string) {
+  const records = await loadTeachersFromStore();
 
   if (teacherId) {
     const teacherById = records.find((record) => record.teacherId === teacherId);
@@ -42,11 +42,11 @@ export async function GET(req: NextRequest) {
     const all = searchParams.get("all");
 
     if (all === "1") {
-      const records = loadTeachersFromStore();
+      const records = await loadTeachersFromStore();
       return NextResponse.json({ teachers: records });
     }
 
-    const { records, list } = getTeachersData();
+    const { records, list } = await getTeachersData();
 
     if (q) {
       const matchedTeacher = matchTeacherByName(q, records);
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Öğretmen adı gerekli" }, { status: 400 });
       }
 
-      const result = addTeacher(teacherName);
+      const result = await addTeacher(teacherName);
       if (!result.success || !result.teacher) {
         return NextResponse.json({ error: result.error || "Öğretmen eklenemedi" }, { status: 400 });
       }
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
     if (action === "remove") {
       const { teacherId } = body;
       if (!teacherId) return NextResponse.json({ error: "teacherId gerekli" }, { status: 400 });
-      const ok = removeTeacher(teacherId);
+      const ok = await removeTeacher(teacherId);
       if (!ok) return NextResponse.json({ error: "Öğretmen bulunamadı" }, { status: 404 });
       return NextResponse.json({ success: true });
     }
@@ -109,8 +109,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Eksik parametre" }, { status: 400 });
       }
 
-      const resolvedTeacherName = resolveTeacherName(teacherId, teacherName);
-      const result = assignTeacherToClass(teacherId, sinifSubeKey, sinifSubeDisplay, resolvedTeacherName);
+      const resolvedTeacherName = await resolveTeacherName(teacherId, teacherName);
+      const result = await assignTeacherToClass(teacherId, sinifSubeKey, sinifSubeDisplay, resolvedTeacherName);
       if (!result.success) return NextResponse.json({ error: result.error }, { status: 404 });
 
       if (resolvedTeacherName) {
@@ -126,8 +126,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "teacherId veya teacherName gerekli" }, { status: 400 });
       }
 
-      const resolvedTeacherName = resolveTeacherName(teacherId, teacherName);
-      const ok = removeTeacherClassAssignment(teacherId, resolvedTeacherName);
+      const resolvedTeacherName = await resolveTeacherName(teacherId, teacherName);
+      const ok = await removeTeacherClassAssignment(teacherId, resolvedTeacherName);
       if (!ok) return NextResponse.json({ error: "Öğretmen bulunamadı" }, { status: 404 });
 
       if (resolvedTeacherName) {
@@ -138,12 +138,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "import") {
-      const count = importTeachersFromExcelToStore();
+      const count = await importTeachersFromExcelToStore();
       return NextResponse.json({ imported: count });
     }
 
     if (action === "seed") {
-      const count = seedTeachers();
+      const count = await seedTeachers();
       return NextResponse.json({ seeded: count, message: `${count} öğretmen verisi yazıldı` });
     }
 

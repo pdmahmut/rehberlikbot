@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'classKey parametresi gerekli' }, { status: 400 });
     }
 
-    const localStudents = listLocalClassStudents(classKey);
+    const localStudents = await listLocalClassStudents(classKey);
     let remoteStudents: any[] = [];
 
     if (supabase) {
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
     const trimmedStudentName = studentName.trim();
     const trimmedStudentNumber = studentNumber?.trim() || null;
 
-    const localDuplicate = listLocalClassStudents(classKey).find(
+    const localDuplicate = (await listLocalClassStudents(classKey)).find(
       (student) =>
         student.student_name.trim().toLocaleLowerCase('tr-TR') ===
         trimmedStudentName.toLocaleLowerCase('tr-TR')
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
       console.error('Supabase class_students POST error:', error.message);
     }
 
-    const localResult = createLocalClassStudent({
+    const localResult = await createLocalClassStudent({
       class_key: classKey,
       class_display: classDisplay ?? classKey,
       student_name: trimmedStudentName,
@@ -192,7 +192,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'id parametresi gerekli' }, { status: 400 });
     }
 
-    if (deleteLocalClassStudent(id)) {
+    if (await deleteLocalClassStudent(id)) {
       return NextResponse.json({ success: true });
     }
 
@@ -224,9 +224,9 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'id ve class_key zorunludur' }, { status: 400 });
     }
 
-    const localStudent = getLocalClassStudent(id);
+    const localStudent = await getLocalClassStudent(id);
     if (localStudent) {
-      const updated = updateLocalClassStudent(id, {
+      const updated = await updateLocalClassStudent(id, {
         class_key,
         class_display: class_display || class_key,
       });
@@ -269,9 +269,9 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Geçerli bir durum seçin' }, { status: 400 });
     }
 
-    const localStudent = getLocalClassStudent(id);
+    const localStudent = await getLocalClassStudent(id);
     if (localStudent) {
-      const updated = updateLocalClassStudent(id, { status });
+      const updated = await updateLocalClassStudent(id, { status });
       return NextResponse.json({ student: updated });
     }
 

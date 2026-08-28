@@ -31,11 +31,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Eksik parametre' }, { status: 400 });
   }
 
-  if (hasPendingRequest(classKey, studentName, requestType)) {
+  if (await hasPendingRequest(classKey, studentName, requestType)) {
     return NextResponse.json({ error: 'Bu öğrenci için zaten bekleyen bir talep var' }, { status: 409 });
   }
 
-  const req = createRequest({
+  const req = await createRequest({
     teacher_name: teacherName,
     class_key: classKey,
     class_display: classDisplay || classKey,
@@ -63,7 +63,7 @@ export async function PATCH(request: NextRequest) {
 
   // Execute action for Supabase-backed students when approved
   if (status === 'approved') {
-    const req = getRequest(id);
+    const req = await getRequest(id);
     if (req?.student_value?.startsWith('local_')) {
       const localStudentId = req.student_value.replace('local_', '');
       if (req.request_type === 'delete') {
@@ -87,7 +87,7 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  const updated = updateRequest(id, { status, admin_note: adminNote });
+  const updated = await updateRequest(id, { status, admin_note: adminNote });
   if (!updated) return NextResponse.json({ error: 'Talep bulunamadı' }, { status: 404 });
 
   return NextResponse.json({ request: updated });

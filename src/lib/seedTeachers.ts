@@ -131,8 +131,8 @@ const SEED_TEACHERS: TeacherRecord[] = [
   }
 ];
 
-export function seedTeachers(): number {
-  saveTeachersToStore(SEED_TEACHERS);
+export async function seedTeachers(): Promise<number> {
+  await saveTeachersToStore(SEED_TEACHERS);
   return SEED_TEACHERS.length;
 }
 

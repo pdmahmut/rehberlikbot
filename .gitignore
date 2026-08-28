@@ -60,4 +60,5 @@ Thumbs.db
 .env.local
 
 # Yerel calisma dosyalari (sifre/ogrenci verisi icerir, repoya girmemeli)
-/var/admin-password.json
+/var/
+/var_backup/

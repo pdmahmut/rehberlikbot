@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     await clearLoginAttempts(ip);
     const token = await createSessionToken(
-      buildTeacherSessionUser({
+      await buildTeacherSessionUser({
         teacherId: teacher.id,
         username: teacher.username,
         teacherName: teacher.teacher_name,

@@ -1,7 +1,11 @@
-import fs from 'fs';
-import path from 'path';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
-const FILE_PATH = path.join(process.cwd(), 'var', 'class-student-requests.json');
+// Ogretmenlerin ogrenci silme / sinif degistirme talepleri.
+//
+// Onceden var/class-student-requests.json dosyasindaydi; Vercel'de kalici
+// olmadigi icin talepler kayboluyordu. Artik `class_student_requests` tablosunda.
+
+const TABLE = 'class_student_requests';
 
 export interface ClassStudentRequest {
   id: string;
@@ -19,44 +23,48 @@ export interface ClassStudentRequest {
   updated_at: string | null;
 }
 
-function load(): ClassStudentRequest[] {
-  try {
-    if (!fs.existsSync(FILE_PATH)) return [];
-    const raw = fs.readFileSync(FILE_PATH, 'utf-8');
-    return JSON.parse(raw) || [];
-  } catch {
-    return [];
-  }
-}
-
-function save(data: ClassStudentRequest[]): void {
-  fs.mkdirSync(path.dirname(FILE_PATH), { recursive: true });
-  fs.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2), 'utf-8');
-}
-
 function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function getRequests(filters: { status?: string; classKey?: string } = {}): ClassStudentRequest[] {
-  let data = load();
-  if (filters.status) data = data.filter(r => r.status === filters.status);
-  if (filters.classKey) data = data.filter(r => r.class_key === filters.classKey);
-  return data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+export async function getRequests(
+  filters: { status?: string; classKey?: string } = {}
+): Promise<ClassStudentRequest[]> {
+  let query = getSupabaseAdmin()
+    .from(TABLE)
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (filters.status) query = query.eq('status', filters.status);
+  if (filters.classKey) query = query.eq('class_key', filters.classKey);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []) as ClassStudentRequest[];
 }
 
-export function hasPendingRequest(classKey: string, studentName: string, requestType: string): boolean {
-  return load().some(
-    r => r.class_key === classKey && r.student_name === studentName &&
-         r.request_type === requestType && r.status === 'pending'
-  );
+export async function hasPendingRequest(
+  classKey: string,
+  studentName: string,
+  requestType: string
+): Promise<boolean> {
+  const { data, error } = await getSupabaseAdmin()
+    .from(TABLE)
+    .select('id')
+    .eq('class_key', classKey)
+    .eq('student_name', studentName)
+    .eq('request_type', requestType)
+    .eq('status', 'pending')
+    .limit(1);
+
+  if (error) throw error;
+  return (data || []).length > 0;
 }
 
-export function createRequest(
+export async function createRequest(
   req: Omit<ClassStudentRequest, 'id' | 'created_at' | 'updated_at' | 'status' | 'admin_note'>
-): ClassStudentRequest {
-  const data = load();
-  const newReq: ClassStudentRequest = {
+): Promise<ClassStudentRequest> {
+  const row: ClassStudentRequest = {
     ...req,
     id: makeId(),
     status: 'pending',
@@ -64,23 +72,39 @@ export function createRequest(
     created_at: new Date().toISOString(),
     updated_at: null,
   };
-  data.push(newReq);
-  save(data);
-  return newReq;
+
+  const { data, error } = await getSupabaseAdmin()
+    .from(TABLE)
+    .insert(row)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data as ClassStudentRequest;
 }
 
-export function updateRequest(
+export async function updateRequest(
   id: string,
   updates: { status: 'approved' | 'rejected'; admin_note?: string }
-): ClassStudentRequest | null {
-  const data = load();
-  const idx = data.findIndex(r => r.id === id);
-  if (idx === -1) return null;
-  data[idx] = { ...data[idx], ...updates, updated_at: new Date().toISOString() };
-  save(data);
-  return data[idx];
+): Promise<ClassStudentRequest | null> {
+  const { data, error } = await getSupabaseAdmin()
+    .from(TABLE)
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('*')
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as ClassStudentRequest) || null;
 }
 
-export function getRequest(id: string): ClassStudentRequest | null {
-  return load().find(r => r.id === id) || null;
+export async function getRequest(id: string): Promise<ClassStudentRequest | null> {
+  const { data, error } = await getSupabaseAdmin()
+    .from(TABLE)
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as ClassStudentRequest) || null;
 }

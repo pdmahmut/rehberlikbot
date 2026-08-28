@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`📋 ${students.length} öğrenci için gönderim işlemi başlatılıyor...`);
 
-    const { records } = getTeachersData();
+    const { records } = await getTeachersData();
     if (records.length > 0) {
       for (const s of students) {
         const keyCandidate = resolveKeyFromDisplay(s.sinifSube) || s.sinifSube;

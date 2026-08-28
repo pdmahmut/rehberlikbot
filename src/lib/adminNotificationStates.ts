@@ -1,14 +1,16 @@
-import "server-only";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
-import fs from "fs";
-import path from "path";
-import { supabase } from "@/lib/supabase";
+// Yoneticinin bildirim okundu / popup goruldu / silindi isaretleri.
+//
+// Onceden once Supabase deneniyor, olmazsa var/admin-notification-states.json
+// dosyasina duselecek sekilde yazilmisti. Tablo hicbir zaman olusturulmadigi
+// icin pratikte HEP dosyaya dusuyordu ve Vercel'de her deploy'da siliniyordu:
+// okundu isaretlediginiz bildirimler tekrar okunmamis gorunuyordu.
+//
+// Artik tek kaynak var: `admin_notification_states` tablosu.
 
 const TABLE_NAME = "admin_notification_states";
-const FILE_PATH = path.join(process.cwd(), "var", "admin-notification-states.json");
 const VIEWER_ROLE = "admin";
-
-type StorageMode = "supabase" | "file";
 
 export interface AdminNotificationStateRecord {
   source_type: string;
@@ -26,92 +28,14 @@ export interface AdminNotificationStateRef {
   sourceId: string;
 }
 
-let resolvedStorageMode: Promise<StorageMode> | null = null;
-
-function loadFileStates(): AdminNotificationStateRecord[] {
-  try {
-    if (!fs.existsSync(FILE_PATH)) return [];
-    const raw = fs.readFileSync(FILE_PATH, "utf-8");
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveFileStates(states: AdminNotificationStateRecord[]) {
-  fs.mkdirSync(path.dirname(FILE_PATH), { recursive: true });
-  fs.writeFileSync(FILE_PATH, JSON.stringify(states, null, 2), "utf-8");
-}
-
-async function tryEnsureSupabaseTable() {
-  if (!supabase) return;
-
-  const sql = `
-CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
-  source_type TEXT NOT NULL,
-  source_id TEXT NOT NULL,
-  viewer_role TEXT NOT NULL DEFAULT '${VIEWER_ROLE}',
-  read_at TIMESTAMPTZ NULL,
-  popup_seen_at TIMESTAMPTZ NULL,
-  deleted_at TIMESTAMPTZ NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (source_type, source_id, viewer_role)
-);
-
-ALTER TABLE ${TABLE_NAME} ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Allow all for anon ${TABLE_NAME}" ON ${TABLE_NAME};
-CREATE POLICY "Allow all for anon ${TABLE_NAME}" ON ${TABLE_NAME}
-  FOR ALL TO anon USING (true) WITH CHECK (true);
-`;
-
-  try {
-    await supabase.rpc("exec_sql", { sql_query: sql });
-  } catch {
-    // If the RPC does not exist or permissions are limited, we will fall back later.
-  }
-}
-
-async function resolveStorageMode(): Promise<StorageMode> {
-  if (!resolvedStorageMode) {
-    resolvedStorageMode = (async () => {
-      if (!supabase) return "file";
-
-      await tryEnsureSupabaseTable();
-
-      try {
-        const { error } = await supabase
-          .from(TABLE_NAME)
-          .select("source_type")
-          .limit(1);
-
-        return error ? "file" : "supabase";
-      } catch {
-        return "file";
-      }
-    })();
-  }
-
-  return resolvedStorageMode;
-}
-
 export async function listAdminNotificationStates(): Promise<AdminNotificationStateRecord[]> {
-  const storageMode = await resolveStorageMode();
+  const { data, error } = await getSupabaseAdmin()
+    .from(TABLE_NAME)
+    .select("*")
+    .eq("viewer_role", VIEWER_ROLE);
 
-  if (storageMode === "supabase" && supabase) {
-    const { data, error } = await supabase
-      .from(TABLE_NAME)
-      .select("*")
-      .eq("viewer_role", VIEWER_ROLE);
-
-    if (!error && data) {
-      return data as AdminNotificationStateRecord[];
-    }
-  }
-
-  return loadFileStates().filter((item) => item.viewer_role === VIEWER_ROLE);
+  if (error) throw error;
+  return (data || []) as AdminNotificationStateRecord[];
 }
 
 export async function upsertAdminNotificationStates(
@@ -135,8 +59,7 @@ export async function upsertAdminNotificationStates(
   const now = new Date().toISOString();
 
   const mergedRows = updates.map((update) => {
-    const key = `${update.sourceType}:${update.sourceId}:${VIEWER_ROLE}`;
-    const existing = currentMap.get(key);
+    const existing = currentMap.get(`${update.sourceType}:${update.sourceId}:${VIEWER_ROLE}`);
 
     return {
       source_type: update.sourceType,
@@ -144,57 +67,32 @@ export async function upsertAdminNotificationStates(
       viewer_role: VIEWER_ROLE,
       read_at: update.readAt ?? existing?.read_at ?? null,
       popup_seen_at: update.popupSeenAt ?? existing?.popup_seen_at ?? null,
-      deleted_at:
-        Object.prototype.hasOwnProperty.call(update, "deletedAt")
-          ? update.deletedAt ?? null
-          : existing?.deleted_at ?? null,
+      deleted_at: Object.prototype.hasOwnProperty.call(update, "deletedAt")
+        ? update.deletedAt ?? null
+        : existing?.deleted_at ?? null,
       created_at: existing?.created_at ?? now,
       updated_at: now,
     } satisfies AdminNotificationStateRecord;
   });
 
-  const storageMode = await resolveStorageMode();
+  const { error } = await getSupabaseAdmin()
+    .from(TABLE_NAME)
+    .upsert(mergedRows, { onConflict: "source_type,source_id,viewer_role" });
 
-  if (storageMode === "supabase" && supabase) {
-    const { error } = await supabase
-      .from(TABLE_NAME)
-      .upsert(mergedRows, { onConflict: "source_type,source_id,viewer_role" });
-
-    if (!error) return;
-  }
-
-  const fileStates = loadFileStates();
-  const fileMap = new Map(
-    fileStates.map((item) => [
-      `${item.source_type}:${item.source_id}:${item.viewer_role}`,
-      item,
-    ])
-  );
-
-  mergedRows.forEach((row) => {
-    fileMap.set(`${row.source_type}:${row.source_id}:${row.viewer_role}`, row);
-  });
-
-  saveFileStates(Array.from(fileMap.values()));
+  if (error) throw error;
 }
 
 export async function markAdminNotificationsRead(refs: AdminNotificationStateRef[]) {
   const timestamp = new Date().toISOString();
-  await upsertAdminNotificationStates(
-    refs.map((ref) => ({ ...ref, readAt: timestamp }))
-  );
+  await upsertAdminNotificationStates(refs.map((ref) => ({ ...ref, readAt: timestamp })));
 }
 
 export async function markAdminNotificationsPopupSeen(refs: AdminNotificationStateRef[]) {
   const timestamp = new Date().toISOString();
-  await upsertAdminNotificationStates(
-    refs.map((ref) => ({ ...ref, popupSeenAt: timestamp }))
-  );
+  await upsertAdminNotificationStates(refs.map((ref) => ({ ...ref, popupSeenAt: timestamp })));
 }
 
 export async function deleteAdminNotifications(refs: AdminNotificationStateRef[]) {
   const timestamp = new Date().toISOString();
-  await upsertAdminNotificationStates(
-    refs.map((ref) => ({ ...ref, deletedAt: timestamp }))
-  );
+  await upsertAdminNotificationStates(refs.map((ref) => ({ ...ref, deletedAt: timestamp })));
 }

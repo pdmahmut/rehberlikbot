@@ -1,75 +1,103 @@
-import fs from 'fs';
-import path from 'path';
 import { TeacherRecord } from './teachers';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
-function getStorePath() {
-  const dir = path.join(process.cwd(), 'var');
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return path.join(dir, 'teachers.json');
+// Ogretmen kadrosu deposu.
+//
+// Onceden var/teachers.json dosyasinda tutuluyordu; Vercel'in gecici dosya
+// sisteminde kalici olmadigi icin canlida yapilan degisiklikler her deploy'da
+// kayboluyordu. Artik Supabase `teachers` tablosunda.
+
+const TABLE = 'teachers';
+const COLUMNS = 'teacher_id, teacher_name, teacher_name_normalized, sinif_sube_key, sinif_sube_display';
+
+interface TeacherRow {
+  teacher_id: string;
+  teacher_name: string;
+  teacher_name_normalized: string;
+  sinif_sube_key: string | null;
+  sinif_sube_display: string | null;
 }
 
-function normalizeTeacherName(value: string): string {
-  return value
-    .toLocaleLowerCase('tr-TR')
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/ı/g, 'i')
-    .replace(/İ/g, 'i')
-    .replace(/[^a-z0-9çğıöşü\s]/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function normalizeTeacherRecord(record: unknown, index: number): TeacherRecord | null {
-  if (!record || typeof record !== 'object') return null;
-
-  const raw = record as Record<string, unknown>;
-  const teacherName = String(raw.teacherName || '').trim();
-  if (!teacherName) return null;
-
-  const teacherId = String(raw.teacherId || raw.id || `legacy-t${index + 1}`).trim();
-  const teacherNameNormalized =
-    String(raw.teacherNameNormalized || '').trim() || normalizeTeacherName(teacherName);
-  const sinifSubeKey = raw.sinifSubeKey ? String(raw.sinifSubeKey).trim() : undefined;
-  const sinifSubeDisplay = raw.sinifSubeDisplay ? String(raw.sinifSubeDisplay).trim() : undefined;
-
+function toRecord(row: TeacherRow): TeacherRecord {
   return {
-    teacherId,
-    teacherName,
-    teacherNameNormalized,
-    ...(sinifSubeKey ? { sinifSubeKey } : {}),
-    ...(sinifSubeDisplay ? { sinifSubeDisplay } : {}),
+    teacherId: row.teacher_id,
+    teacherName: row.teacher_name,
+    teacherNameNormalized: row.teacher_name_normalized,
+    ...(row.sinif_sube_key ? { sinifSubeKey: row.sinif_sube_key } : {}),
+    ...(row.sinif_sube_display ? { sinifSubeDisplay: row.sinif_sube_display } : {}),
   };
 }
 
-export function loadTeachersFromStore(): TeacherRecord[] {
+function toRow(record: TeacherRecord): TeacherRow {
+  return {
+    teacher_id: record.teacherId,
+    teacher_name: record.teacherName,
+    teacher_name_normalized: record.teacherNameNormalized,
+    sinif_sube_key: record.sinifSubeKey || null,
+    sinif_sube_display: record.sinifSubeDisplay || null,
+  };
+}
+
+export async function loadTeachersFromStore(): Promise<TeacherRecord[]> {
   try {
-    const file = getStorePath();
-    if (!fs.existsSync(file)) return [];
-    const raw = fs.readFileSync(file, 'utf8');
-    const data = JSON.parse(raw);
-    if (Array.isArray(data)) {
-      const normalized = data
-        .map((record, index) => normalizeTeacherRecord(record, index))
-        .filter(Boolean) as TeacherRecord[];
+    const { data, error } = await getSupabaseAdmin()
+      .from(TABLE)
+      .select(COLUMNS)
+      .order('teacher_name');
 
-      const changed =
-        normalized.length !== data.length ||
-        normalized.some((record, index) => JSON.stringify(record) !== JSON.stringify(data[index]));
-
-      if (changed) {
-        saveTeachersToStore(normalized);
-      }
-
-      return normalized;
-    }
-    return [];
+    if (error) throw error;
+    return (data as TeacherRow[] | null || []).map(toRecord);
   } catch {
     return [];
   }
 }
 
-export function saveTeachersToStore(records: TeacherRecord[]): void {
-  const file = getStorePath();
-  fs.writeFileSync(file, JSON.stringify(records, null, 2), 'utf8');
+/**
+ * Kadronun tamamini verilen listeyle degistirir.
+ *
+ * Cagiran kod "yukle -> dizide degistir -> kaydet" seklinde calistigi icin
+ * tam degistirme (replace-all) semantigi korunuyor: listede olmayan
+ * ogretmenler silinir, olanlar eklenir/guncellenir.
+ */
+export async function saveTeachersToStore(records: TeacherRecord[]): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  const rows = records.map(toRow);
+  const keepIds = rows.map((r) => r.teacher_id);
+
+  // 1) Listede olmayanlari sil
+  if (keepIds.length > 0) {
+    const inList = `(${keepIds.map((id) => `"${id.replace(/"/g, '')}"`).join(',')})`;
+    const { error } = await supabase.from(TABLE).delete().not('teacher_id', 'in', inList);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from(TABLE).delete().neq('teacher_id', '__none__');
+    if (error) throw error;
+  }
+
+  if (rows.length === 0) return;
+
+  // 2) Sinif atamalarini once temizle.
+  //    Sinif bir ogretmenden digerine devredilirken tek upsert icinde
+  //    gecici cakisma olusmasin diye iki asamada yaziliyor.
+  const { error: clearError } = await supabase
+    .from(TABLE)
+    .upsert(
+      rows.map((r) => ({ ...r, sinif_sube_key: null, sinif_sube_display: null })),
+      { onConflict: 'teacher_id' }
+    );
+  if (clearError) throw clearError;
+
+  // 3) Atamasi olanlari yaz
+  const assigned = rows.filter((r) => r.sinif_sube_key);
+  for (const row of assigned) {
+    const { error } = await supabase
+      .from(TABLE)
+      .update({
+        sinif_sube_key: row.sinif_sube_key,
+        sinif_sube_display: row.sinif_sube_display,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('teacher_id', row.teacher_id);
+    if (error) throw error;
+  }
 }
