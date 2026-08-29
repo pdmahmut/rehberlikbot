@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/apiAuth';
-import { writeToGoogleSheets } from '@/lib/sheets';
 import { YonlendirilenOgrenci, ReferralRecord } from '@/types';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getTeachersData, validateTeacherClass, resolveKeyFromDisplay } from '@/lib/teachers';
@@ -8,9 +7,16 @@ import { groupGuidanceStudents, normalizeGuidanceStudent } from '@/lib/guidance'
 
 export const runtime = 'nodejs';
 
+// Öğretmenin gönderdiği yönlendirmeleri kaydeder.
+//
+// Önceden kayıtlar hem Supabase'e hem de bir Google E-Tablosuna yazılıyordu.
+// Tablo kullanılmadığı için Sheets entegrasyonu kaldırıldı; tek kaynak
+// referrals tablosu.
+
 export async function POST(request: NextRequest) {
   const guard = await requireSession();
   if (!guard.ok) return guard.response;
+
   const supabase = getSupabaseAdmin();
 
   try {
@@ -20,8 +26,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Öğrenci listesi boş' }, { status: 400 });
     }
 
-    console.log(`📋 ${students.length} öğrenci için gönderim işlemi başlatılıyor...`);
-
+    // Öğretmen adı doğrulaması. Sınıf kısıtı YOK: öğretmen kendi sınıfı
+    // dışındaki derslerine girdiği sınıflardan da yönlendirme yapabilir.
     const { records } = await getTeachersData();
     if (records.length > 0) {
       for (const s of students) {
@@ -37,70 +43,39 @@ export async function POST(request: NextRequest) {
       students.map((student) => normalizeGuidanceStudent(student))
     );
 
-    let sheetsSuccess = false;
-    let supabaseSuccess = false;
-    const errors: string[] = [];
+    const payload: ReferralRecord[] = await Promise.all(
+      normalizedStudents.map(async (student) => ({
+        teacher_name: student.ogretmenAdi,
+        class_key: student.sinifSubeKey || (await resolveKeyFromDisplay(student.sinifSube)) || '',
+        class_display: student.sinifSube,
+        student_name: student.ogrenciAdi,
+        reason: student.yonlendirmeNedeni,
+        note: student.not ?? null,
+        source: 'web',
+      }))
+    );
 
-    // Google Sheets entegrasyonu
-    try {
-      sheetsSuccess = await writeToGoogleSheets(normalizedStudents);
-      if (!sheetsSuccess) errors.push('Google Sheets kaydı başarısız');
-    } catch (error) {
-      console.error('Google Sheets entegrasyonu hatası:', error);
-      errors.push('Google Sheets entegrasyonu hatası');
-    }
+    const { error } = await supabase.from('referrals').insert(payload);
 
-    // Supabase referrals tablosuna kayıt
-    try {
-      if (supabase) {
-        const payload: ReferralRecord[] = await Promise.all(normalizedStudents.map(async (student) => ({
-          teacher_name: student.ogretmenAdi,
-          class_key: student.sinifSubeKey || (await resolveKeyFromDisplay(student.sinifSube)) || '',
-          class_display: student.sinifSube,
-          student_name: student.ogrenciAdi,
-          reason: student.yonlendirmeNedeni,
-          note: student.not ?? null,
-          source: 'web',
-        })));
-
-        const { error: supabaseError } = await supabase.from('referrals').insert(payload);
-        if (supabaseError) {
-          console.error('Supabase referrals insert hatası:', supabaseError.message);
-          errors.push('Supabase istatistik kaydı yapılamadı');
-        } else {
-          supabaseSuccess = true;
-        }
-      }
-    } catch (error) {
-      console.error('Supabase referrals entegrasyonu hatası:', error);
-      errors.push('Supabase istatistik kaydı hatası');
+    if (error) {
+      console.error('Yönlendirme kaydı hatası:', error.message);
+      return NextResponse.json(
+        { success: false, message: 'Yönlendirme kaydedilemedi' },
+        { status: 500 }
+      );
     }
 
     const sentCount = normalizedStudents.length;
-
-    if (sheetsSuccess || supabaseSuccess) {
-      return NextResponse.json({
-        success: true,
-        message: sheetsSuccess
-          ? `${sentCount} öğrenci başarıyla Google Sheets'e gönderildi`
-          : `${sentCount} öğrenci sisteme kaydedildi, ancak Google Sheets senkronizasyonu yapılamadı`,
-        sentCount,
-        sheets: sheetsSuccess,
-        supabase: supabaseSuccess,
-        warnings: sheetsSuccess ? [] : ['Google Sheets senkronizasyonu yapılamadı']
-      });
-    } else {
-      return NextResponse.json({
-        success: false,
-        message: `Gönderim başarısız: ${errors.join(', ')}`,
-        sheets: sheetsSuccess,
-        supabase: supabaseSuccess,
-        errors
-      }, { status: 500 });
-    }
-
-  } catch (error) {
-    console.error('Send Guidance API Error:', error);
-    return NextResponse.json({ error: 'Gönderim sırasında hata oluştu' }, { status: 500 });
+    return NextResponse.json({
+      success: true,
+      message: `${sentCount} öğrenci rehberliğe iletildi`,
+      sentCount,
+    });
+  } catch (err) {
+    console.error('Yönlendirme gönderimi hatası:', err);
+    return NextResponse.json(
+      { success: false, message: 'Gönderim sırasında hata oluştu' },
+      { status: 500 }
+    );
   }
 }

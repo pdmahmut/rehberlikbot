@@ -253,9 +253,6 @@ export default function RPDYonlendirme({ teacherName, classKey, classDisplay }: 
       if (response.ok && result.success) {
         toast.success("Öğrenci yönlendirildi.");
 
-        if (!result.sheets) {
-          console.warn("Google Sheets senkronizasyonu yapılamadı:", result.message);
-        }
 
         notifyGuidanceReferralsChanged({
           action: "create",
