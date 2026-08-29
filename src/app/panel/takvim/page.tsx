@@ -1160,6 +1160,13 @@ export default function TakvimPage() {
           await fetch(`/api/gozlem-havuzu?id=${createdDirectSourceId}`, { method: "DELETE" }).catch(() => null);
           createdDirectSourceId = "";
         }
+        // Cakisma bir sistem hatasi degil, bir kural. Kullaniciya sade bir
+        // uyari gosterilir; konsola hata yazilmaz, hata ekrani acilmaz.
+        if (response.status === 409 || result?.conflict) {
+          toast.warning(result.error || 'Bu tarih ve saat uygun değil');
+          return;
+        }
+
         console.error('Appointment API error:', result);
         throw new Error(result.error || result.details || 'Bilinmeyen veritabanı hatası');
       }

@@ -333,8 +333,8 @@ export async function POST(request: NextRequest) {
     if (busyAppointments.length > 0) {
       const appointment = busyAppointments[0];
       return NextResponse.json(
-        { error: `Bu tarih ve ders saatinde zaten bir randevu var: ${appointment.participant_name} (${appointment.participant_type})` },
-        { status: 400 }
+        { error: `Bu tarih ve ders saatinde zaten bir randevu var: ${appointment.participant_name} (${appointment.participant_type})`, conflict: true },
+        { status: 409 }
       );
     }
 
@@ -357,8 +357,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: `${participant_name} için bu tarihte zaten bir randevu var (${sameStudentSameDay[0].start_time}. ders). Aynı öğrenciye aynı gün ikinci randevu verilemez.`,
+          conflict: true,
         },
-        { status: 400 }
+        { status: 409 }
       );
     }
 
@@ -368,8 +369,8 @@ export async function POST(request: NextRequest) {
     if (busyGuidancePlans.length > 0) {
       const plan = busyGuidancePlans[0];
       return NextResponse.json(
-        { error: `Bu tarih ve ders saatinde zaten bir sınıf rehberliği planı var: ${plan.class_display}` },
-        { status: 400 }
+        { error: `Bu tarih ve ders saatinde zaten bir sınıf rehberliği planı var: ${plan.class_display}`, conflict: true },
+        { status: 409 }
       );
     }
 
@@ -377,8 +378,8 @@ export async function POST(request: NextRequest) {
     if (busyActivities.length > 0) {
       const activity = busyActivities[0];
       return NextResponse.json(
-        { error: `Bu tarih ve ders saatinde zaten bir sınıf etkinliği var: ${activity.class_display}` },
-        { status: 400 }
+        { error: `Bu tarih ve ders saatinde zaten bir sınıf etkinliği var: ${activity.class_display}`, conflict: true },
+        { status: 409 }
       );
     }
 
