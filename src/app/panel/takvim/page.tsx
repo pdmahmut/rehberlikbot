@@ -1268,9 +1268,46 @@ export default function TakvimPage() {
         })
       });
       if (!res.ok) throw new Error("Randevu güncellenemedi");
+
+      // "Aktif Takip" seçildiğinde öğrencinin kendisi takibe alınır.
+      // Takip işareti görüşmede değil öğrencide durur; böylece öğrenciye yeni
+      // bir başvuru geldiğinde takip bozulmaz.
+      if (choice === "active_follow") {
+        try {
+          const followRes = await fetch("/api/follow-up", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              studentName: attendanceChoiceAppointment.participant_name,
+              classKey: attendanceChoiceAppointment.participant_class,
+              reason: attendanceChoiceAppointment.purpose || null,
+            }),
+          });
+          if (!followRes.ok) {
+            const data = await followRes.json().catch(() => null);
+            toast.warning(data?.error || "Öğrenci takip listesine eklenemedi");
+          }
+        } catch {
+          toast.warning("Öğrenci takip listesine eklenemedi");
+        }
+      }
+
       toast.success(messages[choice]);
       await loadData();
       closeAttendanceChoiceModal();
+
+      // Takibe alınan öğrenci için sıradaki görüşmeyi hemen planlama teklifi
+      if (choice === "active_follow") {
+        const params = new URLSearchParams();
+        params.set("studentName", attendanceChoiceAppointment.participant_name);
+        if (attendanceChoiceAppointment.participant_class) {
+          params.set("classDisplay", attendanceChoiceAppointment.participant_class);
+        }
+        params.set("purpose", "Takip görüşmesi");
+        if (confirm(`${attendanceChoiceAppointment.participant_name} takibe alındı.\n\nSıradaki görüşmeyi şimdi planlamak ister misiniz?`)) {
+          window.location.href = `/panel/takvim?${params.toString()}`;
+        }
+      }
     } catch (error) {
       toast.error('Randevu durumu değiştirilirken hata oluştu');
     } finally {

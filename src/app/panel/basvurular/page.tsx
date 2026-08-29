@@ -338,6 +338,29 @@ export default function BasvurularPage() {
         if (!res.ok) throw new Error("Randevu güncellenemedi");
       }
 
+      // "Aktif Takip" seçildiğinde öğrencinin kendisi takibe alınır.
+      // İşaret görüşmede değil öğrencide durduğu için, aynı öğrenciye yeni bir
+      // başvuru geldiğinde takip bozulmaz.
+      if (choice === "active_follow") {
+        try {
+          const followRes = await fetch("/api/follow-up", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              studentName: outcomeModalRecord.student_name,
+              classKey: outcomeModalRecord.class_key,
+              reason: outcomeModalRecord.note || outcomeModalRecord.source,
+            }),
+          });
+          if (!followRes.ok) {
+            const data = await followRes.json().catch(() => null);
+            toast.warning(data?.error || "Öğrenci takip listesine eklenemedi");
+          }
+        } catch {
+          toast.warning("Öğrenci takip listesine eklenemedi");
+        }
+      }
+
       toast.success(messages[choice]);
       setOutcomeModalRecord(null);
       await loadData();

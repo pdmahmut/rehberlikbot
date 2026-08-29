@@ -21,6 +21,7 @@ import {
   History,
   Upload,
   RotateCcw,
+  Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -36,6 +37,7 @@ const menuCategories = [
     items: [
       { href: '/panel/basvurular', label: 'Başvurular', icon: MessageSquare },
       { href: '/panel/ogrenci-listesi', label: 'Öğrenciler', icon: GraduationCap },
+      { href: '/panel/takibimdekiler', label: 'Takibimdekiler', icon: Eye },
       { href: '/panel/ogrenci-yukle', label: 'Öğrenci Yükle', icon: Upload },
     ],
   },
