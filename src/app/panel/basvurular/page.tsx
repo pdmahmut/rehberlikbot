@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { db as supabase } from "@/lib/dbClient";
-import { MessageSquare, Search, Loader2, Filter, User, Trash2, Plus, X, ChevronDown } from "lucide-react";
+import { MessageSquare, Search, Loader2, Filter, User, Trash2, Plus, X, ChevronDown, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { AppointmentOutcomeModal, type AppointmentOutcomeChoice } from "@/components/AppointmentOutcomeModal";
 import {
@@ -182,6 +182,9 @@ export default function BasvurularPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [statusOverrides, setStatusOverrides] = useState<ApplicationStatusOverrides>({});
+  // Takipteki ogrencilerin sadelestirilmis adlari. Basvuru listesinde isim
+  // yaninda rozet gostermek icin kullanilir.
+  const [followedNames, setFollowedNames] = useState<Set<string>>(new Set());
 
   // Modal state — tıklanan başvuru kaydı
   const [outcomeModalRecord, setOutcomeModalRecord] = useState<ApplicationRecord | null>(null);
@@ -499,6 +502,16 @@ export default function BasvurularPage() {
 
   const ENTRY_CHANNELS_FOR_CREATION = ENTRY_CHANNELS.filter((c) => c.source !== "Öğretmen Yönlendirmeleri");
 
+  // Basvurulardaki isimler bazen "24 AZIZ CELENK" gibi numarali geliyor;
+  // sinif listesindeki kayitla eslesebilmek icin numara ve buyuk/kucuk harf
+  // farki temizlenir.
+  const followUpKey = (value: string) =>
+    String(value || "")
+      .replace(/^\d+\s+/, "")
+      .trim()
+      .toLocaleUpperCase("tr-TR")
+      .replace(/\s+/g, " ");
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -519,6 +532,24 @@ export default function BasvurularPage() {
       if (!attendedResult.error) setAttendedAppointments(attendedResult.data || []);
       if (!scheduledResult.error) setScheduledAppointments(scheduledResult.data || []);
       if (!individualRequestResult.error) setIndividualRequests(individualRequestResult.data || []);
+
+      // Takip listesi ayri bir uc noktadan gelir. Basarisiz olursa liste yine
+      // acilir, sadece rozetler gorunmez.
+      try {
+        const followRes = await fetch("/api/follow-up");
+        if (followRes.ok) {
+          const followData = await followRes.json();
+          setFollowedNames(
+            new Set(
+              (followData.students || []).map((x: { studentName: string }) =>
+                followUpKey(x.studentName)
+              )
+            )
+          );
+        }
+      } catch {
+        // rozetler olmadan devam
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Veri yüklenirken hata oluştu";
       setLoadError(message);
@@ -1125,7 +1156,20 @@ export default function BasvurularPage() {
                       <td className="px-4 py-3 text-slate-600 text-sm">
                         {new Date(item.event_timestamp).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </td>
-                      <td className="px-4 py-3 font-medium text-slate-800 group-hover/row:text-purple-700 transition-colors">{item.student_name}</td>
+                      <td className="px-4 py-3 font-medium text-slate-800 group-hover/row:text-purple-700 transition-colors">
+                        <span className="inline-flex items-center gap-1.5">
+                          {item.student_name}
+                          {followedNames.has(followUpKey(item.student_name)) && (
+                            <span
+                              title="Bu öğrenci takip listenizde"
+                              className="inline-flex items-center gap-1 rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-medium text-cyan-700"
+                            >
+                              <Eye className="h-3 w-3" />
+                              takipte
+                            </span>
+                          )}
+                        </span>
+                      </td>
                       <td className="px-4 py-3">
                         <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">{formatClassDisplay(item.class_display)}</span>
                       </td>
