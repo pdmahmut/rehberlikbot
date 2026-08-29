@@ -19,6 +19,8 @@ import {
   Users,
   X,
   History,
+  Upload,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -34,6 +36,7 @@ const menuCategories = [
     items: [
       { href: '/panel/basvurular', label: 'Başvurular', icon: MessageSquare },
       { href: '/panel/ogrenci-listesi', label: 'Öğrenciler', icon: GraduationCap },
+      { href: '/panel/ogrenci-yukle', label: 'Öğrenci Yükle', icon: Upload },
     ],
   },
   {
@@ -47,6 +50,7 @@ const menuCategories = [
     items: [
       { href: '/panel/bildirimler', label: 'Bildirimler', icon: Bell },
       { href: '/panel/ogretmen-yonetimi', label: 'Öğretmen Yönetimi', icon: Users },
+      { href: '/panel/yeni-donem', label: 'Yeni Döneme Başla', icon: RotateCcw },
     ],
   },
 ];

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { getSinifSubeList } from '@/lib/data';
+import { getClassOptions } from '@/lib/classes';
 import { loadTeachersFromStore, saveTeachersToStore } from './teachersStore';
 
 // Type definitions
@@ -42,18 +42,26 @@ export function normalizeTr(value: string): string {
     .trim();
 }
 
-export function resolveKeyFromDisplay(display: string): string | null {
-  // Prefer exact match with data.json's Sinif_Sube
-  try {
-    const list = getSinifSubeList();
-    const byText = list.find(s => s.text.trim().toLocaleLowerCase('tr-TR') === display.trim().toLocaleLowerCase('tr-TR'));
-    if (byText) return byText.value;
-  } catch {}
-  // Fallback regex (rarely used, may not match data.json ids)
+function classKeyFromDisplayPattern(display: string): string | null {
   const match = display.match(/(\d+)\.?\s*Sınıf\s*\/\s*([A-ZÇĞİÖŞÜ])/i);
-  if (match) {
-    return `${match[1]}#${match[2].toUpperCase()}`;
+  return match ? `${match[1]}${match[2].toLocaleUpperCase('tr-TR')}` : null;
+}
+
+/** "6. Sınıf / A Şubesi" görünen adından sınıf anahtarını bulur. */
+export async function resolveKeyFromDisplay(display: string): Promise<string | null> {
+  const target = display.trim().toLocaleLowerCase('tr-TR');
+
+  try {
+    const list = await getClassOptions();
+    const byText = list.find(c => c.text.trim().toLocaleLowerCase('tr-TR') === target);
+    if (byText) return byText.value;
+  } catch {
+    // sınıf listesi okunamazsa aşağıdaki desen çözümlemesine düşülür
   }
+
+  const match = display.match(/(\d+)\.?\s*Sınıf\s*\/\s*([A-ZÇĞİÖŞÜ])/i);
+  if (match) return `${match[1]}${match[2].toLocaleUpperCase('tr-TR')}`;
+
   return null;
 }
 
@@ -87,7 +95,8 @@ export function loadTeachersFromExcel(): TeacherRecord[] {
       const sinifSubeDisplay = sinifDisplay || String(r['Sınıf Adı'] || r['Sınıf - Şube'] || '').trim();
       if (!teacherName || !sinifSubeDisplay) return null;
       const teacherId = `t${idx + 1}`;
-      const key = resolveKeyFromDisplay(sinifSubeDisplay) || sinifSubeDisplay;
+      // Excel yukleyici senkron; veritabani sorgusu yapmadan desenden cozumluyoruz.
+      const key = classKeyFromDisplayPattern(sinifSubeDisplay) || sinifSubeDisplay;
       return {
         teacherId,
         teacherName,

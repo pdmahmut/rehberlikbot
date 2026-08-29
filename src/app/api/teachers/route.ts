@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin, requireSession } from '@/lib/apiAuth';
 import {
   getTeachersData,
   matchTeacherByName,
@@ -12,6 +13,7 @@ import { loadTeachersFromStore } from "@/lib/teachersStore";
 import { seedTeachers } from "@/lib/seedTeachers";
 import {
   clearTeacherAccountClassAssignment,
+  deleteTeacherAccountByName,
   ensureTeacherAccount,
   syncTeacherAccountClassAssignment,
 } from "@/lib/teacherAccounts";
@@ -36,6 +38,9 @@ async function resolveTeacherName(teacherId?: string, teacherName?: string) {
 }
 
 export async function GET(req: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+
   try {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get("q");
@@ -62,6 +67,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+
   try {
     const body = await req.json();
     const { action } = body;
@@ -98,9 +106,26 @@ export async function POST(req: NextRequest) {
     if (action === "remove") {
       const { teacherId } = body;
       if (!teacherId) return NextResponse.json({ error: "teacherId gerekli" }, { status: 400 });
+
+      // Once adi bul: kadrodan silindikten sonra hesabi eslestiremeyiz.
+      const { records } = await getTeachersData();
+      const teacher = records.find((r) => r.teacherId === teacherId);
+
       const ok = await removeTeacher(teacherId);
       if (!ok) return NextResponse.json({ error: "Öğretmen bulunamadı" }, { status: 404 });
-      return NextResponse.json({ success: true });
+
+      // Giris hesabi da silinmeli; aksi halde kadrodan cikan ogretmen
+      // eski sifresiyle panele girmeye devam eder.
+      let accountDeleted = false;
+      if (teacher?.teacherName) {
+        try {
+          accountDeleted = await deleteTeacherAccountByName(teacher.teacherName);
+        } catch (err) {
+          console.error("Teacher account delete failed:", err);
+        }
+      }
+
+      return NextResponse.json({ success: true, accountDeleted });
     }
 
     if (action === "assign_class") {

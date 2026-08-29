@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     const { records } = await getTeachersData();
     if (records.length > 0) {
       for (const s of students) {
-        const keyCandidate = resolveKeyFromDisplay(s.sinifSube) || s.sinifSube;
+        const keyCandidate = (await resolveKeyFromDisplay(s.sinifSube)) || s.sinifSube;
         const res = validateTeacherClass(s.ogretmenAdi, keyCandidate, records);
         if (!res.valid) {
           return NextResponse.json({ success: false, message: res.message }, { status: 400 });
@@ -53,15 +53,15 @@ export async function POST(request: NextRequest) {
     // Supabase referrals tablosuna kayıt
     try {
       if (supabase) {
-        const payload: ReferralRecord[] = normalizedStudents.map((student) => ({
+        const payload: ReferralRecord[] = await Promise.all(normalizedStudents.map(async (student) => ({
           teacher_name: student.ogretmenAdi,
-          class_key: student.sinifSubeKey || resolveKeyFromDisplay(student.sinifSube) || '',
+          class_key: student.sinifSubeKey || (await resolveKeyFromDisplay(student.sinifSube)) || '',
           class_display: student.sinifSube,
           student_name: student.ogrenciAdi,
           reason: student.yonlendirmeNedeni,
           note: student.not ?? null,
           source: 'web',
-        }));
+        })));
 
         const { error: supabaseError } = await supabase.from('referrals').insert(payload);
         if (supabaseError) {

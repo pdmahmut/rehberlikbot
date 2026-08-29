@@ -206,3 +206,23 @@ export async function clearTeacherAccountClassAssignment(
 
   if (error) throw error;
 }
+
+/**
+ * Ogretmenin giris hesabini siler.
+ *
+ * Onceden kadrodan silinen ogretmenin hesabi duruyordu; kurumdan ayrilmis
+ * ogretmen eski sifresiyle panele girmeye devam edebiliyordu.
+ */
+export async function deleteTeacherAccountByName(teacherName: string): Promise<boolean> {
+  const trimmed = String(teacherName || "").trim();
+  if (!trimmed) return false;
+
+  const supabase = getTeacherAccountsSupabase();
+  const account = await findTeacherAccountByName(supabase, trimmed);
+  if (!account) return false;
+
+  const { error } = await supabase.from("teacher_users").delete().eq("id", account.id);
+  if (error) throw error;
+
+  return true;
+}

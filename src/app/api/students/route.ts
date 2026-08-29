@@ -1,8 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/apiAuth';
-import { getOgrenciListBySinif, getSinifSubeList, loadStudentData } from '@/lib/data';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { listLocalClassStudents } from '@/lib/classStudentsStore';
+import { listClasses } from '@/lib/classes';
+import { getRequests } from '@/lib/classStudentRequests';
+
+// Ogrenci arama / listeleme.
+//
+// Onceden ogrenciler uc kaynaktan birlestiriliyordu: data.json dosyasi,
+// class_students tablosu ve "yerel" dosya deposu. Yerel depo da artik ayni
+// tabloyu okudugu icin kayitlar iki kez geliyordu (yalnizca tekrar temizleme
+// sayesinde fark edilmiyordu). data.json ise ogrenci TC kimlik numaralarini
+// repoda tutuyordu ve guncellemek yeniden deploy gerektiriyordu.
+//
+// Artik tek kaynak var: class_students tablosu. Sinif adlari da classes
+// tablosundan geliyor.
+
+export const runtime = 'nodejs';
+
+// Sinif listesinden cikarilan ogrenciler bu isaretle saklanir
+const EXCLUDED_MARKER = '__SINIF_DISI__';
 
 type StudentLookupOption = {
   value: string;
@@ -11,19 +27,14 @@ type StudentLookupOption = {
   class_display?: string;
 };
 
-type ParsedStudentText = {
-  number: string | null;
-  name: string;
-};
-
 function normalizeText(value: string) {
   return value
     .toLowerCase()
     .replace(/İ/g, 'i')
     .replace(/I/g, 'i')
-    .replace(/\u0131/g, 'i')
+    .replace(/ı/g, 'i')
     .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/ğ/g, 'g')
     .replace(/ş/g, 's')
     .replace(/ü/g, 'u')
@@ -32,251 +43,149 @@ function normalizeText(value: string) {
     .trim();
 }
 
-function getClassDisplayByKey(classKey: string) {
-  const classList = getSinifSubeList();
-  return (
-    classList.find((item) => item.value === classKey || item.value.startsWith(`${classKey}#`))
-      ?.text || classKey
-  );
-}
-
-function parseStudentText(text: string): ParsedStudentText {
+function parseStudentText(text: string): { number: string | null; name: string } {
   const trimmed = String(text || '').trim();
   const match = trimmed.match(/^(\d+)\s+(.+)$/);
-  if (!match) {
-    return { number: null, name: trimmed };
-  }
-
-  return {
-    number: match[1],
-    name: match[2].trim(),
-  };
+  if (!match) return { number: null, name: trimmed };
+  return { number: match[1], name: match[2].trim() };
 }
 
 function compareStudentOptions(a: StudentLookupOption, b: StudentLookupOption) {
-  const parsedA = parseStudentText(a.text);
-  const parsedB = parseStudentText(b.text);
+  const pa = parseStudentText(a.text);
+  const pb = parseStudentText(b.text);
 
-  const nameCompare = parsedA.name.localeCompare(parsedB.name, 'tr', {
-    sensitivity: 'base',
-  });
+  const nameCompare = pa.name.localeCompare(pb.name, 'tr', { sensitivity: 'base' });
   if (nameCompare !== 0) return nameCompare;
 
-  if (parsedA.number && parsedB.number) {
-    return parsedA.number.localeCompare(parsedB.number, 'tr', { numeric: true });
+  if (pa.number && pb.number) {
+    return pa.number.localeCompare(pb.number, 'tr', { numeric: true });
   }
-
-  if (parsedA.number && !parsedB.number) return -1;
-  if (!parsedA.number && parsedB.number) return 1;
+  if (pa.number && !pb.number) return -1;
+  if (!pa.number && pb.number) return 1;
 
   return a.text.localeCompare(b.text, 'tr', { sensitivity: 'base' });
 }
 
-function buildJsonStudentOptions(): StudentLookupOption[] {
-  const data = loadStudentData();
-  const classList = getSinifSubeList();
-  const options: StudentLookupOption[] = [];
-
-  classList.forEach((classItem) => {
-    const classText = classItem.text;
-    const classKey = classItem.value;
-    const dataKey = `Ogrenci_${classText.replace(' / ', ' _ ')}`;
-    const studentList = data[dataKey];
-
-    if (!Array.isArray(studentList)) return;
-
-    studentList.forEach((student: any) => {
-      const ad = student.Ad || student.ad || '';
-      const soyad = student.Soyad || student.soyad || '';
-      const okulNo = student['Okul No'] || student.okulNo || '';
-      const fullName = `${ad} ${soyad}`.trim();
-
-      if (!fullName) return;
-
-      options.push({
-        value: fullName,
-        text: okulNo ? `${okulNo} ${fullName}` : fullName,
-        class_key: classKey,
-        class_display: classText,
-      });
-    });
-  });
-
-  return options;
+/** Sinif anahtari -> gorunen ad esleme tablosu. */
+async function buildClassDisplayMap(): Promise<Map<string, string>> {
+  const classes = await listClasses();
+  return new Map(classes.map((c) => [c.class_key, c.class_display]));
 }
 
-async function buildLocalStudentOptions(classKey?: string): Promise<StudentLookupOption[]> {
-  return (await listLocalClassStudents(classKey))
-    .filter((student) => student.student_number !== '__SINIF_DISI__')
-    .map((student) => ({
-      value: `local_${student.id}`,
-      text: student.student_number
-        ? `${student.student_number} ${student.student_name}`
-        : student.student_name,
-      class_key: student.class_key,
-      class_display: student.class_display || getClassDisplayByKey(student.class_key),
-    }));
+interface StudentRow {
+  id: string;
+  class_key: string;
+  class_display: string | null;
+  student_number: string | null;
+  student_name: string;
 }
+
+function toOption(row: StudentRow, displays: Map<string, string>): StudentLookupOption {
+  return {
+    value: `supabase_${row.id}`,
+    text: row.student_number ? `${row.student_number} ${row.student_name}` : row.student_name,
+    class_key: row.class_key,
+    class_display: row.class_display || displays.get(row.class_key) || row.class_key,
+  };
+}
+
+const stripNumber = (text: string) => normalizeText(String(text || '').replace(/^\d+\s+/, ''));
 
 export async function GET(request: NextRequest) {
   const guard = await requireSession();
   if (!guard.ok) return guard.response;
-  const supabase = getSupabaseAdmin();
 
   try {
+    const supabase = getSupabaseAdmin();
     const { searchParams } = new URL(request.url);
     const sinifSube = searchParams.get('sinifSube');
     const query = normalizeText(searchParams.get('query') || searchParams.get('q') || '');
 
+    // --- Sinifa gore listeleme ---
     if (sinifSube) {
-      const jsonOgrenciList = getOgrenciListBySinif(sinifSube).map((item) => ({
-        ...item,
-        class_key: sinifSube,
-        class_display: getClassDisplayByKey(sinifSube),
-      }));
+      const displays = await buildClassDisplayMap();
 
-      let supabaseOgrenciList: StudentLookupOption[] = [];
-      const localOgrenciList = await buildLocalStudentOptions(sinifSube);
+      const { data, error } = await supabase
+        .from('class_students')
+        .select('id, class_key, class_display, student_number, student_name')
+        .eq('class_key', sinifSube)
+        .neq('student_number', EXCLUDED_MARKER)
+        .order('student_name', { ascending: true });
 
-      if (supabase) {
-        try {
-          const { data, error } = await supabase
-            .from('class_students')
-            .select('id, class_key, class_display, student_number, student_name')
-            .eq('class_key', sinifSube)
-            .order('student_name', { ascending: true });
+      if (error) throw error;
 
-          if (!error && data) {
-            supabaseOgrenciList = data
-              .filter((student) => student.student_number !== '__SINIF_DISI__')
-              .map((student) => ({
-                value: `supabase_${student.id}`,
-                text: student.student_number
-                  ? `${student.student_number} ${student.student_name}`
-                  : student.student_name,
-                class_key: student.class_key,
-                class_display: student.class_display || getClassDisplayByKey(student.class_key),
-              }));
-          }
-        } catch (err) {
-          console.error('Supabase students fetch error:', err);
-        }
-      }
+      let list = (data as StudentRow[] | null || []).map((row) => toOption(row, displays));
 
-      const deduped = new Map<string, StudentLookupOption>();
-      [...jsonOgrenciList, ...supabaseOgrenciList, ...localOgrenciList].forEach((student) => {
-        const key = normalizeText(`${student.class_key || ''}|${student.text}`);
-        if (!deduped.has(key)) deduped.set(key, student);
-      });
-
-      let combinedList = Array.from(deduped.values());
+      // Onaylanmis silme / sinif degistirme talepleri listeye yansitilir
       try {
-        const { getRequests } = require('@/lib/classStudentRequests');
-        const allApproved = await getRequests({ status: 'approved' });
+        const approved = await getRequests({ status: 'approved' });
 
-        const removedFromThis = allApproved
+        const removed = approved
           .filter(
-            (r: any) =>
+            (r) =>
               r.class_key === sinifSube &&
               (r.request_type === 'delete' || r.request_type === 'class_change')
           )
-          .map((r: any) => normalizeText((r.student_name || '').replace(/^\d+\s+/, '')));
+          .map((r) => stripNumber(r.student_name || ''));
 
-        if (removedFromThis.length > 0) {
-          combinedList = combinedList.filter((student) => {
-            const name = normalizeText(student.text.replace(/^\d+\s+/, ''));
-            return !removedFromThis.some((removed: string) => removed === name);
-          });
+        if (removed.length > 0) {
+          list = list.filter((student) => !removed.includes(stripNumber(student.text)));
         }
 
-        const movedToThis = allApproved.filter(
-          (r: any) =>
+        const movedHere = approved.filter(
+          (r) =>
             r.request_type === 'class_change' &&
             r.new_class_key === sinifSube &&
             r.class_key !== sinifSube
         );
 
-        movedToThis.forEach((request: any) => {
-          const name = normalizeText((request.student_name || '').replace(/^\d+\s+/, ''));
-          const alreadyExists = combinedList.some(
-            (student) => normalizeText(student.text.replace(/^\d+\s+/, '')) === name
-          );
+        for (const req of movedHere) {
+          const name = stripNumber(req.student_name || '');
+          if (list.some((s) => stripNumber(s.text) === name)) continue;
 
-          if (!alreadyExists) {
-            combinedList.push({
-              value: request.student_value || request.student_name,
-              text: request.student_name,
-              class_key: sinifSube,
-              class_display: getClassDisplayByKey(sinifSube),
-            });
-          }
-        });
+          list.push({
+            value: req.student_value || req.student_name,
+            text: req.student_name,
+            class_key: sinifSube,
+            class_display: displays.get(sinifSube) || sinifSube,
+          });
+        }
       } catch {
-        // ignore local request overlays
+        // talep katmani okunamazsa ogrenci listesi yine de donsun
       }
 
-      return NextResponse.json(combinedList.sort(compareStudentOptions));
+      return NextResponse.json(list.sort(compareStudentOptions));
     }
 
+    // --- Genel arama ---
     if (query) {
-      const results = new Map<string, StudentLookupOption>();
-      const matchesQuery = (candidate: StudentLookupOption) => {
-        const haystack = normalizeText(
-          `${candidate.text} ${candidate.value} ${candidate.class_display || ''} ${candidate.class_key || ''}`
-        );
-        return haystack.includes(query);
-      };
+      const displays = await buildClassDisplayMap();
 
-      buildJsonStudentOptions()
-        .filter(matchesQuery)
-        .forEach((student) => {
-          results.set(normalizeText(`${student.class_key || ''}|${student.text}`), student);
+      const { data, error } = await supabase
+        .from('class_students')
+        .select('id, class_key, class_display, student_number, student_name')
+        .neq('student_number', EXCLUDED_MARKER)
+        .order('student_name', { ascending: true });
+
+      if (error) throw error;
+
+      const results = (data as StudentRow[] | null || [])
+        .map((row) => toOption(row, displays))
+        .filter((option) => {
+          const haystack = normalizeText(
+            `${option.text} ${option.value} ${option.class_display || ''} ${option.class_key || ''}`
+          );
+          return haystack.includes(query);
         });
 
-      (await buildLocalStudentOptions()).forEach((student) => {
-        if (matchesQuery(student)) {
-          results.set(normalizeText(`${student.class_key || ''}|${student.text}`), student);
-        }
-      });
-
-      if (supabase) {
-        try {
-          const { data, error } = await supabase
-            .from('class_students')
-            .select('id, class_key, class_display, student_number, student_name')
-            .order('student_name', { ascending: true });
-
-          if (!error && data) {
-            data
-              .filter((student) => student.student_number !== '__SINIF_DISI__')
-              .forEach((student) => {
-                const option: StudentLookupOption = {
-                  value: `supabase_${student.id}`,
-                  text: student.student_number
-                    ? `${student.student_number} ${student.student_name}`
-                    : student.student_name,
-                  class_key: student.class_key,
-                  class_display: student.class_display || getClassDisplayByKey(student.class_key),
-                };
-
-                if (matchesQuery(option)) {
-                  results.set(normalizeText(`${option.class_key || ''}|${option.text}`), option);
-                }
-              });
-          }
-        } catch (err) {
-          console.error('Supabase global students fetch error:', err);
-        }
-      }
-
-      return NextResponse.json(Array.from(results.values()).sort(compareStudentOptions));
+      return NextResponse.json(results.sort(compareStudentOptions));
     }
 
     return NextResponse.json([]);
   } catch (error) {
     console.error('Students API Error:', error);
     return NextResponse.json(
-      { error: 'Öğrenci listesi yüklenirken hata oluştu' },
+      { error: 'Öğrenci listesi alınamadı' },
       { status: 500 }
     );
   }

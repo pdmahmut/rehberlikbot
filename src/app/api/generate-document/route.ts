@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireSession } from '@/lib/apiAuth';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
@@ -139,6 +140,9 @@ function htmlToPlainText(html: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+
   try {
     if (!GEMINI_API_KEY) {
       return NextResponse.json(

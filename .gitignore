@@ -62,3 +62,7 @@ Thumbs.db
 # Yerel calisma dosyalari (sifre/ogrenci verisi icerir, repoya girmemeli)
 /var/
 /var_backup/
+
+# Ogrenci TC kimlik numarasi iceren veri dosyalari - public/ altina ASLA konmamali
+/public/mebbis-data.json
+/data.json
