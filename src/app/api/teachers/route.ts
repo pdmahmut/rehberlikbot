@@ -3,14 +3,12 @@ import { requireAdmin, requireSession } from '@/lib/apiAuth';
 import {
   getTeachersData,
   matchTeacherByName,
-  importTeachersFromExcelToStore,
   addTeacher,
   removeTeacher,
   assignTeacherToClass,
   removeTeacherClassAssignment,
 } from "@/lib/teachers";
 import { loadTeachersFromStore } from "@/lib/teachersStore";
-import { seedTeachers } from "@/lib/seedTeachers";
 import {
   clearTeacherAccountClassAssignment,
   deleteTeacherAccountByName,
@@ -160,16 +158,6 @@ export async function POST(req: NextRequest) {
       }
 
       return NextResponse.json({ success: true });
-    }
-
-    if (action === "import") {
-      const count = await importTeachersFromExcelToStore();
-      return NextResponse.json({ imported: count });
-    }
-
-    if (action === "seed") {
-      const count = await seedTeachers();
-      return NextResponse.json({ seeded: count, message: `${count} öğretmen verisi yazıldı` });
     }
 
     return NextResponse.json({ error: "Geçersiz action" }, { status: 400 });

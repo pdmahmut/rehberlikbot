@@ -55,9 +55,6 @@
     "tailwindcss-animate": "^1.0.7",
     "zod": "^4.3.6"
   },
-  "optionalDependencies": {
-    "xlsx": "^0.18.5"
-  },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",

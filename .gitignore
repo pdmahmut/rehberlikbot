@@ -66,3 +66,8 @@ Thumbs.db
 # Ogrenci TC kimlik numarasi iceren veri dosyalari - public/ altina ASLA konmamali
 /public/mebbis-data.json
 /data.json
+
+# MEBBIS araci kaldirildi (yerel yedek: var_backup/mebbis/)
+MEBBIS_RPD.exe
+SeleniumBasic-*.zip
+/introduction/
