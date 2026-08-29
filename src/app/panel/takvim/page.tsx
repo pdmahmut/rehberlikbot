@@ -444,14 +444,23 @@ export default function TakvimPage() {
           normalizeSourceTypeOrNull(sType) ||
           getSourceTypeFromPanelLabel(sType);
 
+        // sourceId, kaydın kendi kimliğidir (bkz. başvurular sayfasındaki
+        // handleOpenAppointmentForm). Eskiden tireden bölünüp ikinci parça
+        // alınıyordu; UUID'ler zaten tire içerdiği için kimlik parçalanıyor
+        // ve randevu yanlış değere bağlanıyordu.
+        // Yalnızca bilinen bir tür önekiyle başlıyorsa öneki ayıklıyoruz.
+        const stripSourcePrefix = (raw: string, type: string) =>
+          type && raw.startsWith(`${type}-`) ? raw.slice(type.length + 1) : raw;
+
         if (normalizedSourceType === "self_application") {
-          indId = sId.includes('-') ? sId.split('-')[1] : sId;
+          indId = stripSourcePrefix(sId, normalizedSourceType);
         } else if (normalizedSourceType) {
           appType = normalizedSourceType;
-          appId = sId.includes('-') ? sId.split('-')[1] : sId;
+          appId = stripSourcePrefix(sId, normalizedSourceType);
         }
 
-        // Find matching class from the loaded classes list
+
+        // Yüklü sınıf listesinden eşleşen sınıfı bul
         let matchedClassKey = "";
         if (classes.length > 0) {
           const normalizedClassDisplay = normalizeClassValue(cDisplay);
@@ -464,7 +473,6 @@ export default function TakvimPage() {
             matchedClassKey = foundClass.value;
           }
         }
-
         const parsedNote = parseApplicationNote(preparationNoteParam);
         const initialPurpose = purposeParam || parsedNote.purpose;
         const initialPreparationNote = parsedNote.preparationNote;
