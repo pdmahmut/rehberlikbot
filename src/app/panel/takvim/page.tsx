@@ -750,10 +750,14 @@ export default function TakvimPage() {
       }
     };
 
-    if (formData.appointment_date) {
+    // Yalnizca tarih degistiginde degil, randevu penceresi her acildiginda da
+    // yenile. Aksi halde ayni gun icin ikinci randevu acildiginda dolu saat
+    // listesi bayat kaliyor ve ayni ders saatine birden fazla randevu
+    // verilebiliyordu.
+    if (formData.appointment_date && showAppointmentModal) {
       fetchBusySlots(formData.appointment_date);
     }
-  }, [formData.appointment_date]);
+  }, [formData.appointment_date, showAppointmentModal]);
 
   const resetAppointmentForm = (baseDate = getLocalDateString(currentDate)) => {
     setFormData({

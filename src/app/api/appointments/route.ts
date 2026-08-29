@@ -282,11 +282,15 @@ export async function POST(request: NextRequest) {
     }
 
     const [appointmentConflicts, guidanceConflictsResult, activityConflictsResult] = await Promise.all([
+      // Cakisma kontrolu: iptal edilmis ve henuz olusturulmamis kayitlar
+      // disindaki TUM randevular o ders saatini dolu sayar. Onceden yalnizca
+      // "planned" olanlara bakiliyordu; gorusme tamamlanip "attended" olunca
+      // saat bosalmis gibi gorunuyor ve ayni saate ikinci randevu
+      // verilebiliyordu. Istemci tarafi zaten bu kurali uyguluyor.
       supabase
         .from("appointments")
-        .select("id, participant_name, participant_type, start_time")
-        .eq("appointment_date", appointment_date)
-        .eq("status", "planned"),
+        .select("id, participant_name, participant_type, start_time, status")
+        .eq("appointment_date", appointment_date),
       supabase
         .from("guidance_plans")
         .select("id, class_display, lesson_period")
@@ -320,7 +324,12 @@ export async function POST(request: NextRequest) {
       console.warn("Sınıf etkinliği çakışma kontrolü atlandı:", activityConflictsResult.error);
     }
 
-    const busyAppointments = (appointmentConflicts.data || []).filter((item) => normalizeLessonSlot(item.start_time) === normalizedSlot);
+    const OCCUPYING_STATUSES_EXCLUDED = ["cancelled", "pending"];
+    const busyAppointments = (appointmentConflicts.data || []).filter(
+      (item) =>
+        normalizeLessonSlot(item.start_time) === normalizedSlot &&
+        !OCCUPYING_STATUSES_EXCLUDED.includes(String(item.status || ""))
+    );
     if (busyAppointments.length > 0) {
       const appointment = busyAppointments[0];
       return NextResponse.json(
@@ -463,7 +472,7 @@ export async function PUT(request: NextRequest) {
       const [appointmentConflicts, guidanceConflictsResult, activityConflictsResult] = await Promise.all([
         supabase
           .from("appointments")
-          .select("id, participant_name, participant_type, start_time")
+          .select("id, participant_name, participant_type, start_time, status")
           .eq("appointment_date", nextAppointmentDate)
           .neq("status", "cancelled")
           .neq("id", id),
@@ -500,7 +509,12 @@ export async function PUT(request: NextRequest) {
         console.warn("Güncelleme sınıf etkinliği çakışma kontrolü atlandı:", activityConflictsResult.error);
       }
 
-      const busyAppointments = (appointmentConflicts.data || []).filter((item) => normalizeLessonSlot(item.start_time) === normalizedSlot);
+      const OCCUPYING_STATUSES_EXCLUDED = ["cancelled", "pending"];
+      const busyAppointments = (appointmentConflicts.data || []).filter(
+        (item) =>
+          normalizeLessonSlot(item.start_time) === normalizedSlot &&
+          !OCCUPYING_STATUSES_EXCLUDED.includes(String(item.status || ""))
+      );
       if (busyAppointments.length > 0) {
         const appointment = busyAppointments[0];
         return NextResponse.json(
