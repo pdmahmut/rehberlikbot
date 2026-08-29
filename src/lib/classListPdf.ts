@@ -1,3 +1,5 @@
+import { installPdfNodePolyfills } from "@/lib/pdfNodePolyfill";
+
 // MEB sinif listesi PDF'ini okur.
 //
 // Neden koordinat bazli:
@@ -194,6 +196,9 @@ async function parsePage(page: PdfPage): Promise<ParsedClass | null> {
 
 /** PDF icerigini sinif + ogrenci listesine cevirir. */
 export async function parseClassListPdf(data: Uint8Array): Promise<ParsedClass[]> {
+  // pdfjs Node'da DOMMatrix gibi tarayici siniflarini arar; import'tan ONCE saglanmali.
+  installPdfNodePolyfills();
+
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const doc = (await pdfjs.getDocument({
     data,
