@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { YONLENDIRME_NEDENLERI } from "@/types";
 
 // Takipteki öğrenciler.
 //
@@ -91,6 +92,27 @@ export default function TakibimdekilerPage() {
       load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Çıkarılamadı");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  // Takip sebebini gunceller. Hazir kategoriler kullanildigi icin ileride
+  // "kac ogrenci hangi sebeple takipte" gibi bir dokum alinabilir.
+  const handleReasonChange = async (student: FollowUpStudent, reason: string) => {
+    setBusyId(student.id);
+    try {
+      const res = await fetch("/api/follow-up", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId: student.id, reason }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Guncellenemedi");
+      setStudents((prev) => prev.map((x) => (x.id === student.id ? { ...x, reason: reason || null } : x)));
+      toast.success("Takip sebebi guncellendi");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Guncellenemedi");
     } finally {
       setBusyId(null);
     }
@@ -211,11 +233,29 @@ export default function TakibimdekilerPage() {
                           )}
                         </div>
 
-                        {s.reason && (
-                          <p className="mt-1 text-sm text-slate-600">
-                            <span className="text-slate-400">Sebep:</span> {s.reason}
-                          </p>
-                        )}
+                        {/* Takip sebebi — öğretmenlerin yönlendirmede kullandığı
+                            kategorilerle aynı liste, böylece aynı dil konuşulur */}
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                          <span className="text-xs text-slate-400">Sebep:</span>
+                          <select
+                            value={s.reason || ""}
+                            disabled={busy}
+                            onChange={(e) => handleReasonChange(s, e.target.value)}
+                            className={
+                              "rounded-lg border px-2 py-1 text-xs disabled:opacity-50 " +
+                              (s.reason
+                                ? "border-slate-200 bg-white text-slate-700"
+                                : "border-amber-300 bg-amber-50 text-amber-700")
+                            }
+                          >
+                            <option value="">— sebep seçilmedi —</option>
+                            {YONLENDIRME_NEDENLERI.map((neden) => (
+                              <option key={neden} value={neden}>
+                                {neden}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                         {s.note && <p className="mt-0.5 text-sm text-slate-500">{s.note}</p>}
 
                         <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">

@@ -338,6 +338,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Ayni ogrenciye ayni gun icinde ikinci randevu verilemez. Ders saati bos
+    // olsa bile ogrenci o gun zaten programa alinmis demektir.
+    const normalizeParticipant = (value: unknown) =>
+      String(value || "")
+        .replace(/^\d+\s+/, "")
+        .trim()
+        .toLocaleUpperCase("tr-TR")
+        .replace(/\s+/g, " ");
+
+    const sameStudentSameDay = (appointmentConflicts.data || []).filter(
+      (item) =>
+        !OCCUPYING_STATUSES_EXCLUDED.includes(String(item.status || "")) &&
+        normalizeParticipant(item.participant_name) === normalizeParticipant(participant_name)
+    );
+
+    if (sameStudentSameDay.length > 0) {
+      return NextResponse.json(
+        {
+          error: `${participant_name} için bu tarihte zaten bir randevu var (${sameStudentSameDay[0].start_time}. ders). Aynı öğrenciye aynı gün ikinci randevu verilemez.`,
+        },
+        { status: 400 }
+      );
+    }
+
+
+
     const busyGuidancePlans = guidanceConflicts.filter((item) => normalizeLessonSlot(item.lesson_period) === normalizedSlot);
     if (busyGuidancePlans.length > 0) {
       const plan = busyGuidancePlans[0];

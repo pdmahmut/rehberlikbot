@@ -252,3 +252,34 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export async function PATCH(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+
+  try {
+    const body = await request.json();
+    const studentId = String(body.studentId || "").trim();
+
+    if (!studentId) {
+      return NextResponse.json({ error: "studentId gerekli" }, { status: 400 });
+    }
+
+    const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (body.reason !== undefined) payload.follow_up_reason = String(body.reason || "").trim() || null;
+    if (body.note !== undefined) payload.follow_up_note = String(body.note || "").trim() || null;
+
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase
+      .from("class_students")
+      .update(payload)
+      .eq("id", studentId);
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Guncellenemedi";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
