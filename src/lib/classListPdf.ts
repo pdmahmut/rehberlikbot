@@ -200,6 +200,11 @@ export async function parseClassListPdf(data: Uint8Array): Promise<ParsedClass[]
   installPdfNodePolyfills();
 
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+
+  // Worker modulu acikca import ediliyor: pdfjs onu calisma aninda dinamik
+  // olarak yuklemeye calisiyor, ancak dinamik yol paketleyici tarafindan
+  // gorulmedigi icin dosya Vercel dagitimina dahil edilmiyordu.
+  await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
   const doc = (await pdfjs.getDocument({
     data,
     useSystemFonts: true,
