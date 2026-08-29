@@ -661,6 +661,29 @@ export async function DELETE(request: NextRequest) {
       });
     }
 
+    // Silinen randevunun kaynak basvurusu tekrar "Bekliyor" durumuna
+    // donmelidir; aksi halde ortada randevu yokken basvuru "Randevu verildi"
+    // olarak kalir ve islem bekleyenler listesinden dusup gozden kacar.
+    const affectedSources: Array<{ type: string | null; id: string | null }> = [];
+
+    if (appointmentIds.length > 0) {
+      const { data: sourceRows } = await supabase
+        .from("appointments")
+        .select("source_application_type, source_application_id, source_individual_request_id")
+        .in("id", appointmentIds);
+
+      for (const row of sourceRows || []) {
+        const srcId = row.source_application_id || row.source_individual_request_id;
+        if (srcId) {
+          affectedSources.push({
+            type: row.source_application_type || (row.source_individual_request_id ? "self_application" : null),
+            id: srcId,
+          });
+        }
+      }
+    }
+
+
     if (appointmentIds.length > 0) {
       const { error: taskDeleteError } = await supabase
         .from("appointment_tasks")
@@ -694,6 +717,12 @@ export async function DELETE(request: NextRequest) {
         { error: "Randevu silinemedi", details: error.message },
         { status: 500 }
       );
+    }
+
+    // Kaynak basvurulari tekrar bekleyen duruma cek
+    for (const src of affectedSources) {
+      if (!src.id) continue;
+      await syncApplicationStatus(src.type, src.id, "pending", null);
     }
 
     return NextResponse.json({ message: "Randevu silindi" });

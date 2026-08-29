@@ -173,6 +173,7 @@ export default function BasvurularPage() {
   const [savingOutcome, setSavingOutcome] = useState(false);
   const [attendedAppointments, setAttendedAppointments] = useState<any[]>([]);
   const [scheduledAppointments, setScheduledAppointments] = useState<any[]>([]);
+  const [cancellingRecordId, setCancellingRecordId] = useState<string | null>(null);
   const [referrals, setReferrals] = useState<ReferralRecord[]>([]);
   const [observations, setObservations] = useState<ObservationPoolRecord[]>([]);
   const [incidents, setIncidents] = useState<StudentIncidentRecord[]>([]);
@@ -192,6 +193,46 @@ export default function BasvurularPage() {
   };
 
   // Başvuruyu Randevuya Dönüştür - Takvim sayfasına yönlendir
+  // "Randevu verildi" durumundaki bir başvurunun randevusunu iptal eder.
+  // Randevu kaydı silinmez (durumu "cancelled" olur), ders saati serbest kalır
+  // ve başvuru tekrar "Bekliyor" durumuna döner.
+  const handleCancelScheduledAppointment = async (record: ApplicationRecord) => {
+    const appointment = findAppointmentForApplicationRecord(scheduledAppointments, record);
+
+    if (!appointment) {
+      toast.error("Bu başvuruya bağlı randevu bulunamadı");
+      return;
+    }
+
+    if (!confirm(`${record.student_name} için verilen randevu iptal edilecek ve başvuru tekrar "Bekliyor" durumuna dönecek. Onaylıyor musunuz?`)) {
+      return;
+    }
+
+    setCancellingRecordId(record.id);
+    try {
+      const res = await fetch("/api/appointments", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: appointment.id,
+          status: "cancelled",
+          source_application_status: "pending",
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Randevu iptal edilemedi");
+      }
+
+      toast.success("Randevu iptal edildi, başvuru tekrar bekliyor");
+      await loadData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Randevu iptal edilemedi");
+    } finally {
+      setCancellingRecordId(null);
+    }
+  };
   const handleOpenAppointmentForm = (record: ApplicationRecord) => {
     const parsedNote = extractTopicFromNote(record.note);
     const params = new URLSearchParams();
@@ -1087,6 +1128,17 @@ export default function BasvurularPage() {
                             title="Görüşme sonucunu belirle"
                           >
                             Görüşüldü ▾
+                          </button>
+                        ) : item.status === "Randevu verildi" ? (
+                          // Randevusu iptal edilebilsin diye tıklanabilir
+                          <button
+                            type="button"
+                            onClick={() => handleCancelScheduledAppointment(item)}
+                            disabled={cancellingRecordId === item.id}
+                            className="inline-flex h-auto items-center rounded-full bg-gradient-to-r from-blue-500 to-cyan-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition-all hover:from-rose-500 hover:to-red-600 hover:shadow-md disabled:opacity-60"
+                            title="Randevuyu iptal et — başvuru tekrar Bekliyor durumuna döner"
+                          >
+                            {cancellingRecordId === item.id ? "İptal ediliyor..." : "Randevu verildi ▾"}
                           </button>
                         ) : (
                           <Badge className={item.status === "Görüşüldü" ? "bg-gradient-to-r from-emerald-500 to-green-600 text-white border-0 shadow-sm" : "bg-gradient-to-r from-blue-500 to-cyan-600 text-white border-0 shadow-sm"}>

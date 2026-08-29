@@ -1423,10 +1423,47 @@ export default function TakvimPage() {
     catch { toast.error('Hata oluştu'); }
   };
 
+  // Randevuyu iptal eder: kayıt silinmez, durumu "cancelled" olur ve ders
+  // saati serbest kalır. Kaynak başvuru (yönlendirme, veli talebi vb.)
+  // tekrar "Bekliyor" durumuna döner ki işlem bekleyenler listesinde görünsün.
+  const handleCancelAppointment = async (appointment: Appointment) => {
+    if (!confirm(`${appointment.participant_name} randevusu iptal edilecek. Başvuru tekrar "Bekliyor" durumuna dönecek. Onaylıyor musunuz?`)) return;
+    try {
+      const res = await fetch('/api/appointments', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: appointment.id,
+          status: 'cancelled',
+          source_application_status: 'pending',
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'İptal edilemedi');
+      }
+      toast.success('Randevu iptal edildi, başvuru tekrar bekliyor');
+      await loadData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'İptal edilemedi');
+    }
+  };
+
+  // Kaydı tamamen siler. API üzerinden gider çünkü sunucu, silinen randevunun
+  // kaynak başvurusunu da "Bekliyor" durumuna geri çeker.
   const handleDeleteAppointment = async (appointmentId: string) => {
-    if (!confirm('Silmek istediğinize emin misiniz?')) return;
-    try { await supabase.from('appointments').delete().eq('id', appointmentId); toast.success('Silindi'); await loadData(); }
-    catch { toast.error('Hata oluştu'); }
+    if (!confirm('Randevu kalıcı olarak silinecek. Yanlış oluşturulmuş kayıtlar için kullanın; normal durumda "İptal" tercih edin. Devam edilsin mi?')) return;
+    try {
+      const res = await fetch(`/api/appointments?id=${encodeURIComponent(appointmentId)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Silinemedi');
+      }
+      toast.success('Randevu silindi');
+      await loadData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Hata oluştu');
+    }
   };
 
   const handleDeleteGuidancePlan = async (planId: string) => {
@@ -1809,13 +1846,24 @@ export default function TakvimPage() {
                                       <Trash2 className="h-4 w-4" />
                                     </button>
                                     ) : (
+                                    <>
+                                    {e.type === 'appointment' && e.status !== 'cancelled' && (
+                                      <button
+                                        onClick={() => handleCancelAppointment(e.data as Appointment)}
+                                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-transparent text-slate-300 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-600 transition-colors"
+                                        title="Randevuyu iptal et (başvuru tekrar Bekliyor olur)"
+                                      >
+                                        <XCircle className="h-4 w-4" />
+                                      </button>
+                                    )}
                                     <button
                                       onClick={() => e.type === 'appointment' ? handleDeleteAppointment(e.id) : handleDeleteGuidancePlan(e.id)}
                                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-transparent text-slate-300 hover:border-red-200 hover:bg-red-50 hover:text-red-500 transition-colors"
-                                      title="Sil"
+                                      title="Kalıcı olarak sil"
                                     >
                                       <Trash2 className="h-4 w-4" />
                                     </button>
+                                    </>
                                     )}
                                   </div>
                                 </div>
@@ -2579,12 +2627,17 @@ export default function TakvimPage() {
                       const slotKey = `${getLocalDateString(currentDate)}-${periodStr}`;
                       const isExpandedEmpty = Boolean(expandedEmptySlots[slotKey]);
                       const isCurrentSlot = currentLessonSlot === periodStr && isToday(currentDate);
-                      const lessonEvents = getEventsForDate(currentDate).filter((event) => {
-                        if (event.type === "appointment" || event.type === "guidance_plan" || event.type === "class_request") {
-                          return normalizeLessonSlot(event.time) === periodStr;
-                        }
-                        return false;
-                      });
+                        const lessonEvents = getEventsForDate(currentDate).filter((event) => {
+                          // İptal edilmiş randevular takvimde gösterilmez. Ay ve hafta
+                          // görünümleri bunu zaten yapıyordu; gün görünümü filtrelemediği
+                          // için iptal edilen randevu "Planlı" olarak görünmeye devam
+                          // ediyordu.
+                          if (event.status === "cancelled") return false;
+                          if (event.type === "appointment" || event.type === "guidance_plan" || event.type === "class_request") {
+                            return normalizeLessonSlot(event.time) === periodStr;
+                          }
+                          return false;
+                        });
 
                       return (
                         <div
