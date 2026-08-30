@@ -1183,11 +1183,11 @@ export default function BasvurularPage() {
               </div>
             )}
 
-            <div className="text-sm text-slate-500">
-              {filteredApplications.length === statusCounts.toplam
-                ? `${statusCounts.toplam} kayıt`
-                : `${statusCounts.toplam} kayıttan ${filteredApplications.length} tanesi gösteriliyor`}
-            </div>
+            {filteredApplications.length !== statusCounts.toplam && (
+              <div className="text-sm text-slate-500">
+                {statusCounts.toplam} kayıttan {filteredApplications.length} tanesi gösteriliyor
+              </div>
+            )}
           </div>
 
           {/* Tablo */}
@@ -1298,7 +1298,7 @@ export default function BasvurularPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <Button onClick={() => handleDeleteApplication(item)} disabled={deletingId === item.id} variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50">
+                        <Button onClick={() => handleDeleteApplication(item)} disabled={deletingId === item.id} variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-400 hover:bg-red-50 hover:text-red-600">
                           {deletingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                         </Button>
                       </td>
