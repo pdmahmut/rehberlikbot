@@ -296,16 +296,26 @@ export function findAppointmentForApplicationRecord<
     return linkedAppointment;
   }
 
+  // Yedek yol: randevuda kaynak bagi yoksa ogrenci adi ve sinifina gore eslestir.
+  // Bu, kaynak bagi eklenmeden once olusmus eski kayitlar icin gerekli.
+  //
+  // ANCAK zaten BASKA bir basvuruya bagli olan randevu buraya girmemeli.
+  // Aksi halde ayni ogrencinin iki acik basvurusu oldugunda (ornegin biri veli
+  // talebi, digeri ogretmen yonlendirmesi), veli talebine verilen randevu
+  // yonlendirmeye de ait sanilir ve bekleyen basvuru "Randevu verildi"
+  // gorunur. Bagli randevu sahibi bellidir; ad benzerligiyle sahiplenilemez.
   const recordTime = record.created_at ? new Date(record.created_at).getTime() : Number.NaN;
   const fallbackMatches = appointments
-    .filter((appointment) =>
-      matchesApplicationToAppointment(
+    .filter((appointment) => {
+      const ref = getAppointmentSourceReference(appointment);
+      if (ref.sourceKey) return false;
+      return matchesApplicationToAppointment(
         appointment,
         record.student_name,
         record.class_display,
         record.class_key
-      )
-    )
+      );
+    })
     .map((appointment) => ({
       appointment,
       time: getComparableAppointmentTime(appointment),
