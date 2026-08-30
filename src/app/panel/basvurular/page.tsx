@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,13 @@ type ApplicationRecord = {
 type ApplicationStatus = ApplicationRecord["status"];
 // Kanal adlari kodun iki yerinde cogul ("Veli Talepleri"), bir yerinde tekil
 // ("Veli Talebi") yaziliyordu. Listede tek ve kisa isim kullanilir.
+// Bu sayfa bir is kuyrugu: siralama aciliyete gore yapilir.
+const STATUS_RANK: Record<string, number> = {
+  "Bekliyor": 0,
+  "Randevu verildi": 1,
+  "Görüşüldü": 2,
+};
+
 const CHANNEL_SHORT_LABELS: Record<string, string> = {
   "Öğretmen Yönlendirmeleri": "Öğretmen",
   "Veli Talepleri": "Veli",
@@ -140,6 +147,7 @@ export default function BasvurularPage() {
   const [applicationsOutcomeFilter, setApplicationsOutcomeFilter] = useState<"all" | "Tamamlandı" | "Aktif Takip">("all");
 
   const [showFilters, setShowFilters] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [savingOutcome, setSavingOutcome] = useState(false);
   const [attendedAppointments, setAttendedAppointments] = useState<any[]>([]);
@@ -768,7 +776,7 @@ export default function BasvurularPage() {
   }, [applicationRecordsWithOverrides]);
 
   const filteredApplications = useMemo(() => {
-    let filtered = applicationRecordsWithOverrides.filter((item) => {
+    const filtered = applicationRecordsWithOverrides.filter((item) => {
       const matchesSearch = !applicationsSearchQuery || normalizeStudentName(item.student_name).includes(normalizeStudentName(applicationsSearchQuery));
       const matchesClass = !applicationsClassFilter || normalizeClassText(item.class_display) === applicationsClassFilter || normalizeClassText(item.class_key) === applicationsClassFilter;
       const matchesSource = applicationsSourceFilter === "all" || item.source === applicationsSourceFilter;
@@ -780,14 +788,8 @@ export default function BasvurularPage() {
 
     // Bu sayfa bir is kuyrugu: once ele alinmasi gerekenler gelir.
     // Ayni durumdakiler kendi icinde yeniden eskiye siralanir.
-    const statusRank: Record<string, number> = {
-      "Bekliyor": 0,
-      "Randevu verildi": 1,
-      "Görüşüldü": 2,
-    };
-
     filtered.sort((a, b) => {
-      const rank = (statusRank[a.status] ?? 3) - (statusRank[b.status] ?? 3);
+      const rank = (STATUS_RANK[a.status] ?? 3) - (STATUS_RANK[b.status] ?? 3);
       if (rank !== 0) return rank;
       return new Date(b.event_timestamp).getTime() - new Date(a.event_timestamp).getTime();
     });
@@ -804,6 +806,125 @@ export default function BasvurularPage() {
     }
     return { ...counts, toplam: applicationRecordsWithOverrides.length };
   }, [applicationRecordsWithOverrides]);
+
+  // --- Ogrenci bazli gruplama --------------------------------------------
+  // Ayni ogrenci icin birden fazla basvuru gelebilir (ornegin hem veli hem
+  // ogretmen). Bunlar ayri kayitlardir ve ayri ayri kapatilir; ama listede
+  // ayni ismin tekrar tekrar gorunmesi kuyrugu okumayi zorlastiriyordu.
+  // Bu yuzden satirlar ogrenciye gore gruplanir, detay acilarak gorulur.
+  const applicationGroups = useMemo(() => {
+    const groups = new Map<string, { key: string; records: ApplicationRecord[] }>();
+    for (const record of filteredApplications) {
+      // Ad + sinif: farkli siniflardaki adaslar ayni gruba dusmesin.
+      const key = `${followUpKey(record.student_name)}|${normalizeClassText(record.class_display || record.class_key)}`;
+      const existing = groups.get(key);
+      if (existing) existing.records.push(record);
+      else groups.set(key, { key, records: [record] });
+    }
+
+    return [...groups.values()].map((group) => {
+      // Grubun sirasi en acil basvurusuna gore belirlenir: bir ogrencinin
+      // bekleyen bir basvurusu varsa, grup kuyrugun basinda kalmali.
+      const rank = Math.min(...group.records.map((r) => STATUS_RANK[r.status] ?? 3));
+      const latest = Math.max(...group.records.map((r) => new Date(r.event_timestamp).getTime()));
+      const counts = new Map<string, number>();
+      for (const r of group.records) counts.set(r.status, (counts.get(r.status) || 0) + 1);
+      return { ...group, rank, latest, counts, primary: group.records[0] };
+    }).sort((a, b) => (a.rank - b.rank) || (b.latest - a.latest));
+  }, [filteredApplications]);
+
+  const toggleGroup = (key: string) =>
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+
+  // --- Satir hucreleri ---------------------------------------------------
+  // Ayni ogrencinin birden fazla basvurusu tek satirda gruplanip acilarak
+  // gosterildigi icin, bu hucreler hem tek satirda hem alt satirlarda
+  // kullaniliyor.
+
+  const renderChannelCell = (item: ApplicationRecord) => (
+    <span className="inline-flex items-center gap-1.5 text-slate-600">
+      <span>{ENTRY_CHANNELS.find((c) => c.source === item.source)?.icon}</span>
+      {CHANNEL_SHORT_LABELS[item.source] || item.source}
+    </span>
+  );
+
+  const renderStatusCell = (item: ApplicationRecord) => {
+    if (item.status === "Bekliyor") {
+      return (
+        <button
+          type="button"
+          onClick={() => setStatusChoiceRecord(item)}
+          className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-100"
+        >
+          Bekliyor ▾
+        </button>
+      );
+    }
+    if (item.status === "Görüşüldü" && !item.outcome_label) {
+      return (
+        <button
+          type="button"
+          onClick={() => handleOpenOutcomeModal(item)}
+          className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 transition-colors hover:bg-emerald-100"
+          title="Görüşme sonucunu belirle"
+        >
+          Görüşüldü ▾
+        </button>
+      );
+    }
+    if (item.status === "Randevu verildi") {
+      return (
+        <button
+          type="button"
+          onClick={() => handleCancelScheduledAppointment(item)}
+          disabled={cancellingRecordId === item.id}
+          className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800 transition-colors hover:border-rose-300 hover:bg-rose-50 hover:text-rose-800 disabled:opacity-60"
+          title="Randevuyu iptal et — başvuru tekrar Bekliyor durumuna döner"
+        >
+          {cancellingRecordId === item.id ? "İptal ediliyor..." : "Randevu verildi ▾"}
+        </button>
+      );
+    }
+    return (
+      <Badge className={item.status === "Görüşüldü" ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-blue-200 bg-blue-50 text-blue-800"}>
+        {item.status}
+      </Badge>
+    );
+  };
+
+  const renderOutcomeCell = (item: ApplicationRecord) =>
+    item.outcome_label && (item.status === "Görüşüldü" || item.outcome_label === "Aktif Takip") ? (
+      <Badge className={
+        item.outcome_label === "Tamamlandı" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+        item.outcome_label === "Aktif Takip" ? "bg-cyan-100 text-cyan-700 border-cyan-200" :
+        "bg-violet-100 text-violet-700 border-violet-200"
+      }>
+        {item.outcome_label}
+      </Badge>
+    ) : (
+      <span className="text-xs text-slate-400">—</span>
+    );
+
+  const renderDeleteCell = (item: ApplicationRecord) => (
+    <Button
+      onClick={() => handleDeleteApplication(item)}
+      disabled={deletingId === item.id}
+      variant="ghost"
+      size="sm"
+      className="h-8 w-8 p-0 text-slate-400 hover:bg-red-50 hover:text-red-600"
+    >
+      {deletingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+    </Button>
+  );
+
+  const formatEventDate = (value: string) =>
+    new Date(value).toLocaleString("tr-TR", {
+      day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+    });
 
   // Katlanmis panelde hangi filtrelerin acik oldugu gorunmedigi icin sayilir.
   const activeFilterCount =
@@ -942,7 +1063,11 @@ export default function BasvurularPage() {
             );
           })}
           <div className="ml-auto flex items-center text-sm text-slate-400">
-            toplam {statusCounts.toplam} kayıt
+            {/* Satir sayisi ogrenci sayisidir; basvuru sayisindan az olabilir,
+                cunku ayni ogrencinin basvurulari tek satirda toplanir. */}
+            {applicationGroups.length === statusCounts.toplam
+              ? `toplam ${statusCounts.toplam} başvuru`
+              : `${statusCounts.toplam} başvuru · ${applicationGroups.length} öğrenci`}
           </div>
         </div>
       </div>
@@ -1185,7 +1310,7 @@ export default function BasvurularPage() {
 
             {filteredApplications.length !== statusCounts.toplam && (
               <div className="text-sm text-slate-500">
-                {statusCounts.toplam} kayıttan {filteredApplications.length} tanesi gösteriliyor
+                {statusCounts.toplam} başvurudan {filteredApplications.length} tanesi gösteriliyor
               </div>
             )}
           </div>
@@ -1219,91 +1344,120 @@ export default function BasvurularPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredApplications.map((item) => (
-                    <tr key={item.id} className="group/row border-b border-slate-100 transition-colors hover:bg-slate-50">
-                      <td className="px-4 py-3 text-slate-600 text-sm">
-                        {new Date(item.event_timestamp).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-800">
-                        <span className="inline-flex items-center gap-1.5">
-                          {item.student_name}
-                          {followedNames.has(followUpKey(item.student_name)) && (
-                            <span
-                              title="Bu öğrenci takip listenizde"
-                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
-                            >
-                              <Eye className="h-3 w-3" />
-                              takipte
+                  applicationGroups.map((group) => {
+                    const item = group.primary;
+                    const isFollowed = followedNames.has(followUpKey(item.student_name));
+                    const multi = group.records.length > 1;
+                    const open = expandedGroups.has(group.key);
+                    const colCount = applicationsSourceFilter === "Öğretmen Yönlendirmeleri" ? 8 : 7;
+
+                    const nameCell = (
+                      <span className="inline-flex items-center gap-1.5">
+                        {item.student_name}
+                        {isFollowed && (
+                          <span
+                            title="Bu öğrenci takip listenizde"
+                            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
+                          >
+                            <Eye className="h-3 w-3" />
+                            takipte
+                          </span>
+                        )}
+                      </span>
+                    );
+
+                    // Tek basvurusu olan ogrenci — cogunluk bu. Acilir satir
+                    // gostermek gereksiz bir tiklama olurdu.
+                    if (!multi) {
+                      return (
+                        <tr key={group.key} className="border-b border-slate-100 transition-colors hover:bg-slate-50">
+                          <td className="px-4 py-3 text-sm text-slate-600">{formatEventDate(item.event_timestamp)}</td>
+                          <td className="px-4 py-3 font-medium text-slate-800">{nameCell}</td>
+                          <td className="px-4 py-3 text-slate-600">{formatClassDisplay(item.class_display)}</td>
+                          <td className="px-4 py-3">{renderChannelCell(item)}</td>
+                          {applicationsSourceFilter === "Öğretmen Yönlendirmeleri" && <td className="px-4 py-3 text-slate-600">{item.referrer || "-"}</td>}
+                          <td className="px-4 py-3">{renderStatusCell(item)}</td>
+                          <td className="px-4 py-3">{renderOutcomeCell(item)}</td>
+                          <td className="px-4 py-3">{renderDeleteCell(item)}</td>
+                        </tr>
+                      );
+                    }
+
+                    // Birden fazla basvurusu olan ogrenci: tek satirda toplanir.
+                    // Islemler basvuruya ait oldugu icin ozet satirinda eylem
+                    // yok; acinca her basvuru kendi dugmeleriyle gorunur.
+                    return (
+                      <Fragment key={group.key}>
+                        <tr
+                          onClick={() => toggleGroup(group.key)}
+                          className={`cursor-pointer border-b border-slate-100 transition-colors hover:bg-slate-50 ${open ? "bg-slate-50" : ""}`}
+                        >
+                          <td className="px-4 py-3 text-sm text-slate-600">{formatEventDate(new Date(group.latest).toISOString())}</td>
+                          <td className="px-4 py-3 font-medium text-slate-800">
+                            <span className="inline-flex items-center gap-1.5">
+                              <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${open ? "" : "-rotate-90"}`} />
+                              {nameCell}
+                              <span className="rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600">
+                                {group.records.length} başvuru
+                              </span>
                             </span>
-                          )}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{formatClassDisplay(item.class_display)}</td>
-                      <td className="px-4 py-3">
-                        {/* Kanal bilgisi ne yapilacagini degistirmez; sessiz durur.
-                            Dikkati ceken tek sey durum sutunu olsun. */}
-                        <span className="inline-flex items-center gap-1.5 text-slate-600">
-                          <span>{ENTRY_CHANNELS.find((c) => c.source === item.source)?.icon}</span>
-                          {CHANNEL_SHORT_LABELS[item.source] || item.source}
-                        </span>
-                      </td>
-                      {applicationsSourceFilter === "Öğretmen Yönlendirmeleri" && <td className="px-4 py-3 text-slate-600">{item.referrer || "-"}</td>}
-                      <td className="px-4 py-3">
-                        {item.status === "Bekliyor" ? (
-                          <button
-                            type="button"
-                            onClick={() => setStatusChoiceRecord(item)}
-                            className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-100"
-                          >
-                            Bekliyor ▾
-                          </button>
-                        ) : item.status === "Görüşüldü" && !item.outcome_label ? (
-                          // Görüşüldü ama henüz sonuç seçilmemiş → tıklanabilir badge
-                          <button
-                            type="button"
-                            onClick={() => handleOpenOutcomeModal(item)}
-                            className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 transition-colors hover:bg-emerald-100"
-                            title="Görüşme sonucunu belirle"
-                          >
-                            Görüşüldü ▾
-                          </button>
-                        ) : item.status === "Randevu verildi" ? (
-                          // Randevusu iptal edilebilsin diye tıklanabilir
-                          <button
-                            type="button"
-                            onClick={() => handleCancelScheduledAppointment(item)}
-                            disabled={cancellingRecordId === item.id}
-                            className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800 transition-colors hover:border-rose-300 hover:bg-rose-50 hover:text-rose-800 disabled:opacity-60"
-                            title="Randevuyu iptal et — başvuru tekrar Bekliyor durumuna döner"
-                          >
-                            {cancellingRecordId === item.id ? "İptal ediliyor..." : "Randevu verildi ▾"}
-                          </button>
-                        ) : (
-                          <Badge className={item.status === "Görüşüldü" ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-blue-200 bg-blue-50 text-blue-800"}>
-                            {item.status}
-                          </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">{formatClassDisplay(item.class_display)}</td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center gap-1">
+                              {[...new Set(group.records.map((r) => r.source))].map((src) => (
+                                <span key={src} title={CHANNEL_SHORT_LABELS[src] || src}>
+                                  {ENTRY_CHANNELS.find((c) => c.source === src)?.icon}
+                                </span>
+                              ))}
+                            </span>
+                          </td>
+                          {applicationsSourceFilter === "Öğretmen Yönlendirmeleri" && <td className="px-4 py-3 text-slate-600">-</td>}
+                          <td className="px-4 py-3">
+                            <span className="inline-flex flex-wrap items-center gap-1">
+                              {[...group.counts.entries()].map(([status, count]) => (
+                                <span
+                                  key={status}
+                                  className={`rounded-md border px-2 py-0.5 text-xs font-medium ${
+                                    status === "Bekliyor" ? "border-amber-200 bg-amber-50 text-amber-800"
+                                    : status === "Randevu verildi" ? "border-blue-200 bg-blue-50 text-blue-800"
+                                    : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                  }`}
+                                >
+                                  {count} {status.toLocaleLowerCase("tr-TR")}
+                                </span>
+                              ))}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3"><span className="text-xs text-slate-400">—</span></td>
+                          <td className="px-4 py-3"></td>
+                        </tr>
+
+                        {open && (
+                          <tr className="border-b border-slate-100 bg-slate-50/70">
+                            <td colSpan={colCount} className="px-4 py-3">
+                              <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                                <table className="min-w-full text-left text-sm">
+                                  <tbody>
+                                    {group.records.map((rec, i) => (
+                                      <tr key={rec.id} className={i > 0 ? "border-t border-slate-100" : ""}>
+                                        <td className="px-3 py-2.5 text-sm text-slate-600">{formatEventDate(rec.event_timestamp)}</td>
+                                        <td className="px-3 py-2.5">{renderChannelCell(rec)}</td>
+                                        <td className="px-3 py-2.5 text-slate-600">{rec.referrer || ""}</td>
+                                        <td className="px-3 py-2.5">{renderStatusCell(rec)}</td>
+                                        <td className="px-3 py-2.5">{renderOutcomeCell(rec)}</td>
+                                        <td className="px-3 py-2.5 text-right">{renderDeleteCell(rec)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {item.outcome_label && (item.status === "Görüşüldü" || item.outcome_label === "Aktif Takip") ? (
-                          <Badge className={
-                            item.outcome_label === "Tamamlandı" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
-                            item.outcome_label === "Aktif Takip" ? "bg-cyan-100 text-cyan-700 border-cyan-200" :
-                            "bg-violet-100 text-violet-700 border-violet-200"
-                          }>
-                            {item.outcome_label}
-                          </Badge>
-                        ) : (
-                          <span className="text-slate-400 text-xs">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Button onClick={() => handleDeleteApplication(item)} disabled={deletingId === item.id} variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-400 hover:bg-red-50 hover:text-red-600">
-                          {deletingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
+                      </Fragment>
+                    );
+                  })
                 )}
               </tbody>
             </table>
