@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { db as supabase } from "@/lib/dbClient";
-import { MessageSquare, Search, Loader2, Filter, User, Trash2, Plus, X, ChevronDown, Eye } from "lucide-react";
+import { MessageSquare, Search, Loader2, Filter, Trash2, Plus, X, ChevronDown, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { AppointmentOutcomeModal, type AppointmentOutcomeChoice } from "@/components/AppointmentOutcomeModal";
 import {
@@ -47,44 +47,14 @@ type ApplicationRecord = {
 };
 
 type ApplicationStatus = ApplicationRecord["status"];
-type ApplicationStatusOverrideEntry = {
-  status: ApplicationStatus;
-  acted_at: string;
-};
-
-type ApplicationStatusOverrides = Record<string, ApplicationStatusOverrideEntry>;
-
-const APPLICATION_STATUS_OVERRIDES_KEY = "application-status-overrides";
-
-const loadApplicationStatusOverrides = (): ApplicationStatusOverrides => {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(APPLICATION_STATUS_OVERRIDES_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    return Object.entries(parsed as Record<string, unknown>).reduce<ApplicationStatusOverrides>((acc, [id, value]) => {
-      if (value === "Görüşüldü" || value === "Randevu verildi" || value === "Bekliyor") {
-        acc[id] = { status: value, acted_at: "" };
-        return acc;
-      }
-      if (value && typeof value === "object" && !Array.isArray(value)) {
-        const entry = value as Record<string, unknown>;
-        if (entry.status === "Görüşüldü" || entry.status === "Randevu verildi" || entry.status === "Bekliyor") {
-          acc[id] = {
-            status: entry.status as ApplicationStatus,
-            acted_at: typeof entry.acted_at === "string" ? entry.acted_at : ""
-          };
-        }
-      }
-      return acc;
-    }, {});
-  } catch { return {}; }
-};
-
-const saveApplicationStatusOverrides = (overrides: ApplicationStatusOverrides) => {
-  if (typeof window === "undefined") return;
-  try { window.localStorage.setItem(APPLICATION_STATUS_OVERRIDES_KEY, JSON.stringify(overrides)); } catch { }
+// Kanal adlari kodun iki yerinde cogul ("Veli Talepleri"), bir yerinde tekil
+// ("Veli Talebi") yaziliyordu. Listede tek ve kisa isim kullanilir.
+const CHANNEL_SHORT_LABELS: Record<string, string> = {
+  "Öğretmen Yönlendirmeleri": "Öğretmen",
+  "Veli Talepleri": "Veli",
+  "Öğrenci Bildirimleri": "Öğrenci bildirimi",
+  "Rehberlik İsteği": "Rehberlik",
+  "Bireysel Başvuru": "Bireysel",
 };
 
 const normalizeText = (value: string) =>
@@ -169,6 +139,7 @@ export default function BasvurularPage() {
   const [applicationsStatusFilter, setApplicationsStatusFilter] = useState<"all" | ApplicationStatus>("all");
   const [applicationsOutcomeFilter, setApplicationsOutcomeFilter] = useState<"all" | "Tamamlandı" | "Aktif Takip">("all");
 
+  const [showFilters, setShowFilters] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingOutcome, setSavingOutcome] = useState(false);
   const [attendedAppointments, setAttendedAppointments] = useState<any[]>([]);
@@ -181,7 +152,6 @@ export default function BasvurularPage() {
   const [individualRequests, setIndividualRequests] = useState<IndividualRequestRecord[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [statusOverrides, setStatusOverrides] = useState<ApplicationStatusOverrides>({});
   // Takipteki ogrencilerin sadelestirilmis adlari. Basvuru listesinde isim
   // yaninda rozet gostermek icin kullanilir.
   const [followedNames, setFollowedNames] = useState<Set<string>>(new Set());
@@ -579,35 +549,12 @@ export default function BasvurularPage() {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    setStatusOverrides(loadApplicationStatusOverrides());
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === APPLICATION_STATUS_OVERRIDES_KEY) setStatusOverrides(loadApplicationStatusOverrides());
-    };
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, []);
-
   // Yönlendiren filtresini sıfırla eğer Öğretmen Yönlendirmeleri seçili değilse
   useEffect(() => {
     if (applicationsSourceFilter !== "Öğretmen Yönlendirmeleri") {
       setApplicationsReferrerFilter("");
     }
   }, [applicationsSourceFilter]);
-
-  const updateApplicationStatusOverride = (id: string, nextStatus: ApplicationStatus) => {
-    setStatusOverrides((prev) => {
-      const next = {
-        ...prev,
-        [id]: {
-          status: nextStatus,
-          acted_at: new Date().toISOString()
-        }
-      };
-      saveApplicationStatusOverrides(next);
-      return next;
-    });
-  };
 
   const applicationRecords: ApplicationRecord[] = useMemo(() => {
     const records: ApplicationRecord[] = [];
@@ -809,12 +756,10 @@ export default function BasvurularPage() {
       .sort((a, b) => new Date(b.event_timestamp).getTime() - new Date(a.event_timestamp).getTime());
   }, [incidents, referrals, observations, requests, individualRequests, attendedAppointments, scheduledAppointments]);
 
-  const applicationRecordsWithOverrides = useMemo(() => {
-    return applicationRecords.map((record) => ({
-      ...record,
-      status: statusOverrides[record.id]?.status || record.status
-    }));
-  }, [applicationRecords, statusOverrides]);
+  // Durum tek kaynaktan gelir: veritabani. Eskiden burada tarayici hafizasindaki
+  // bir "override" katmani vardi; okuldaki bilgisayarda isaretlenen bir basvuru
+  // baska bir cihazda hala "Bekliyor" gorunuyordu. Katman kaldirildi.
+  const applicationRecordsWithOverrides = applicationRecords;
 
   const applicationReferrerOptions = useMemo(() => {
     const referrers = new Set<string>();
@@ -833,12 +778,46 @@ export default function BasvurularPage() {
       return matchesSearch && matchesClass && matchesSource && matchesReferrer && matchesStatus && matchesOutcome;
     });
 
+    // Bu sayfa bir is kuyrugu: once ele alinmasi gerekenler gelir.
+    // Ayni durumdakiler kendi icinde yeniden eskiye siralanir.
+    const statusRank: Record<string, number> = {
+      "Bekliyor": 0,
+      "Randevu verildi": 1,
+      "Görüşüldü": 2,
+    };
+
     filtered.sort((a, b) => {
+      const rank = (statusRank[a.status] ?? 3) - (statusRank[b.status] ?? 3);
+      if (rank !== 0) return rank;
       return new Date(b.event_timestamp).getTime() - new Date(a.event_timestamp).getTime();
     });
 
     return filtered;
   }, [applicationRecordsWithOverrides, applicationsSearchQuery, applicationsClassFilter, applicationsSourceFilter, applicationsReferrerFilter, applicationsStatusFilter, applicationsOutcomeFilter]);
+
+  // Durum sayaclari filtrelerden etkilenmez: ekranda ne filtrelenmis olursa
+  // olsun, toplam is yukunu gormek gerekir.
+  const statusCounts = useMemo(() => {
+    const counts = { "Bekliyor": 0, "Randevu verildi": 0, "Görüşüldü": 0 };
+    for (const item of applicationRecordsWithOverrides) {
+      if (item.status in counts) counts[item.status as keyof typeof counts]++;
+    }
+    return { ...counts, toplam: applicationRecordsWithOverrides.length };
+  }, [applicationRecordsWithOverrides]);
+
+  // Katlanmis panelde hangi filtrelerin acik oldugu gorunmedigi icin sayilir.
+  const activeFilterCount =
+    (applicationsClassFilter ? 1 : 0) +
+    (applicationsSourceFilter !== "all" ? 1 : 0) +
+    (applicationsOutcomeFilter !== "all" ? 1 : 0) +
+    (applicationsReferrerFilter ? 1 : 0);
+
+  const clearFilters = () => {
+    setApplicationsClassFilter("");
+    setApplicationsSourceFilter("all");
+    setApplicationsOutcomeFilter("all");
+    setApplicationsReferrerFilter("");
+  };
 
   const applicationClassOptions = useMemo(() => {
     const classMap = new Map<string, string>();
@@ -897,21 +876,21 @@ export default function BasvurularPage() {
 
   return (
     <div className="space-y-6">
-      {/* Başlık */}
-      <div className="rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 px-5 py-4 text-white shadow-xl">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-white/20 rounded-xl">
-              <MessageSquare className="h-5 w-5" />
-            </div>
-            <h1 className="text-xl font-bold">Başvurular Takibi</h1>
+      {/* Başlık — dekoratif banner yerine calisma basligi:
+          solda ne oldugu, ortada is yuku, sagda tek eylem. */}
+      <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-lg font-semibold text-slate-800">Başvurular</h1>
+            <p className="text-sm text-slate-500">
+              Öğrencilerin rehberlik servisine geliş kayıtları
+            </p>
           </div>
 
-          {/* Yeni Başvuru Dropdown */}
           <div className="relative">
             <button
               onClick={() => setShowNewEntryDropdown(!showNewEntryDropdown)}
-              className="flex items-center gap-1.5 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur px-3 py-2 text-sm font-semibold transition-all"
+              className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
             >
               <Plus className="h-4 w-4" />
               Yeni Başvuru
@@ -919,12 +898,12 @@ export default function BasvurularPage() {
             {showNewEntryDropdown && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowNewEntryDropdown(false)} />
-                <div className="absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden">
+                <div className="absolute right-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
                   {ENTRY_CHANNELS_FOR_CREATION.map((ch) => (
                     <button
                       key={ch.source}
                       onClick={() => { openEntryForm(ch.source); setShowNewEntryDropdown(false); }}
-                      className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-slate-700 transition-colors hover:bg-slate-50"
                     >
                       <span>{ch.icon}</span>
                       {ch.label}
@@ -933,6 +912,37 @@ export default function BasvurularPage() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+
+        {/* Is yuku ozeti. Tiklayinca o duruma filtreler; ayni sayaca tekrar
+            tiklayinca filtre kalkar. */}
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+          {([
+            { key: "Bekliyor", label: "Bekliyor", count: statusCounts["Bekliyor"], tone: "amber" },
+            { key: "Randevu verildi", label: "Randevu verildi", count: statusCounts["Randevu verildi"], tone: "blue" },
+            { key: "Görüşüldü", label: "Görüşüldü", count: statusCounts["Görüşüldü"], tone: "emerald" },
+          ] as const).map((s) => {
+            const active = applicationsStatusFilter === s.key;
+            const tones: Record<string, string> = {
+              amber: active ? "border-amber-400 bg-amber-50 text-amber-800" : "border-slate-200 text-slate-600 hover:border-amber-300",
+              blue: active ? "border-blue-400 bg-blue-50 text-blue-800" : "border-slate-200 text-slate-600 hover:border-blue-300",
+              emerald: active ? "border-emerald-400 bg-emerald-50 text-emerald-800" : "border-slate-200 text-slate-600 hover:border-emerald-300",
+            };
+            return (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setApplicationsStatusFilter(active ? "all" : s.key)}
+                className={`flex items-baseline gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${tones[s.tone]}`}
+              >
+                <span className="text-base font-semibold tabular-nums">{s.count}</span>
+                <span>{s.label}</span>
+              </button>
+            );
+          })}
+          <div className="ml-auto flex items-center text-sm text-slate-400">
+            toplam {statusCounts.toplam} kayıt
           </div>
         </div>
       </div>
@@ -1066,103 +1076,161 @@ export default function BasvurularPage() {
         );
       })()}
 
-      <Card className="rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden">
-        <CardHeader className="border-b bg-gradient-to-r from-purple-50 to-pink-50 p-4">
-          <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg shadow-lg">
-              <MessageSquare className="h-5 w-5 text-white" />
+      {/* Sayfa basligi zaten "Basvurular" diyor; kartin ikinci bir baslik
+          tasimasi gereksiz tekrardi, kaldirildi. */}
+      <Card className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <CardContent className="space-y-4 p-4 sm:p-5">
+          {/* Filtreler — arama her zaman acik, gerisi katlanir.
+              Durum filtresi yok: ustteki sayaclar onu daha gorunur yapiyor. */}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[220px] flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={applicationsSearchQuery}
+                  onChange={(e) => setApplicationsSearchQuery(e.target.value)}
+                  placeholder="Öğrenci adı ara..."
+                  className="pl-9"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowFilters((v) => !v)}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  activeFilterCount > 0
+                    ? "border-slate-400 bg-slate-50 text-slate-800"
+                    : "border-slate-200 text-slate-600 hover:border-slate-300"
+                }`}
+              >
+                <Filter className="h-4 w-4" />
+                Filtreler
+                {activeFilterCount > 0 && (
+                  <span className="rounded-full bg-slate-800 px-1.5 text-xs font-medium text-white">
+                    {activeFilterCount}
+                  </span>
+                )}
+                <ChevronDown className={`h-4 w-4 transition-transform ${showFilters ? "rotate-180" : ""}`} />
+              </button>
+
+              {activeFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="rounded-lg px-2 py-2 text-sm text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
+                >
+                  Temizle
+                </button>
+              )}
             </div>
-            Başvurular Listesi
-            <Badge className="bg-gradient-to-r from-purple-500 to-pink-600 text-white border-0 shadow-sm">
-              {filteredApplications.length}
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6 p-4 sm:p-6">
-          {/* Filtreler */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Search className="h-4 w-4 text-purple-500" />Öğrenci Ara</Label>
-              <Input value={applicationsSearchQuery} onChange={(e) => setApplicationsSearchQuery(e.target.value)} placeholder="Ad soyad ara..." className="border-purple-200 focus:border-purple-400" />
+
+            {showFilters && (
+              <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-600">Sınıf</Label>
+                  <select
+                    value={applicationsClassFilter}
+                    onChange={(e) => setApplicationsClassFilter(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                  >
+                    <option value="">Tümü</option>
+                    {applicationClassOptions.map((cls) => <option key={cls.value} value={cls.value}>{cls.label}</option>)}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-600">Geliş kanalı</Label>
+                  <select
+                    value={applicationsSourceFilter}
+                    onChange={(e) => setApplicationsSourceFilter(e.target.value as any)}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                  >
+                    <option value="all">Tümü</option>
+                    <option value="Öğretmen Yönlendirmeleri">Öğretmen yönlendirmesi</option>
+                    <option value="Veli Talepleri">Veli talebi</option>
+                    <option value="Öğrenci Bildirimleri">Öğrenci bildirimi</option>
+                    <option value="Rehberlik İsteği">Rehberlik isteği</option>
+                    <option value="Bireysel Başvuru">Bireysel başvuru</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-600">Görüşme sonucu</Label>
+                  <select
+                    value={applicationsOutcomeFilter}
+                    onChange={(e) => setApplicationsOutcomeFilter(e.target.value as any)}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                  >
+                    <option value="all">Tümü</option>
+                    <option value="Tamamlandı">Tamamlandı</option>
+                    <option value="Aktif Takip">Aktif Takip</option>
+                  </select>
+                </div>
+
+                {applicationsSourceFilter === "Öğretmen Yönlendirmeleri" && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-600">Yönlendiren öğretmen</Label>
+                    <select
+                      value={applicationsReferrerFilter}
+                      onChange={(e) => setApplicationsReferrerFilter(e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                    >
+                      <option value="">Tümü</option>
+                      {applicationReferrerOptions.map((ref) => <option key={ref} value={ref}>{ref}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="text-sm text-slate-500">
+              {filteredApplications.length === statusCounts.toplam
+                ? `${statusCounts.toplam} kayıt`
+                : `${statusCounts.toplam} kayıttan ${filteredApplications.length} tanesi gösteriliyor`}
             </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Filter className="h-4 w-4 text-blue-500" />Sınıf</Label>
-              <select value={applicationsClassFilter} onChange={(e) => setApplicationsClassFilter(e.target.value)} className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20">
-                <option value="">Tümü</option>
-                {applicationClassOptions.map((cls) => <option key={cls.value} value={cls.value}>{cls.label}</option>)}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-slate-700 flex items-center gap-2"><MessageSquare className="h-4 w-4 text-emerald-500" />Geliş Türü</Label>
-              <select value={applicationsSourceFilter} onChange={(e) => setApplicationsSourceFilter(e.target.value as any)} className="w-full rounded-lg border border-emerald-200 px-3 py-2 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20">
-                <option value="all">Tümü</option>
-                <option value="Veli Talepleri">Veli Talepleri</option>
-                <option value="Öğretmen Yönlendirmeleri">Öğretmen Yönlendirmeleri</option>
-                <option value="Öğrenci Bildirimleri">Öğrenci Bildirimleri</option>
-                <option value="Rehberlik İsteği">Rehberlik İsteği</option>
-                <option value="Bireysel Başvuru">Bireysel Başvuru</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Loader2 className="h-4 w-4 text-rose-500" />Durum</Label>
-              <select value={applicationsStatusFilter} onChange={(e) => setApplicationsStatusFilter(e.target.value as any)} className="w-full rounded-lg border border-rose-200 px-3 py-2 text-sm focus:border-rose-400 focus:ring-2 focus:ring-rose-400/20">
-                <option value="all">Tümü</option>
-                <option value="Görüşüldü">Görüşüldü</option>
-                <option value="Randevu verildi">Randevu verildi</option>
-                <option value="Bekliyor">Bekliyor</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Filter className="h-4 w-4 text-violet-500" />Görüşme Sonucu</Label>
-              <select value={applicationsOutcomeFilter} onChange={(e) => setApplicationsOutcomeFilter(e.target.value as any)} className="w-full rounded-lg border border-violet-200 px-3 py-2 text-sm focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20">
-                <option value="all">Tümü</option>
-                <option value="Tamamlandı">Tamamlandı</option>
-                <option value="Aktif Takip">Aktif Takip</option>
-              </select>
-            </div>            {applicationsSourceFilter === "Öğretmen Yönlendirmeleri" && <div className="space-y-2">
-              <Label className="text-sm font-medium text-slate-700 flex items-center gap-2"><User className="h-4 w-4 text-amber-500" />Yönlendiren</Label>
-              <select value={applicationsReferrerFilter} onChange={(e) => setApplicationsReferrerFilter(e.target.value)} className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20">
-                <option value="">Tümü</option>
-                {applicationReferrerOptions.map((ref) => <option key={ref} value={ref}>{ref}</option>)}
-              </select>
-            </div>}          </div>
+          </div>
 
           {/* Tablo */}
           <div className="responsive-scroll overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
             <table className="min-w-full text-left text-sm">
-              <thead className="bg-gradient-to-r from-purple-50 to-pink-50">
-                <tr className="border-b border-slate-200 text-slate-700">
-                  <th className="px-4 py-3 font-semibold">Tarih</th>
-                  <th className="px-4 py-3 font-semibold">Ad Soyad</th>
-                  <th className="px-4 py-3 font-semibold">Sınıf</th>
-                  <th className="px-4 py-3 font-semibold">Geliş Türü</th>
-                  {applicationsSourceFilter === "Öğretmen Yönlendirmeleri" && <th className="px-4 py-3 font-semibold">Yönlendiren</th>}
-                  <th className="px-4 py-3 font-semibold">Durum</th>
-                  <th className="px-4 py-3 font-semibold">Görüşme Sonucu</th>
-                  <th className="px-4 py-3 font-semibold">İşlemler</th>
+              <thead className="bg-slate-50">
+                <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-2.5 font-medium">Tarih</th>
+                  <th className="px-4 py-2.5 font-medium">Öğrenci</th>
+                  <th className="px-4 py-2.5 font-medium">Sınıf</th>
+                  <th className="px-4 py-2.5 font-medium">Geliş kanalı</th>
+                  {applicationsSourceFilter === "Öğretmen Yönlendirmeleri" && <th className="px-4 py-2.5 font-medium">Yönlendiren</th>}
+                  <th className="px-4 py-2.5 font-medium">Durum</th>
+                  <th className="px-4 py-2.5 font-medium">Sonuç</th>
+                  <th className="px-4 py-2.5 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
                 {filteredApplications.length === 0 ? (
                   <tr>
                     <td colSpan={applicationsSourceFilter === "Öğretmen Yönlendirmeleri" ? 8 : 7} className="p-8 text-center text-slate-500">
-                      <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-30 text-purple-300" />
-                      <p>Kayıt bulunamadı.</p>
+                      <MessageSquare className="mx-auto mb-3 h-10 w-10 text-slate-300" />
+                      <p className="font-medium text-slate-600">Kayıt bulunamadı</p>
+                      {activeFilterCount > 0 && (
+                        <button type="button" onClick={clearFilters} className="mt-2 text-sm text-slate-500 underline underline-offset-2 hover:text-slate-800">
+                          Filtreleri temizle
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ) : (
                   filteredApplications.map((item) => (
-                    <tr key={item.id} className="group/row border-b border-slate-100 hover:bg-gradient-to-r hover:from-purple-50/50 hover:to-pink-50/50 transition-all duration-200">
+                    <tr key={item.id} className="group/row border-b border-slate-100 transition-colors hover:bg-slate-50">
                       <td className="px-4 py-3 text-slate-600 text-sm">
                         {new Date(item.event_timestamp).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </td>
-                      <td className="px-4 py-3 font-medium text-slate-800 group-hover/row:text-purple-700 transition-colors">
+                      <td className="px-4 py-3 font-medium text-slate-800">
                         <span className="inline-flex items-center gap-1.5">
                           {item.student_name}
                           {followedNames.has(followUpKey(item.student_name)) && (
                             <span
                               title="Bu öğrenci takip listenizde"
-                              className="inline-flex items-center gap-1 rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-medium text-cyan-700"
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
                             >
                               <Eye className="h-3 w-3" />
                               takipte
@@ -1170,11 +1238,14 @@ export default function BasvurularPage() {
                           )}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-slate-600">{formatClassDisplay(item.class_display)}</td>
                       <td className="px-4 py-3">
-                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">{formatClassDisplay(item.class_display)}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">{item.source}</span>
+                        {/* Kanal bilgisi ne yapilacagini degistirmez; sessiz durur.
+                            Dikkati ceken tek sey durum sutunu olsun. */}
+                        <span className="inline-flex items-center gap-1.5 text-slate-600">
+                          <span>{ENTRY_CHANNELS.find((c) => c.source === item.source)?.icon}</span>
+                          {CHANNEL_SHORT_LABELS[item.source] || item.source}
+                        </span>
                       </td>
                       {applicationsSourceFilter === "Öğretmen Yönlendirmeleri" && <td className="px-4 py-3 text-slate-600">{item.referrer || "-"}</td>}
                       <td className="px-4 py-3">
@@ -1182,7 +1253,7 @@ export default function BasvurularPage() {
                           <button
                             type="button"
                             onClick={() => setStatusChoiceRecord(item)}
-                            className="inline-flex h-auto items-center rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition-all hover:from-amber-600 hover:to-orange-700 hover:shadow-md"
+                            className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-100"
                           >
                             Bekliyor ▾
                           </button>
@@ -1191,7 +1262,7 @@ export default function BasvurularPage() {
                           <button
                             type="button"
                             onClick={() => handleOpenOutcomeModal(item)}
-                            className="inline-flex h-auto items-center rounded-full bg-gradient-to-r from-emerald-500 to-green-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition-all hover:from-emerald-600 hover:to-green-700 hover:shadow-md cursor-pointer"
+                            className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 transition-colors hover:bg-emerald-100"
                             title="Görüşme sonucunu belirle"
                           >
                             Görüşüldü ▾
@@ -1202,13 +1273,13 @@ export default function BasvurularPage() {
                             type="button"
                             onClick={() => handleCancelScheduledAppointment(item)}
                             disabled={cancellingRecordId === item.id}
-                            className="inline-flex h-auto items-center rounded-full bg-gradient-to-r from-blue-500 to-cyan-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition-all hover:from-rose-500 hover:to-red-600 hover:shadow-md disabled:opacity-60"
+                            className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800 transition-colors hover:border-rose-300 hover:bg-rose-50 hover:text-rose-800 disabled:opacity-60"
                             title="Randevuyu iptal et — başvuru tekrar Bekliyor durumuna döner"
                           >
                             {cancellingRecordId === item.id ? "İptal ediliyor..." : "Randevu verildi ▾"}
                           </button>
                         ) : (
-                          <Badge className={item.status === "Görüşüldü" ? "bg-gradient-to-r from-emerald-500 to-green-600 text-white border-0 shadow-sm" : "bg-gradient-to-r from-blue-500 to-cyan-600 text-white border-0 shadow-sm"}>
+                          <Badge className={item.status === "Görüşüldü" ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-blue-200 bg-blue-50 text-blue-800"}>
                             {item.status}
                           </Badge>
                         )}
@@ -1279,7 +1350,8 @@ export default function BasvurularPage() {
               <button
                 type="button"
                 onClick={() => {
-                  updateApplicationStatusOverride(statusChoiceRecord.id, "Görüşüldü");
+                  // Durum, sonuc penceresi kaydedildiginde veritabanina yazilir.
+                  // Pencere kapatilirsa basvuru "Bekliyor" olarak kalir.
                   setStatusChoiceRecord(null);
                   setTimeout(() => handleOpenOutcomeModal({ ...statusChoiceRecord, status: "Görüşüldü" }), 100);
                 }}
