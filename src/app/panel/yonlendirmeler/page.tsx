@@ -28,6 +28,9 @@ type Appointment = {
   created_at?: string | null;
   updated_at?: string | null;
   outcome_decision?: string[] | null;
+  source_application_id?: string | null;
+  source_application_type?: string | null;
+  source_individual_request_id?: string | null;
 };
 
 type SubTab = "mine" | "class";
@@ -144,12 +147,29 @@ export default function YonlendirmelerPage() {
 
   const enrichedRecords = useMemo(() => {
     return currentReferrals.map(ref => {
-      const matchedAttended = attendedAppointments.find(apt => matchesAppointment(apt, ref) && isAppointmentAfterReferral(apt, ref)) || null;
-      const matchedScheduled = scheduledAppointments.find(apt => matchesAppointment(apt, ref) && isAppointmentAfterReferral(apt, ref)) || null;
+      // Randevu eslestirmesi ada gore yapilir. Bir randevu zaten BASKA bir
+      // basvuruya baglanmissa, ad benzerligiyle bu yonlendirmeye mal
+      // edilemez; yoksa ayni ogrencinin bekleyen yonlendirmesi randevulu
+      // gorunurdu. Bagi olmayan eski randevular icin eslestirme surer.
+      const isClaimedByOther = (apt: Appointment) => {
+        const linkedId = apt.source_application_id || apt.source_individual_request_id;
+        if (!linkedId) return false;
+        return linkedId !== ref.id;
+      };
 
-      let status = "Bekliyor";
+      const usable = (apt: Appointment) =>
+        !isClaimedByOther(apt) && matchesAppointment(apt, ref) && isAppointmentAfterReferral(apt, ref);
+
+      const matchedAttended = attendedAppointments.find(usable) || null;
+      const matchedScheduled = scheduledAppointments.find(usable) || null;
+
+      // Durum once kaydin kendisinden okunur; sunucu bir basvuru islendiginde
+      // bu alani gunceller (ayni ogrencinin diger basvurulari dahil).
+      const stored = String(ref.status || "");
+      let status =
+        ["Bekliyor", "Randevu verildi", "Görüşüldü"].includes(stored) ? stored : "Bekliyor";
       if (matchedAttended) status = "Görüşüldü";
-      else if (matchedScheduled) status = "Randevu verildi";
+      else if (matchedScheduled && status === "Bekliyor") status = "Randevu verildi";
 
       const outcomeLabel = matchedAttended ? getOutcomeLabel(matchedAttended.outcome_decision) : null;
       const lastActivityAt = latestTimestamp(ref.updated_at, ref.created_at, matchedScheduled?.updated_at, matchedAttended?.updated_at);

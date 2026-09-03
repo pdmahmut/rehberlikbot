@@ -151,6 +151,96 @@ const syncApplicationStatus = async (
   }
 };
 
+// Ayni ogrencinin diger acik basvurulari.
+//
+// Bir ogrenci icin birden fazla kanaldan basvuru gelebilir (ornegin hem veli
+// hem ogretmen). Rehber ogretmen bunlari tek gorusmede hallediyor; bu yuzden
+// bir basvuru islendiginde ayni ogrencinin diger ACIK basvurulari da ayni
+// duruma gecer. Islem yalnizca ekranda degil veritabaninda yapilir; boylece
+// ogretmenin kendi ekrani, sayaclar ve donem sonu dokumleri de dogru olur.
+//
+// Iptalde geri alinirken, kendi randevusu olan basvuruya dokunulmaz: onu
+// bagimsiz bir islem kapatmistir.
+
+const SIBLING_SOURCES: Array<{
+  type: "teacher_referral" | "parent_request" | "student_report" | "self_application" | "observation";
+  table: string;
+  nameColumn: string;
+}> = [
+  { type: "teacher_referral", table: "referrals", nameColumn: "student_name" },
+  { type: "parent_request", table: "parent_meeting_requests", nameColumn: "student_name" },
+  { type: "student_report", table: "student_incidents", nameColumn: "target_student_name" },
+  { type: "self_application", table: "individual_requests", nameColumn: "student_name" },
+  { type: "observation", table: "observation_pool", nameColumn: "student_name" },
+];
+
+/** "24 AZİZ ÇELENK" ile "AZİZ ÇELENK" ayni ogrenci sayilir. */
+const siblingNameKey = (value: unknown) =>
+  String(value || "")
+    .replace(/^\d+\s+/, "")
+    .trim()
+    .toLocaleUpperCase("tr-TR")
+    .replace(/\s+/g, " ");
+
+const OPEN_STATUSES = new Set(["pending", "new", "bekliyor", "reviewing"]);
+
+const syncSiblingApplications = async (
+  studentName: string | null | undefined,
+  status: "scheduled" | "completed" | "active_follow" | "pending",
+  actedType: string | null | undefined,
+  actedId: string | null | undefined
+) => {
+  const key = siblingNameKey(studentName);
+  if (!key) return;
+
+  const supabase = getSupabaseAdmin();
+  const normalizedActedType = normalizeSourceTypeOrNull(actedType);
+
+  try {
+    for (const source of SIBLING_SOURCES) {
+      // Sutun adi kaynaga gore degistigi icin tum satir cekilir; tablolar
+      // kucuk (bir donemlik basvuru sayisi) oldugu icin maliyeti onemsiz.
+      const { data, error } = await supabase.from(source.table).select("*");
+
+      if (error) continue;
+
+      for (const row of ((data || []) as unknown[]) as Array<Record<string, unknown>>) {
+        const rowId = String(row.id || "");
+        if (!rowId) continue;
+
+        // Islemi tetikleyen basvuru zaten ayrica guncelleniyor.
+        if (source.type === normalizedActedType && rowId === actedId) continue;
+        if (siblingNameKey(row[source.nameColumn]) !== key) continue;
+
+        const current = String(row.status || "").toLocaleLowerCase("tr-TR");
+
+        if (status === "pending") {
+          // Geri alma: zaten acik olan bir seyi geri almaya gerek yok.
+          if (OPEN_STATUSES.has(current)) continue;
+
+          // Kendi randevusu olan basvuru baska bir islemin sonucudur;
+          // bu iptal onu ilgilendirmez.
+          const { data: own } = await supabase
+            .from("appointments")
+            .select("id")
+            .eq("source_application_id", rowId)
+            .neq("status", "cancelled")
+            .limit(1);
+          if ((own || []).length > 0) continue;
+        } else if (!OPEN_STATUSES.has(current)) {
+          // Ileri yonde yalnizca acik basvurular kapatilir; kapanmis bir
+          // kaydin durumu degistirilmez.
+          continue;
+        }
+
+        await syncApplicationStatus(source.type, rowId, status, null);
+      }
+    }
+  } catch (error) {
+    console.error("syncSiblingApplications exception:", error);
+  }
+};
+
 // GET - Randevuları listele
 export async function GET(request: NextRequest) {
   const guard = await requireSession();
@@ -431,6 +521,7 @@ export async function POST(request: NextRequest) {
     }
 
     await syncApplicationStatus(resolvedSourceApplicationType, resolvedSourceApplicationId, "scheduled", data?.id || null);
+    await syncSiblingApplications(participant_name, "scheduled", resolvedSourceApplicationType, resolvedSourceApplicationId);
 
     return NextResponse.json({ appointment: data, message: "Randevu oluşturuldu" });
   } catch (error) {
@@ -626,6 +717,12 @@ export async function PUT(request: NextRequest) {
         source_application_status,
         id
       );
+      await syncSiblingApplications(
+        data?.participant_name,
+        source_application_status as "scheduled" | "completed" | "active_follow" | "pending",
+        resolvedSourceApplicationType,
+        resolvedSourceApplicationId
+      );
     }
 
     return NextResponse.json({ appointment: data, message: "Randevu güncellendi" });
@@ -692,14 +789,16 @@ export async function DELETE(request: NextRequest) {
     // donmelidir; aksi halde ortada randevu yokken basvuru "Randevu verildi"
     // olarak kalir ve islem bekleyenler listesinden dusup gozden kacar.
     const affectedSources: Array<{ type: string | null; id: string | null }> = [];
+    const affectedStudents: string[] = [];
 
     if (appointmentIds.length > 0) {
       const { data: sourceRows } = await supabase
         .from("appointments")
-        .select("source_application_type, source_application_id, source_individual_request_id")
+        .select("participant_name, source_application_type, source_application_id, source_individual_request_id")
         .in("id", appointmentIds);
 
       for (const row of sourceRows || []) {
+        if (row.participant_name) affectedStudents.push(String(row.participant_name));
         const srcId = row.source_application_id || row.source_individual_request_id;
         if (srcId) {
           affectedSources.push({
@@ -750,6 +849,13 @@ export async function DELETE(request: NextRequest) {
     for (const src of affectedSources) {
       if (!src.id) continue;
       await syncApplicationStatus(src.type, src.id, "pending", null);
+    }
+
+    // Randevu silinince, o randevu yuzunden kapanmis kardes basvurular da
+    // tekrar bekleyen duruma doner.
+    for (const name of affectedStudents) {
+      const src = affectedSources[0];
+      await syncSiblingApplications(name, "pending", src?.type, src?.id);
     }
 
     return NextResponse.json({ message: "Randevu silindi" });
