@@ -827,11 +827,29 @@ export default function BasvurularPage() {
       // bekleyen bir basvurusu varsa, grup kuyrugun basinda kalmali.
       const rank = Math.min(...group.records.map((r) => STATUS_RANK[r.status] ?? 3));
       const latest = Math.max(...group.records.map((r) => new Date(r.event_timestamp).getTime()));
-      const counts = new Map<string, number>();
-      for (const r of group.records) counts.set(r.status, (counts.get(r.status) || 0) + 1);
-      return { ...group, rank, latest, counts, primary: group.records[0] };
+
+      // Ogrencinin tek durumu vardir; en acil olan gosterilir. Islem de o
+      // basvuru uzerinden yapilir, cunku bir basvuruyu islemek ayni
+      // ogrencinin tum acik basvurularini kapatir.
+      const urgent = group.records.filter((r) => (STATUS_RANK[r.status] ?? 3) === rank);
+
+      // Randevusu/gorusmesi olan durumlarda iptal ve sonuc islemleri o kaydin
+      // randevusuna bagli oldugu icin, randevuyu tasiyan kayit secilir.
+      const owner =
+        rank === 1
+          ? urgent.find((r) => findAppointmentForApplicationRecord(scheduledAppointments, r))
+          : rank === 2
+            ? urgent.find((r) => findAppointmentForApplicationRecord(attendedAppointments, r))
+            : undefined;
+
+      // Aksi halde en uzun suredir bekleyen basvuru.
+      const oldest = [...urgent].sort(
+        (a, b) => new Date(a.event_timestamp).getTime() - new Date(b.event_timestamp).getTime()
+      )[0];
+
+      return { ...group, rank, latest, primary: group.records[0], actionRecord: owner || oldest };
     }).sort((a, b) => (a.rank - b.rank) || (b.latest - a.latest));
-  }, [filteredApplications]);
+  }, [filteredApplications, scheduledAppointments, attendedAppointments]);
 
   const toggleGroup = (key: string) =>
     setExpandedGroups((prev) => {
@@ -1413,29 +1431,25 @@ export default function BasvurularPage() {
                             </span>
                           </td>
                           {applicationsSourceFilter === "Öğretmen Yönlendirmeleri" && <td className="px-4 py-3 text-slate-600">-</td>}
-                          <td className="px-4 py-3">
-                            <span className="inline-flex flex-wrap items-center gap-1">
-                              {[...group.counts.entries()].map(([status, count]) => (
-                                <span
-                                  key={status}
-                                  className={`rounded-md border px-2 py-0.5 text-xs font-medium ${
-                                    status === "Bekliyor" ? "border-amber-200 bg-amber-50 text-amber-800"
-                                    : status === "Randevu verildi" ? "border-blue-200 bg-blue-50 text-blue-800"
-                                    : "border-emerald-200 bg-emerald-50 text-emerald-800"
-                                  }`}
-                                >
-                                  {count} {status.toLocaleLowerCase("tr-TR")}
-                                </span>
-                              ))}
-                            </span>
+                          {/* Ogrencinin tek bir durumu vardir. Basvurular ayni anda
+                              kapandigi icin durumu her satirda tekrarlamak yerine
+                              burada bir kez gosterilir; islem de buradan yapilir. */}
+                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                            {renderStatusCell(group.actionRecord)}
                           </td>
-                          <td className="px-4 py-3"><span className="text-xs text-slate-400">—</span></td>
+                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                            {renderOutcomeCell(group.actionRecord)}
+                          </td>
                           <td className="px-4 py-3"></td>
                         </tr>
 
                         {open && (
                           <tr className="border-b border-slate-100 bg-slate-50/70">
                             <td colSpan={colCount} className="px-4 py-3">
+                              <p className="mb-2 text-xs text-slate-500">
+                                Bu öğrenci {group.records.length} ayrı kanaldan geldi. Tek görüşmede
+                                hepsi kapanır; durum yukarıdaki tek kutudan yönetilir.
+                              </p>
                               <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                                 <table className="min-w-full text-left text-sm">
                                   <tbody>
@@ -1444,8 +1458,6 @@ export default function BasvurularPage() {
                                         <td className="px-3 py-2.5 text-sm text-slate-600">{formatEventDate(rec.event_timestamp)}</td>
                                         <td className="px-3 py-2.5">{renderChannelCell(rec)}</td>
                                         <td className="px-3 py-2.5 text-slate-600">{rec.referrer || ""}</td>
-                                        <td className="px-3 py-2.5">{renderStatusCell(rec)}</td>
-                                        <td className="px-3 py-2.5">{renderOutcomeCell(rec)}</td>
                                         <td className="px-3 py-2.5 text-right">{renderDeleteCell(rec)}</td>
                                       </tr>
                                     ))}
