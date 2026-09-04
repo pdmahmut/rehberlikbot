@@ -101,6 +101,58 @@ export async function GET(request: NextRequest) {
     const sinifSube = searchParams.get('sinifSube');
     const query = normalizeText(searchParams.get('query') || searchParams.get('q') || '');
 
+    // --- Tum siniflarin ogrenci sayilari (tek istekte) ---
+    //
+    // Ogrenciler ekrani her sinif icin ayri bir istek atip donen listenin
+    // uzunlugunu sayiyordu: 12 sinif = 12 HTTP istegi, her biri o sinifin
+    // tum ogrencilerini indiriyor ve her cevap ekrani yeniden cizdiriyordu.
+    // Burasi ayni sonucu tek sorguyla verir.
+    if (searchParams.get('counts')) {
+      // Supabase'e her gidis-donus ~440 ms suruyor ve bu sure veri miktarindan
+      // bagimsiz. Bu yuzden iki sorgu sirayla degil birlikte calistirilir.
+      const [studentsResult, approvedRequests] = await Promise.all([
+        supabase
+          .from('class_students')
+          .select('class_key, student_name')
+          .neq('student_number', EXCLUDED_MARKER),
+        getRequests({ status: 'approved' }).catch(() => []),
+      ]);
+
+      const { data, error } = studentsResult;
+      if (error) throw error;
+
+      const counts: Record<string, number> = {};
+      const perClass = new Map<string, Set<string>>();
+
+      for (const row of (data as Array<{ class_key: string; student_name: string }> | null) || []) {
+        if (!row.class_key) continue;
+        const set = perClass.get(row.class_key) || new Set<string>();
+        set.add(stripNumber(row.student_name || ''));
+        perClass.set(row.class_key, set);
+      }
+
+      // Onaylanmis silme ve sinif degisiklikleri listelemede uygulaniyor;
+      // sayilar da ayni sonucu vermeli, yoksa sinif kartindaki rakam ile
+      // acilan liste birbirini tutmaz.
+      for (const req of approvedRequests) {
+        const name = stripNumber(req.student_name || '');
+        if (!name) continue;
+
+        if (req.request_type === 'delete' || req.request_type === 'class_change') {
+          perClass.get(req.class_key)?.delete(name);
+        }
+        if (req.request_type === 'class_change' && req.new_class_key) {
+          const set = perClass.get(req.new_class_key) || new Set<string>();
+          set.add(name);
+          perClass.set(req.new_class_key, set);
+        }
+      }
+
+      for (const [classKey, set] of perClass) counts[classKey] = set.size;
+
+      return NextResponse.json(counts);
+    }
+
     // --- Sinifa gore listeleme ---
     if (sinifSube) {
       const displays = await buildClassDisplayMap();

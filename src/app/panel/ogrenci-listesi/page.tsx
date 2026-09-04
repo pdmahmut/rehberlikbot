@@ -6,15 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  GraduationCap,
   Search,
   RefreshCw,
   User,
   Calendar,
-  X,
   UserCheck,
   ChevronRight,
-  ChevronDown,
   History,
   Users,
   BarChart3,
@@ -137,7 +134,6 @@ export default function OgrenciListesiPage() {
 
   // Aktif randevular ve bekleyen başvurular
   const [activeAppointments, setActiveAppointments] = useState<any[]>([]);
-  const [attendedAppointments, setAttendedAppointments] = useState<StudentAppointment[]>([]);
   const [pendingApplications, setPendingApplications] = useState<any[]>([]);
   const [studentApplicationHistory, setStudentApplicationHistory] = useState<StudentApplicationHistoryItem[]>([]);
 
@@ -210,7 +206,16 @@ export default function OgrenciListesiPage() {
     };
   }, [classDropdownOpen]);
 
-  // Sınıf rehber öğretmenleri ve mevcutları yükle
+  // Sinif rehber ogretmenleri ve ogrenci sayilari.
+  //
+  // Bu blok onceden [classes] bagimliligiyla calisiyordu; ikisi de sinif
+  // listesine ihtiyac duymadigi halde /api/data bitene kadar bekliyorlardi.
+  // Ayrica classes her degistiginde ogretmenler tekrar cekiliyordu. Artik
+  // sayfa acilir acilmaz, digerleriyle ayni anda gidiyorlar.
+  //
+  // Ogrenci sayilari da tek istekte geliyor: onceden her sinif icin ayri bir
+  // istek atilip donen listenin uzunlugu sayiliyordu (12 sinif = 12 istek ve
+  // 12 yeniden cizim), sayfa bu yuzden yukaridan asagi yavas yavas doluyordu.
   useEffect(() => {
     fetch("/api/teachers?all=1")
       .then((r) => r.json())
@@ -225,18 +230,11 @@ export default function OgrenciListesiPage() {
       })
       .catch(() => {});
 
-    if (classes.length > 0) {
-      classes.forEach((c) => {
-        fetch(`/api/students?sinifSube=${encodeURIComponent(c.value)}`)
-          .then((r) => r.json())
-          .then((data) => {
-            const count = Array.isArray(data) ? data.length : 0;
-            setClassCounts((prev) => ({ ...prev, [c.value]: count }));
-          })
-          .catch(() => {});
-      });
-    }
-  }, [classes]);
+    fetch("/api/students?counts=1")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((data) => setClassCounts(data || {}))
+      .catch(() => {});
+  }, []);
 
   const handleGlobalStudentSelect = (result: any) => {
     setGlobalSearch("");
@@ -298,35 +296,10 @@ export default function OgrenciListesiPage() {
         }
       }
       setActiveAppointments(plannedAppointments);
-      setAttendedAppointments(attendedAppointmentsData);
 
       // 2. Başvuru geçmişi (tüm kaynaklar)
       if (supabase) {
         const actualSourceKeys = new Set<string>();
-
-        const [refKeyData, indKeyData, incKeyData, parKeyData] = await Promise.all([
-          supabase.from("referrals").select("id").ilike("student_name", `%${cleanName}%`),
-          supabase.from("individual_requests").select("id").ilike("student_name", `%${cleanName}%`),
-          supabase.from("student_incidents").select("id").ilike("target_student_name", `%${cleanName}%`),
-          supabase.from("parent_meeting_requests").select("id").ilike("student_name", `%${cleanName}%`),
-        ]);
-
-        (refKeyData.data || []).forEach((r: any) => {
-          const key = buildSourceRecordKey("teacher_referral", r.id);
-          if (key) actualSourceKeys.add(key);
-        });
-        (indKeyData.data || []).forEach((r: any) => {
-          const key = buildSourceRecordKey("self_application", r.id);
-          if (key) actualSourceKeys.add(key);
-        });
-        (incKeyData.data || []).forEach((r: any) => {
-          const key = buildSourceRecordKey("student_report", r.id);
-          if (key) actualSourceKeys.add(key);
-        });
-        (parKeyData.data || []).forEach((r: any) => {
-          const key = buildSourceRecordKey("parent_request", r.id);
-          if (key) actualSourceKeys.add(key);
-        });
 
         const [obsRes, refRes, indRes, incRes, parRes] = await Promise.all([
           supabase
@@ -339,6 +312,19 @@ export default function OgrenciListesiPage() {
           supabase.from("student_incidents").select("*").ilike("target_student_name", `%${cleanName}%`),
           supabase.from("parent_meeting_requests").select("*").ilike("student_name", `%${cleanName}%`),
         ]);
+
+        // Kaynak anahtarlari, ayri bir sorgu grubu yerine yukarida zaten
+        // cekilmis olan tam kayitlardan uretilir.
+        const anahtarla = (rows: any[] | null, sourceType: string) => {
+          (rows || []).forEach((r: any) => {
+            const key = buildSourceRecordKey(sourceType, r.id);
+            if (key) actualSourceKeys.add(key);
+          });
+        };
+        anahtarla(refRes.data, "teacher_referral");
+        anahtarla(indRes.data, "self_application");
+        anahtarla(incRes.data, "student_report");
+        anahtarla(parRes.data, "parent_request");
 
         const rawRecords: any[] = [];
         (refRes.data || [])
@@ -535,7 +521,6 @@ export default function OgrenciListesiPage() {
     } catch (err) {
       console.error("loadStudentActiveData error:", err);
       setActiveAppointments([]);
-      setAttendedAppointments([]);
       setStudentApplicationHistory([]);
       setPendingApplications([]);
     }
@@ -546,7 +531,6 @@ export default function OgrenciListesiPage() {
     setLoadingHistory(true);
     setStudentHistory(null);
     setActiveAppointments([]);
-    setAttendedAppointments([]);
     setStudentApplicationHistory([]);
     try {
       let url = `/api/student-history?studentName=${encodeURIComponent(studentName)}`;
@@ -597,7 +581,6 @@ export default function OgrenciListesiPage() {
     setLoadingHistory(true);
     setStudentHistory(null);
     setActiveAppointments([]);
-    setAttendedAppointments([]);
     setStudentApplicationHistory([]);
     try {
       const studentName = student.text.replace(/^\d+\s+/, "").trim();
@@ -623,7 +606,6 @@ export default function OgrenciListesiPage() {
     setSelectedStudent(null);
     setStudentHistory(null);
     setActiveAppointments([]);
-    setAttendedAppointments([]);
     setStudentApplicationHistory([]);
     setPendingApplications([]);
   };
@@ -633,16 +615,6 @@ export default function OgrenciListesiPage() {
       s.text.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [students, searchTerm]);
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" });
-  };
-
-  const formatDateTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-  };
 
   const getReasonColor = (reason: string) => {
     const r = reason.toLowerCase();
@@ -704,34 +676,6 @@ export default function OgrenciListesiPage() {
       .sort((a, b) => b.time - a.time);
     return sorted[0]?.raw || new Date().toISOString();
   };
-
-  const isAppointmentAfterReferral = (
-    appointment: StudentAppointment,
-    referralDate: string
-  ) => {
-    const referralTime = new Date(referralDate).getTime();
-    if (!Number.isFinite(referralTime)) return true;
-    const appointmentDateTime = appointment.appointment_date
-      ? new Date(`${appointment.appointment_date}T00:00:00`).getTime()
-      : Number.NaN;
-    const appointmentCreatedAt = appointment.created_at
-      ? new Date(appointment.created_at).getTime()
-      : Number.NaN;
-    const appointmentUpdatedAt = appointment.updated_at
-      ? new Date(appointment.updated_at).getTime()
-      : Number.NaN;
-    const candidateTimes = [
-      appointmentDateTime,
-      appointmentCreatedAt,
-      appointmentUpdatedAt,
-    ].filter((time) => Number.isFinite(time));
-    if (candidateTimes.length === 0) return false;
-    return Math.max(...candidateTimes) >= referralTime;
-  };
-
-  const lastReferralDate = studentHistory?.referrals[0]?.date
-    ? formatDate(studentHistory.referrals[0].date)
-    : undefined;
 
   // Randevu oluştur — takvim sayfasına yönlendir, modal otomatik açılsın
   const handleCreateAppointment = () => {
