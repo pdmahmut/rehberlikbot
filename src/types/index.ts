@@ -168,30 +168,6 @@ export const YONLENDIRME_NEDENLERI = YONLENDIRME_KATEGORILERI.map(k => k.baslik)
 
 export type YonlendirmeNedeni = string;
 
-// Disiplin Ceza Türleri
-export const DISIPLIN_CEZALARI = [
-  "Sözlü Uyarı",
-  "Öğrenci Sözleşmesi İmzalama",
-  "Kınama",
-  "Okul Değişikliği Talebi"
-] as const;
-
-export type DisiplinCezasi = typeof DISIPLIN_CEZALARI[number];
-
-// Disiplin kaydı için tip
-export interface DisiplinRecord {
-  id?: string;
-  created_at?: string;
-  student_id: string;
-  student_name: string;
-  class_key: string;
-  class_display: string;
-  event_date: string;
-  reason: string;
-  penalty_type: DisiplinCezasi;
-  notes?: string | null;
-}
-
 // Öğrenci bildirimi / akran şikayeti kaydı
 export const INCIDENT_REPORTER_TYPES = [
   { value: 'student', label: 'Öğrenci' },
