@@ -47,39 +47,108 @@ interface QueryState {
   returning: boolean;
 }
 
-async function execute(state: QueryState): Promise<DbResult<any>> {
+// --- Istek gruplama ---------------------------------------------------
+//
+// Tarayicidan sunucuya her gidis-donus ~300 ms suruyor ve bu sure sorgunun
+// buyuklugunden bagimsiz. Bir sayfa acilirken sekiz sorgu gonderiliyorsa
+// eskiden bu sekiz ayri HTTP istegi demekti.
+//
+// Ayni anda (ayni mikro-gorevde) gonderilen sorgular burada toplanip tek
+// istekte yollanir. Promise.all([...]) icindeki sorgular dogal olarak ayni
+// anda basladigi icin sayfa kodlarinda hicbir degisiklik gerekmez.
+
+type PendingQuery = {
+  payload: Record<string, unknown>;
+  resolve: (value: DbResult<any>) => void;
+};
+
+let pending: PendingQuery[] = [];
+let flushScheduled = false;
+
+/** Tek istekte gonderilecek azami sorgu sayisi (sunucu tarafiyla ayni). */
+const MAX_BATCH = 25;
+
+function hataSonucu(message: string): DbResult<any> {
+  return { data: null, error: { message } };
+}
+
+async function flush() {
+  const batch = pending;
+  pending = [];
+  flushScheduled = false;
+
+  // Tek sorgu varsa gruplamaya gerek yok; eski bicimde gonderilir.
+  if (batch.length === 1) {
+    const { payload, resolve } = batch[0];
+    resolve(await gonder("/api/db", payload));
+    return;
+  }
+
+  for (let i = 0; i < batch.length; i += MAX_BATCH) {
+    const dilim = batch.slice(i, i + MAX_BATCH);
+    try {
+      const response = await fetch("/api/db", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ queries: dilim.map((q) => q.payload) }),
+      });
+      const body = await response.json().catch(() => null);
+
+      if (!response.ok || !Array.isArray(body?.results)) {
+        const mesaj = body?.error || `İstek başarısız (${response.status})`;
+        dilim.forEach((q) => q.resolve(hataSonucu(mesaj)));
+        continue;
+      }
+
+      dilim.forEach((q, idx) => {
+        const r = body.results[idx];
+        q.resolve({ data: r?.data ?? null, error: r?.error ?? null });
+      });
+    } catch (err) {
+      const mesaj = err instanceof Error ? err.message : "Bağlantı hatası";
+      dilim.forEach((q) => q.resolve(hataSonucu(mesaj)));
+    }
+  }
+}
+
+async function gonder(url: string, payload: unknown): Promise<DbResult<any>> {
   try {
-    const response = await fetch("/api/db", {
+    const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        table: state.table,
-        operation: state.operation,
-        columns: state.columns,
-        filters: state.filters,
-        order: state.order,
-        limit: state.limit,
-        rowMode: state.rowMode,
-        values: state.values,
-        returning: state.returning,
-      }),
+      body: JSON.stringify(payload),
     });
-
-    const payload = await response.json().catch(() => null);
-
+    const body = await response.json().catch(() => null);
     if (!response.ok) {
-      return {
-        data: null,
-        error: { message: payload?.error || `İstek başarısız (${response.status})` },
-      };
+      return hataSonucu(body?.error || `İstek başarısız (${response.status})`);
     }
-    return { data: payload?.data ?? null, error: payload?.error ?? null };
+    return { data: body?.data ?? null, error: body?.error ?? null };
   } catch (err) {
-    return {
-      data: null,
-      error: { message: err instanceof Error ? err.message : "Bağlantı hatası" },
-    };
+    return hataSonucu(err instanceof Error ? err.message : "Bağlantı hatası");
   }
+}
+
+function execute(state: QueryState): Promise<DbResult<any>> {
+  const payload = {
+    table: state.table,
+    operation: state.operation,
+    columns: state.columns,
+    filters: state.filters,
+    order: state.order,
+    limit: state.limit,
+    rowMode: state.rowMode,
+    values: state.values,
+    returning: state.returning,
+  };
+
+  return new Promise<DbResult<any>>((resolve) => {
+    pending.push({ payload, resolve });
+    if (!flushScheduled) {
+      flushScheduled = true;
+      // Mikro-gorev: ayni anda baslatilan tum sorgular toplanir.
+      queueMicrotask(flush);
+    }
+  });
 }
 
 /**

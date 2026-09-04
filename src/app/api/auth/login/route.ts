@@ -35,7 +35,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Şifre gerekli' }, { status: 400 });
     }
 
-    const limit = await checkLoginRateLimit(ip);
+    // Deneme siniri ile sifre dogrulamasi birbirini beklemez; ikisi birlikte
+    // baslatilir. Sunucudan veritabanina her gidis-donus yarim saniyeye
+    // yakin surdugu icin bu adimi sirali birakmak girisi belirgin sekilde
+    // yavaslatiyordu. Sinir asilmissa sifre sonucu kullanilmadan atilir.
+    const [limit, adminOk] = await Promise.all([
+      checkLoginRateLimit(ip),
+      role === 'admin' ? verifyAdminPassword(entered) : Promise.resolve(false),
+    ]);
+
     if (!limit.allowed) {
       return NextResponse.json(
         { error: 'Çok fazla hatalı deneme. Lütfen 15 dakika sonra tekrar deneyin.' },
@@ -45,12 +53,13 @@ export async function POST(request: NextRequest) {
 
     // --- Yonetici girisi ---
     if (role === 'admin') {
-      if (!(await verifyAdminPassword(entered))) {
+      if (!adminOk) {
         await recordFailedLogin(ip, 'admin');
         return NextResponse.json({ error: INVALID_CREDENTIALS }, { status: 401 });
       }
 
-      await clearLoginAttempts(ip);
+      // Temizlik girisin sonucunu etkilemez; kullaniciyi bekletmeye gerek yok.
+      void clearLoginAttempts(ip);
       const token = await createSessionToken({ role: 'admin' });
       const response = NextResponse.json({ success: true, role: 'admin' });
       response.cookies.set(COOKIE_NAME, token, SESSION_COOKIE_OPTIONS);
@@ -81,7 +90,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: INVALID_CREDENTIALS }, { status: 401 });
     }
 
-    await clearLoginAttempts(ip);
+    void clearLoginAttempts(ip);
     const token = await createSessionToken(
       await buildTeacherSessionUser({
         teacherId: teacher.id,

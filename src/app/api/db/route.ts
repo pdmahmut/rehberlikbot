@@ -58,31 +58,26 @@ function applyFilters(builder: any, filters: QueryFilter[]) {
   return result;
 }
 
-export async function POST(request: NextRequest) {
-  const guard = await requireSession();
-  if (!guard.ok) return guard.response;
-
-  const session = guard.session;
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Geçersiz istek gövdesi" }, { status: 400 });
-  }
-
-  const validated = validateQuery(body);
+/**
+ * Tek bir sorguyu calistirir. Yetki ve ogretmen kapsam filtresi burada
+ * uygulanir; toplu istekteki her sorgu da bu fonksiyondan gecer.
+ */
+async function runQuery(
+  raw: unknown,
+  session: SessionUser
+): Promise<{ data: unknown; error: { message: string; code?: string } | null }> {
+  const validated = validateQuery(raw);
   if (!validated.ok) {
-    return NextResponse.json({ error: validated.error }, { status: 400 });
+    return { data: null, error: { message: validated.error } };
   }
 
   const query = validated.query;
 
   if (!isOperationAllowed(query.table, query.operation, session.role)) {
-    return NextResponse.json(
-      { error: `Bu işlem için yetkiniz yok: ${query.operation} ${query.table}` },
-      { status: 403 }
-    );
+    return {
+      data: null,
+      error: { message: `Bu işlem için yetkiniz yok: ${query.operation} ${query.table}` },
+    };
   }
 
   // Ogretmen filtresi istemciden GELMEZ, burada eklenir. Istemcinin
@@ -128,12 +123,60 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await builder;
 
-    if (error) {
-      return NextResponse.json({ data: null, error: { message: error.message, code: error.code } });
-    }
-    return NextResponse.json({ data, error: null });
+    if (error) return { data: null, error: { message: error.message, code: error.code } };
+    return { data, error: null };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Veritabanı hatası";
-    return NextResponse.json({ data: null, error: { message } }, { status: 500 });
+    return { data: null, error: { message } };
   }
+}
+
+/** Tek istekte gonderilebilecek azami sorgu sayisi. */
+const MAX_BATCH = 25;
+
+export async function POST(request: NextRequest) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+
+  const session = guard.session;
+
+  let body: any;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Geçersiz istek gövdesi" }, { status: 400 });
+  }
+
+  // --- Toplu istek ---
+  //
+  // Tarayicidan Vercel'e her gidis-donus ~300 ms suruyor. Bir sayfa acilirken
+  // sekiz ayri sorgu gonderiliyorsa bu sekiz ayri istek demekti. Ayni anda
+  // gonderilen sorgular istemci tarafinda tek istekte toplanir; burada
+  // sunucuda paralel calistirilir. Her sorgu yetki ve kapsam kontrolunden
+  // tek tek gecer, yani toplu olmak hicbir denetimi atlamaz.
+  if (Array.isArray(body?.queries)) {
+    if (body.queries.length === 0) {
+      return NextResponse.json({ results: [] });
+    }
+    if (body.queries.length > MAX_BATCH) {
+      return NextResponse.json(
+        { error: `Tek istekte en fazla ${MAX_BATCH} sorgu gonderilebilir` },
+        { status: 400 }
+      );
+    }
+
+    const results = await Promise.all(
+      body.queries.map((q: unknown) => runQuery(q, session))
+    );
+    return NextResponse.json({ results });
+  }
+
+  // --- Tek sorgu (eski bicim, korunuyor) ---
+  const validated = validateQuery(body);
+  if (!validated.ok) {
+    return NextResponse.json({ error: validated.error }, { status: 400 });
+  }
+
+  const result = await runQuery(body, session);
+  return NextResponse.json(result);
 }
