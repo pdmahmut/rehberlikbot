@@ -494,14 +494,17 @@ export default function BasvurularPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [referralResult, observationResult, incidentResult, requestResult, attendedResult, scheduledResult, individualRequestResult] = await Promise.all([
+      // Takip listesi de bu grubun icinde: onceden digerleri bittikten SONRA
+      // ayrica bekleniyordu ve her acilisa bir gidis-donus (~440 ms) ekliyordu.
+      const [referralResult, observationResult, incidentResult, requestResult, attendedResult, scheduledResult, individualRequestResult, followRes] = await Promise.all([
         supabase.from("referrals").select("*").order("created_at", { ascending: false }),
         supabase.from("observation_pool").select("*").order("created_at", { ascending: false }),
         supabase.from("student_incidents").select("*").in("status", ["new", "reviewing"]).order("incident_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("parent_meeting_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("appointments").select("*").eq("status", "attended").eq("participant_type", "student").order("appointment_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("appointments").select("*").neq("status", "pending").neq("status", "attended").neq("status", "cancelled").eq("participant_type", "student").order("appointment_date", { ascending: false }).order("created_at", { ascending: false }),
-        supabase.from("individual_requests").select("*").order("created_at", { ascending: false })
+        supabase.from("individual_requests").select("*").order("created_at", { ascending: false }),
+        fetch("/api/follow-up").catch(() => null)
       ]);
       if (!referralResult.error) setReferrals(referralResult.data || []);
       if (!observationResult.error) setObservations(observationResult.data || []);
@@ -511,11 +514,9 @@ export default function BasvurularPage() {
       if (!scheduledResult.error) setScheduledAppointments(scheduledResult.data || []);
       if (!individualRequestResult.error) setIndividualRequests(individualRequestResult.data || []);
 
-      // Takip listesi ayri bir uc noktadan gelir. Basarisiz olursa liste yine
-      // acilir, sadece rozetler gorunmez.
-      try {
-        const followRes = await fetch("/api/follow-up");
-        if (followRes.ok) {
+      // Takip listesi alinamazsa liste yine acilir, sadece rozetler gorunmez.
+      if (followRes?.ok) {
+        try {
           const followData = await followRes.json();
           setFollowedNames(
             new Set(
@@ -524,9 +525,9 @@ export default function BasvurularPage() {
               )
             )
           );
+        } catch {
+          // rozetler olmadan devam
         }
-      } catch {
-        // rozetler olmadan devam
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Veri yüklenirken hata oluştu");
@@ -994,14 +995,6 @@ export default function BasvurularPage() {
     created_at: new Date().toISOString()
   } as any : null;
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-14">
-        <Loader2 className="h-8 w-8 animate-spin text-cyan-600" />
-        <span className="ml-3 text-slate-600">Başvurular yükleniyor...</span>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -1065,7 +1058,7 @@ export default function BasvurularPage() {
                 onClick={() => setApplicationsStatusFilter(active ? "all" : s.key)}
                 className={`flex items-baseline gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${tones[s.tone]}`}
               >
-                <span className="text-base font-semibold tabular-nums">{s.count}</span>
+                <span className="text-base font-semibold tabular-nums">{loading ? "–" : s.count}</span>
                 <span>{s.label}</span>
               </button>
             );
@@ -1073,9 +1066,11 @@ export default function BasvurularPage() {
           <div className="ml-auto flex items-center text-sm text-slate-400">
             {/* Satir sayisi ogrenci sayisidir; basvuru sayisindan az olabilir,
                 cunku ayni ogrencinin basvurulari tek satirda toplanir. */}
-            {applicationGroups.length === statusCounts.toplam
-              ? `toplam ${statusCounts.toplam} başvuru`
-              : `${statusCounts.toplam} başvuru · ${applicationGroups.length} öğrenci`}
+            {loading
+              ? "yükleniyor…"
+              : applicationGroups.length === statusCounts.toplam
+                ? `toplam ${statusCounts.toplam} başvuru`
+                : `${statusCounts.toplam} başvuru · ${applicationGroups.length} öğrenci`}
           </div>
         </div>
       </div>
@@ -1339,7 +1334,19 @@ export default function BasvurularPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredApplications.length === 0 ? (
+                {loading ? (
+                  // Iskelet satirlar: sayfanin yerlesimi hemen oturur,
+                  // veri gelince yerine gecer.
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <tr key={`iskelet-${i}`} className="border-b border-slate-100">
+                      {Array.from({ length: applicationsSourceFilter === "Öğretmen Yönlendirmeleri" ? 8 : 7 }).map((__, j) => (
+                        <td key={j} className="px-4 py-3">
+                          <div className="h-4 animate-pulse rounded bg-slate-100" />
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                ) : filteredApplications.length === 0 ? (
                   <tr>
                     <td colSpan={applicationsSourceFilter === "Öğretmen Yönlendirmeleri" ? 8 : 7} className="p-8 text-center text-slate-500">
                       <MessageSquare className="mx-auto mb-3 h-10 w-10 text-slate-300" />
