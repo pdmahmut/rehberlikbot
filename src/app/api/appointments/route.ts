@@ -812,21 +812,6 @@ export async function DELETE(request: NextRequest) {
     }
 
 
-    if (appointmentIds.length > 0) {
-      const { error: taskDeleteError } = await supabase
-        .from("appointment_tasks")
-        .delete()
-        .in("appointment_id", appointmentIds);
-
-      if (taskDeleteError) {
-        console.error("Appointment tasks delete error:", taskDeleteError);
-        return NextResponse.json(
-          { error: "Randevu görevleri silinirken hata oluştu", details: taskDeleteError.message },
-          { status: 500 }
-        );
-      }
-    }
-
     let query = supabase.from("appointments").delete();
 
     if (id) {

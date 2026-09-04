@@ -49,7 +49,6 @@ export const TABLE_POLICIES: Record<string, TablePolicy> = {
   tasks: { admin: ["select", "insert", "delete"], teacher: NONE },
   follow_ups: { admin: R, teacher: NONE },
   class_activities: { admin: R, teacher: NONE },
-  work_requests: { admin: R, teacher: NONE },
 };
 
 export function getTablePolicy(table: string): TablePolicy | null {

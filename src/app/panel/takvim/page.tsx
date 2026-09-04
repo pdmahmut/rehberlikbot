@@ -1503,11 +1503,6 @@ export default function TakvimPage() {
     try {
       const { error } = await supabase.from('guidance_plans').update({ status: newStatus }).eq('id', id);
       if (error) throw error;
-      // Bu plana bağlı bir sınıf çalışma talebi varsa onu da güncelle
-      await supabase
-        .from('work_requests')
-        .update({ status: newStatus === 'completed' ? 'tamamlandi' : 'planlandı' })
-        .eq('guidance_plan_id', id);
       toast.success(newStatus === 'completed' ? 'Tamamlandı' : 'Durum geri alındı');
       await loadData();
     } catch { toast.error('Güncellenemedi'); }

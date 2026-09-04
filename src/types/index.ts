@@ -458,16 +458,6 @@ export interface AppointmentClosureData {
   create_follow_up?: boolean;
 }
 
-// Randevu görevi
-export interface AppointmentTask {
-  id: string;
-  created_at: string;
-  appointment_id: string;
-  task_description: string;
-  is_completed: boolean;
-  due_date?: string;
-}
-
 // Randevu şablonu
 export interface AppointmentTemplate {
   id: string;

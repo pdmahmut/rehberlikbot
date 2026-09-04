@@ -54,7 +54,6 @@ npm run dev
 | `SESSION_SECRET` | Oturum çerezlerini imzalar (en az 32 karakter) |
 | `PASSWORD_SECRET` | Öğretmen şifrelerini şifreler (en az 32 karakter, **değiştirmeyin**) |
 | `ADMIN_PASSWORD` | Yalnızca ilk kurulumda; sonrasında panelden değiştirilir |
-| `GEMINI_API_KEY` | Belge ve rapor üretimi için (isteğe bağlı) |
 
 ## Güvenlik notları
 

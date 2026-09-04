@@ -31,7 +31,6 @@ export const RESET_GROUPS: ResetGroup[] = [
     tables: [
       "referrals",
       "appointments",
-      "appointment_tasks",
       "observation_pool",
       "individual_requests",
       "parent_meeting_requests",
@@ -51,8 +50,6 @@ export const RESET_GROUPS: ResetGroup[] = [
       "class_requests",
       "class_request_categories",
       "class_student_requests",
-      "deletion_requests",
-      "work_requests",
       "admin_notification_states",
     ],
   },
