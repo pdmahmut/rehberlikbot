@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -73,9 +73,6 @@ const toMinutes = (time: string) => {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
 };
-
-const getLessonTimelineMeta = (slot: string) =>
-  DEFAULT_LESSON_TIMELINE.find((item) => item.value === slot);
 
 const stripParticipantSuffix = (title: string) =>
   title.replace(/\s*\((Öğrenci|Veli|Öğretmen)\)\s*$/i, "").trim();
@@ -376,9 +373,6 @@ export default function TakvimPage() {
   const [followUps, setFollowUps] = useState<any[]>([]);
 
   // Filtre State'leri
-  const [showAppointments, setShowAppointments] = useState(true);
-  const [showActivities, setShowActivities] = useState(true);
-  const [showTasks, setShowTasks] = useState(true);
   const [taskFilter, setTaskFilter] = useState<'today' | 'all'>('today');
   const [selectedTaskDetail, setSelectedTaskDetail] = useState<any>(null);
   const [allTasks, setAllTasks] = useState<any[]>([]);
@@ -1111,7 +1105,7 @@ export default function TakvimPage() {
     try {
       let resolvedSourceApplicationId = formData.source_application_id || "";
       let resolvedSourceApplicationType = formData.source_application_type || "";
-      let resolvedSourceIndividualRequestId = formData.source_individual_request_id || "";
+      const resolvedSourceIndividualRequestId = formData.source_individual_request_id || "";
 
       const needsFollowUpSource =
         isDirectProgramStudentAppointment &&
@@ -1253,7 +1247,7 @@ export default function TakvimPage() {
       toast.success('Görev eklendi');
       closeTaskModal();
       loadData();
-    } catch (error: any) {
+    } catch {
       toast.error('Görev eklenirken hata oluştu');
     } finally {
       setTaskSaving(false);
@@ -1378,7 +1372,7 @@ export default function TakvimPage() {
           window.location.href = `/panel/takvim?${params.toString()}`;
         }
       }
-    } catch (error) {
+    } catch {
       toast.error('Randevu durumu değiştirilirken hata oluştu');
     } finally {
       setAttendanceSaving(false);
@@ -1576,15 +1570,12 @@ export default function TakvimPage() {
 
   const events = useMemo<CalendarEvent[]>(() => {
     const allEvents: CalendarEvent[] = [];
-    if (showAppointments) {
-      appointments.forEach(app => {
+    appointments.forEach(app => {
         const colors: any = { planned: 'blue', attended: 'green', not_attended: 'red', postponed: 'amber', cancelled: 'slate' };
-        const pType = app.participant_type === 'student' ? 'Öğrenci' : app.participant_type === 'parent' ? 'Veli' : 'Öğretmen';
-        allEvents.push({ id: app.id, date: app.appointment_date, time: app.start_time, title: app.participant_class ? `${app.participant_class} ${app.participant_name}` : app.participant_name, type: 'appointment', status: app.status, color: colors[app.status] || 'blue', data: app });
-      });
-    }
-    if (showActivities) {
-      guidancePlans.forEach(plan => {
+      allEvents.push({ id: app.id, date: app.appointment_date, time: app.start_time, title: app.participant_class ? `${app.participant_class} ${app.participant_name}` : app.participant_name, type: 'appointment', status: app.status, color: colors[app.status] || 'blue', data: app });
+    });
+
+    guidancePlans.forEach(plan => {
         allEvents.push({
           id: plan.id,
           date: plan.plan_date,
@@ -1599,7 +1590,7 @@ export default function TakvimPage() {
           }
         });
       });
-      classRequests.forEach(req => {
+    classRequests.forEach(req => {
         allEvents.push({
           id: req.id,
           date: req.scheduled_date,
@@ -1609,24 +1600,36 @@ export default function TakvimPage() {
           color: 'violet',
           status: req.status,
           data: req
-        });
       });
-    }
-    if (showTasks) {
-      tasks.forEach(task => {
-        allEvents.push({ id: task.id, date: task.due_date, time: task.due_time, title: task.title, type: 'task', status: task.status, color: 'orange', data: task });
-      });
-      followUps.forEach(fu => {
-        allEvents.push({ id: fu.id, date: fu.follow_up_date, title: `Takip: ${fu.student_name}`, type: 'follow_up', status: fu.status, color: 'teal', data: fu });
-      });
-    }
-    return allEvents;
-  }, [appointments, guidancePlans, classRequests, tasks, followUps, showAppointments, showActivities, showTasks, guidanceTopicMap]);
+    });
 
-  const getEventsForDate = (date: Date) => {
-    const dateStr = getLocalDateString(date);
-    return events.filter(e => e.date === dateStr);
-  };
+    tasks.forEach(task => {
+      allEvents.push({ id: task.id, date: task.due_date, time: task.due_time, title: task.title, type: 'task', status: task.status, color: 'orange', data: task });
+    });
+
+    followUps.forEach(fu => {
+      allEvents.push({ id: fu.id, date: fu.follow_up_date, title: `Takip: ${fu.student_name}`, type: 'follow_up', status: fu.status, color: 'teal', data: fu });
+    });
+
+    return allEvents;
+  }, [appointments, guidancePlans, classRequests, tasks, followUps, guidanceTopicMap]);
+
+  // Etkinlikler gune gore bir kez gruplanir. Onceden her cagrida tum liste
+  // bastan taraniyordu; ay gorunumu bunu ~42, hafta gorunumu ~35 kez yapiyor.
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    for (const event of events) {
+      if (!event.date) continue;
+      const list = map.get(event.date);
+      if (list) list.push(event);
+      else map.set(event.date, [event]);
+    }
+    return map;
+  }, [events]);
+
+  const EMPTY_EVENTS: CalendarEvent[] = [];
+  const getEventsForDate = (date: Date) =>
+    eventsByDate.get(getLocalDateString(date)) || EMPTY_EVENTS;
 
   const calendarDays = useMemo(() => {
     const year = currentDate.getFullYear();
@@ -1986,12 +1989,17 @@ export default function TakvimPage() {
                 </div>
 
                 {/* Sağ Kolon: Görevler */}
+                {(() => {
+                const dayTasks = getEventsForDate(dayModalDate).filter(
+                  (e) => e.type === 'follow_up' || (e.type === 'task' && !e.data.related_guidance_plan_id)
+                );
+                return (
                 <div className="w-full max-w-sm space-y-4 justify-self-end">
                   <h3 className="font-bold text-slate-700 flex items-center gap-2 mb-2">
                     <ListTodo className="h-4 w-4 text-orange-500"/> Diğer Görevler
                   </h3>
                   <div className="flex h-full min-h-[300px] flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                    {getEventsForDate(dayModalDate).filter(e => e.type === 'follow_up' || (e.type === 'task' && !e.data.related_guidance_plan_id)).length === 0 ? (
+                    {dayTasks.length === 0 ? (
                       <div className="flex flex-1 flex-col items-center justify-center text-center text-slate-400">
                         <div className="mb-3 rounded-full bg-slate-100 p-3 text-slate-400">
                           <ListTodo className="h-6 w-6" />
@@ -2010,7 +2018,7 @@ export default function TakvimPage() {
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {getEventsForDate(dayModalDate).filter(e => e.type === 'follow_up' || (e.type === 'task' && !e.data.related_guidance_plan_id)).map(t => (
+                        {dayTasks.map(t => (
                           <div key={t.id} className={`rounded-lg border p-4 shadow-sm transition-all ${getOtherTaskPresentation(t).containerClass}`}>
                             <div className="flex items-start gap-3">
                               <button onClick={() => toggleTaskStatus(t.id, t.type, t.status)} className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${getOtherTaskPresentation(t).checkboxClass}`}>
@@ -2034,6 +2042,8 @@ export default function TakvimPage() {
                     )}
                   </div>
                 </div>
+                );
+                })()}
 
               </div>
             </div>
@@ -2483,8 +2493,9 @@ export default function TakvimPage() {
         </div>
       )}
 
-      {/* Başlık ve Üst Butonlar - sadece gün modunda göster */}
-      {viewType === 'day' && (
+      {/* Başlık ve üst butonlar. Onceden yalnizca gun gorunumunde
+          gosteriliyordu; hafta veya aya gecince "Yeni Randevu" dugmesi
+          kayboluyor ve once gune donmek gerekiyordu. */}
       <div className="rounded-[10px] border border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-white px-4 py-2.5 shadow-sm">
         <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-2.5">
@@ -2517,7 +2528,6 @@ export default function TakvimPage() {
           </div>
         </div>
       </div>
-      )}
 
       {/* Navigasyon */}
       <div className="flex flex-col gap-3 rounded-[10px] border border-slate-200 bg-white px-4 py-2.5 shadow-sm xl:flex-row xl:items-center xl:justify-between">
