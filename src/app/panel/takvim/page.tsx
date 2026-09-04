@@ -1272,6 +1272,41 @@ export default function TakvimPage() {
     setAttendanceChoiceAppointment(null);
   };
 
+  // Isaretlenmis bir randevuyu tekrar "planlandi" durumuna cevirir.
+  // Sinif rehberligi ve sinif talebi isaretleri zaten acilip kapanabiliyordu;
+  // randevularda geri donus yolu yoktu.
+  const handleUndoAttendance = async () => {
+    if (!attendanceChoiceAppointment) return;
+    try {
+      setAttendanceSaving(true);
+      const res = await fetch("/api/appointments", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: attendanceChoiceAppointment.id,
+          status: "planned",
+          outcome_decision: [],
+          source_application_status: "scheduled",
+          source_individual_request_id: attendanceChoiceAppointment.source_individual_request_id,
+          source_application_id: attendanceChoiceAppointment.source_application_id,
+          source_application_type: attendanceChoiceAppointment.source_application_type
+        })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "İşaret geri alınamadı");
+      }
+      toast.success("İşaret geri alındı, randevu tekrar planlandı");
+      setShowAttendanceChoiceModal(false);
+      setAttendanceChoiceAppointment(null);
+      await loadData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "İşaret geri alınamadı");
+    } finally {
+      setAttendanceSaving(false);
+    }
+  };
+
   const handleAttendanceChoice = async (choice: Exclude<AppointmentOutcomeChoice, "cancel">) => {
     if (!attendanceChoiceAppointment) return;
 
@@ -1795,6 +1830,12 @@ export default function TakvimPage() {
         loading={attendanceSaving}
         onClose={closeAttendanceChoiceModal}
         onSelect={handleAttendanceChoice}
+        onUndo={
+          attendanceChoiceAppointment &&
+          ["attended", "completed", "not_attended"].includes(String(attendanceChoiceAppointment.status || ""))
+            ? handleUndoAttendance
+            : undefined
+        }
       />
 
       {/* Ay Görünümü Gününe Tıklayınca Açılan Gün Detay Modalı */}

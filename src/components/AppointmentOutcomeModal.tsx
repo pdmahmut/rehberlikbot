@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Sparkles, UserX, X } from "lucide-react";
+import { CheckCircle2, RotateCcw, Sparkles, UserX, X } from "lucide-react";
 import type { Appointment } from "@/types";
 
 export type AppointmentOutcomeChoice = "completed" | "active_follow" | "not_attended" | "cancel";
@@ -18,6 +18,11 @@ type AppointmentOutcomeModalProps = {
    * kaydin sonucunu sonradan secerken gosterilmez.
    */
   allowNotAttended?: boolean;
+  /**
+   * Zaten isaretlenmis bir randevunun isaretini kaldirir. Verilmezse dugme
+   * gosterilmez (henuz isaretlenmemis randevularda geri alinacak bir sey yok).
+   */
+  onUndo?: () => void | Promise<void>;
 };
 
 const OPTIONS: Array<{
@@ -59,7 +64,8 @@ export function AppointmentOutcomeModal({
   loading = false,
   onClose,
   onSelect,
-  allowNotAttended = true
+  allowNotAttended = true,
+  onUndo
 }: AppointmentOutcomeModalProps) {
   if (!open || !appointment) return null;
 
@@ -116,9 +122,27 @@ export function AppointmentOutcomeModal({
           })}
         </div>
 
-        <div className="border-t bg-slate-50 px-6 py-4">
+        <div className="space-y-2 border-t bg-slate-50 px-6 py-4">
+          {onUndo && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void onUndo()}
+                disabled={loading}
+                className="w-full border-slate-300 text-slate-700 hover:bg-white"
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                İşareti geri al
+              </Button>
+              <p className="text-center text-xs text-slate-500">
+                Randevu tekrar planlanmış duruma döner. Öğrenci takip listenizdeyse
+                orada kalır; çıkarmak isterseniz Takibimdekiler ekranından yapabilirsiniz.
+              </p>
+            </>
+          )}
           <Button type="button" variant="outline" onClick={onClose} disabled={loading} className="w-full">
-            İptal
+            Kapat
           </Button>
         </div>
       </div>
