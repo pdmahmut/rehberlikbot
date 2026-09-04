@@ -604,6 +604,29 @@ export default function TakvimPage() {
   }, []);
 
   // --- Data Fetching ---
+
+  // Ders saatleri tarihten bagimsizdir ve okul yili boyunca degismez;
+  // sayfa acilirken bir kez yuklenir. Onceden loadData'nin basinda tek
+  // basina bekleniyor, diger sorgular ancak o bittikten sonra
+  // basliyordu; ustelik her ay degisiminde ve her kayittan sonra
+  // yeniden cekiliyordu.
+  useEffect(() => {
+    fetch("/api/lesson-hours")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data?.hours?.length) return;
+        setLessonTimeline(
+          data.hours.map((h: any) => ({
+            value: String(h.period_number),
+            timeLabel: `${h.start_time} - ${h.end_time}`,
+            start: h.start_time,
+            end: h.end_time,
+          }))
+        );
+      })
+      .catch(() => { /* varsayilan saatler kalir */ });
+  }, []);
+
   useEffect(() => {
     loadData();
   }, [currentDate]);
@@ -615,24 +638,6 @@ export default function TakvimPage() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      // Ders saatlerini yükle
-      try {
-        const hoursRes = await fetch("/api/lesson-hours");
-        if (hoursRes.ok) {
-          const hoursData = await hoursRes.json();
-          if (hoursData.hours && hoursData.hours.length > 0) {
-            setLessonTimeline(
-              hoursData.hours.map((h: any) => ({
-                value: String(h.period_number),
-                timeLabel: `${h.start_time} - ${h.end_time}`,
-                start: h.start_time,
-                end: h.end_time,
-              }))
-            );
-          }
-        }
-      } catch { /* varsayılan saatler kalır */ }
-
       const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
       const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
 

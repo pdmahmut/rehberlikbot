@@ -237,35 +237,47 @@ export default function SinifRehberligiPage() {
 
       if (error) throw error
 
-      const topicsWithPlans = await Promise.all(
-        (topicsData || []).map(async (topic: any) => {
-          const { data: plans } = await supabase
-            .from('guidance_plans')
-            .select('*')
-            .eq('topic_id', topic.id)
-            .order('class_key')
-          return { ...topic, plans: plans || [] }
-        })
-      )
+      // Planlar tek sorguda cekilip konuya gore gruplanir. Onceden her konu
+      // icin ayri bir sorgu atiliyordu; Supabase'e her gidis-donus ~440 ms
+      // surdugu icin konu sayisi arttikca sayfa belirgin sekilde yavasliyordu.
+      const { data: allPlans } = await supabase
+        .from('guidance_plans')
+        .select('*')
+        .order('class_key')
 
-      // Tüm kartları completed olan konuları otomatik olarak completed yap
-      const completedTopicIds: string[] = []
-      for (const topic of topicsWithPlans) {
-        if (topic.plans.length > 0) {
-          const allPlansCompleted = topic.plans.every((p: any) => p.status === 'completed')
-          if (allPlansCompleted && topic.status !== 'completed') {
-            console.log(`Auto-completing topic: ${topic.title}`)
-            await supabase
-              .from('guidance_topics')
-              .update({ status: 'completed' })
-              .eq('id', topic.id)
-            completedTopicIds.push(topic.id)
-          }
-        }
+      const plansByTopic = new Map<string, any[]>()
+      for (const plan of allPlans || []) {
+        if (!plan.topic_id) continue
+        const list = plansByTopic.get(plan.topic_id)
+        if (list) list.push(plan)
+        else plansByTopic.set(plan.topic_id, [plan])
+      }
+
+      const topicsWithPlans = (topicsData || []).map((topic: any) => ({
+        ...topic,
+        plans: plansByTopic.get(topic.id) || [],
+      }))
+
+      // Tüm kartları completed olan konuları otomatik olarak completed yap.
+      // Guncellemeler dongude tek tek degil, tek istekte yapilir.
+      const completedTopicIds = topicsWithPlans
+        .filter(
+          (topic: any) =>
+            topic.plans.length > 0 &&
+            topic.status !== 'completed' &&
+            topic.plans.every((p: any) => p.status === 'completed')
+        )
+        .map((topic: any) => topic.id)
+
+      if (completedTopicIds.length > 0) {
+        await supabase
+          .from('guidance_topics')
+          .update({ status: 'completed' })
+          .in('id', completedTopicIds)
       }
 
       // Completed olanları state'ten çıkar
-      const filteredTopics = topicsWithPlans.filter(t => !completedTopicIds.includes(t.id))
+      const filteredTopics = topicsWithPlans.filter((t: any) => !completedTopicIds.includes(t.id))
       setTopics(filteredTopics)
     } catch (err) {
       console.error(err)
