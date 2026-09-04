@@ -414,7 +414,8 @@ export async function POST(request: NextRequest) {
       console.warn("Sınıf etkinliği çakışma kontrolü atlandı:", activityConflictsResult.error);
     }
 
-    const OCCUPYING_STATUSES_EXCLUDED = ["cancelled", "pending"];
+    // Ogrenci gelmediyse o ders saati fiilen bostur; yeni randevuyu engellemez.
+    const OCCUPYING_STATUSES_EXCLUDED = ["cancelled", "pending", "not_attended"];
     const busyAppointments = (appointmentConflicts.data || []).filter(
       (item) =>
         normalizeLessonSlot(item.start_time) === normalizedSlot &&
@@ -627,7 +628,8 @@ export async function PUT(request: NextRequest) {
         console.warn("Güncelleme sınıf etkinliği çakışma kontrolü atlandı:", activityConflictsResult.error);
       }
 
-      const OCCUPYING_STATUSES_EXCLUDED = ["cancelled", "pending"];
+      // Ogrenci gelmediyse o ders saati fiilen bostur; yeni randevuyu engellemez.
+    const OCCUPYING_STATUSES_EXCLUDED = ["cancelled", "pending", "not_attended"];
       const busyAppointments = (appointmentConflicts.data || []).filter(
         (item) =>
           normalizeLessonSlot(item.start_time) === normalizedSlot &&

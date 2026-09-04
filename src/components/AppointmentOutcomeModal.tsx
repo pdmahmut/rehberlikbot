@@ -2,10 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Sparkles, X } from "lucide-react";
+import { CheckCircle2, Sparkles, UserX, X } from "lucide-react";
 import type { Appointment } from "@/types";
 
-export type AppointmentOutcomeChoice = "completed" | "active_follow" | "cancel";
+export type AppointmentOutcomeChoice = "completed" | "active_follow" | "not_attended" | "cancel";
 
 type AppointmentOutcomeModalProps = {
   open: boolean;
@@ -13,6 +13,11 @@ type AppointmentOutcomeModalProps = {
   loading?: boolean;
   onClose: () => void;
   onSelect: (choice: Exclude<AppointmentOutcomeChoice, "cancel">) => void | Promise<void>;
+  /**
+   * "Gelmedi" yalnizca yoklama alinirken anlamlidir. Gorusmesi yapilmis bir
+   * kaydin sonucunu sonradan secerken gosterilmez.
+   */
+  allowNotAttended?: boolean;
 };
 
 const OPTIONS: Array<{
@@ -35,6 +40,16 @@ const OPTIONS: Array<{
     description: "Öğrenci Aktif Takip durumuna geçer ve ilgili sekmeye taşınır.",
     icon: Sparkles,
     accent: "from-cyan-500 to-blue-600"
+  },
+  {
+    // Randevuyu ileri bir gune atmak o gunun programini bozar. Bunun yerine
+    // basvuru tekrar bekleyen kuyruguna doner, uygun oldugunuzda yeni bir
+    // randevu verirsiniz. Gelmedigi bilgisi kayitta kalir.
+    value: "not_attended",
+    title: "Gelmedi",
+    description: "Öğrenci randevuya gelmedi. Başvuru tekrar \"Bekliyor\" durumuna döner, ders saati serbest kalır.",
+    icon: UserX,
+    accent: "from-slate-400 to-slate-500"
   }
 ];
 
@@ -43,9 +58,14 @@ export function AppointmentOutcomeModal({
   appointment,
   loading = false,
   onClose,
-  onSelect
+  onSelect,
+  allowNotAttended = true
 }: AppointmentOutcomeModalProps) {
   if (!open || !appointment) return null;
+
+  const options = allowNotAttended
+    ? OPTIONS
+    : OPTIONS.filter((option) => option.value !== "not_attended");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -72,7 +92,7 @@ export function AppointmentOutcomeModal({
         </div>
 
         <div className="space-y-3 px-6 py-5">
-          {OPTIONS.map((option) => {
+          {options.map((option) => {
             const Icon = option.icon;
             return (
               <button

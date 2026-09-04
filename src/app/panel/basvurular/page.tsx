@@ -227,6 +227,9 @@ export default function BasvurularPage() {
 
   // Modal seçimi → outcome_decision kaydet
   const handleOutcomeSelect = async (choice: Exclude<AppointmentOutcomeChoice, "cancel">) => {
+    // "Gelmedi" bu ekranda gosterilmiyor: buradaki pencere, gorusmesi yapilmis
+    // bir kaydin sonucunu secmek icin aciliyor.
+    if (choice === "not_attended") return;
     if (!outcomeModalRecord) return;
     setSavingOutcome(true);
 
@@ -1466,6 +1469,7 @@ export default function BasvurularPage() {
 
       {/* Görüşme Sonucu Modalı */}
       <AppointmentOutcomeModal
+        allowNotAttended={false}
         open={!!outcomeModalRecord}
         appointment={fakeAppointmentForModal}
         loading={savingOutcome}

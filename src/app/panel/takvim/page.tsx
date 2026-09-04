@@ -133,6 +133,19 @@ const getLessonEventPresentation = (event: CalendarEvent) => {
     };
   }
 
+  // Gelmeyen ogrencinin randevusu, bekleyen bir randevu gibi gorunmemeli:
+  // gorusme olmadi, kayit yalnizca gecmis olarak duruyor.
+  if (event.status === "not_attended") {
+    return {
+      kindLabel,
+      badgeLabel: "Gelmedi",
+      containerClass: "border-slate-200 bg-slate-50 opacity-70 shadow-sm",
+      kindClass: "text-slate-500",
+      badgeClass: "border-slate-200 bg-white text-slate-500",
+      titleClass: "text-slate-500 line-through",
+    };
+  }
+
   if (isAppointment) {
     return {
       kindLabel,
@@ -163,6 +176,17 @@ const getTimelineStatusMeta = (event: CalendarEvent) => {
       badgeClass: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200",
       dotClass: "bg-emerald-500",
       cardClass: "border-emerald-100 bg-white",
+    };
+  }
+
+  if (event.status === "not_attended") {
+    return {
+      label: "Gelmedi",
+      icon: "alert" as const,
+      borderClass: "border-l-slate-400",
+      badgeClass: "bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200",
+      dotClass: "bg-slate-400",
+      cardClass: "border-slate-200 bg-white",
     };
   }
 
@@ -1253,12 +1277,16 @@ export default function TakvimPage() {
 
     const choiceMap: Record<Exclude<AppointmentOutcomeChoice, "cancel">, Partial<Appointment> & { source_application_status?: string }> = {
       completed: { status: "attended", outcome_decision: ["Tamamlandı"], source_application_status: "completed" },
-      active_follow: { status: "attended", outcome_decision: ["Aktif Takip"], source_application_status: "active_follow" }
+      active_follow: { status: "attended", outcome_decision: ["Aktif Takip"], source_application_status: "active_follow" },
+      // Gelmeyen ogrencinin basvurusu tekrar kuyruga doner; randevu kaydi
+      // silinmez, "gelmedi" olarak durur ki tekrar edenler gorulebilsin.
+      not_attended: { status: "not_attended", outcome_decision: ["Gelmedi"], source_application_status: "pending" }
     };
 
     const messages: Record<Exclude<AppointmentOutcomeChoice, "cancel">, string> = {
       completed: "Tamamlandı olarak işaretlendi",
-      active_follow: "Aktif Takip olarak işaretlendi"
+      active_follow: "Aktif Takip olarak işaretlendi",
+      not_attended: "Gelmedi olarak işaretlendi, başvuru tekrar bekliyor"
     };
 
     try {
