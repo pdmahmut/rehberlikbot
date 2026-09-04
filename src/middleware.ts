@@ -31,10 +31,8 @@ export async function middleware(request: NextRequest) {
     // Ogretmen sadece belirli sayfalara erisebilir
     const teacherAllowed = [
       '/panel/ogrenci-yonlendirmesi',
-      '/panel/yonlendirme-gecmisi',
       '/panel/yonlendirmeler',
       '/panel/sinifim',
-      '/panel/yaptigim-yonlendirmeler',
       '/panel/hesabim',
     ];
     if (session.role === 'teacher' && !teacherAllowed.some(p => pathname.startsWith(p))) {
