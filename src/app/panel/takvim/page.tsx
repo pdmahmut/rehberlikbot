@@ -123,9 +123,9 @@ const getLessonEventPresentation = (event: CalendarEvent) => {
     return {
       kindLabel,
       badgeLabel: "Tamamlandı",
-      containerClass: "border-green-200 bg-green-50 opacity-70 shadow-sm",
-      kindClass: "text-green-700",
-      badgeClass: "border-green-200 bg-white text-green-700",
+      containerClass: "border-emerald-200 bg-emerald-50 opacity-70 shadow-sm",
+      kindClass: "text-emerald-700",
+      badgeClass: "border-emerald-200 bg-white text-emerald-700",
       titleClass: "text-slate-600 line-through",
     };
   }
@@ -202,9 +202,9 @@ const getTimelineStatusMeta = (event: CalendarEvent) => {
     label: "Planlandı",
     icon: "clock" as const,
     borderClass: "border-l-sky-500",
-    badgeClass: "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200",
-    dotClass: "bg-sky-500",
-    cardClass: "border-sky-100 bg-white",
+    badgeClass: "bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200",
+    dotClass: "bg-blue-500",
+    cardClass: "border-blue-100 bg-white",
   };
 };
 
@@ -240,10 +240,10 @@ const getOtherTaskPresentation = (event: CalendarEvent) => {
 
   if (isCompleted) {
     return {
-      containerClass: "border-green-200 bg-green-50 opacity-70",
-      checkboxClass: "border-green-500 bg-green-500 text-white",
+      containerClass: "border-emerald-200 bg-emerald-50 opacity-70",
+      checkboxClass: "border-emerald-500 bg-emerald-500 text-white",
       titleClass: "text-slate-500 line-through",
-      badgeClass: "border-green-200 bg-white text-green-700",
+      badgeClass: "border-emerald-200 bg-white text-emerald-700",
     };
   }
 
@@ -1571,8 +1571,8 @@ export default function TakvimPage() {
   const events = useMemo<CalendarEvent[]>(() => {
     const allEvents: CalendarEvent[] = [];
     appointments.forEach(app => {
-        const colors: any = { planned: 'blue', attended: 'green', not_attended: 'red', postponed: 'amber', cancelled: 'slate' };
-      allEvents.push({ id: app.id, date: app.appointment_date, time: app.start_time, title: app.participant_class ? `${app.participant_class} ${app.participant_name}` : app.participant_name, type: 'appointment', status: app.status, color: colors[app.status] || 'blue', data: app });
+      // Renk turu anlatir; durum soluklastirma ve ustu cizme ile gosterilir.
+      allEvents.push({ id: app.id, date: app.appointment_date, time: app.start_time, title: app.participant_class ? `${app.participant_class} ${app.participant_name}` : app.participant_name, type: 'appointment', status: app.status, color: 'blue', data: app });
     });
 
     guidancePlans.forEach(plan => {
@@ -1604,7 +1604,7 @@ export default function TakvimPage() {
     });
 
     tasks.forEach(task => {
-      allEvents.push({ id: task.id, date: task.due_date, time: task.due_time, title: task.title, type: 'task', status: task.status, color: 'orange', data: task });
+      allEvents.push({ id: task.id, date: task.due_date, time: task.due_time, title: task.title, type: 'task', status: task.status, color: 'amber', data: task });
     });
 
     followUps.forEach(fu => {
@@ -1669,16 +1669,19 @@ export default function TakvimPage() {
 
   const isToday = (date: Date) => new Date().toDateString() === date.toDateString();
 
-  const colorMap: any = {
-    blue: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', dot: 'bg-blue-500' },
-    green: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-    red: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', dot: 'bg-red-500' },
-    amber: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', dot: 'bg-amber-500' },
-    purple: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', dot: 'bg-purple-500' },
-    orange: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', dot: 'bg-orange-500' },
-    teal: { bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-700', dot: 'bg-teal-500' },
-    emerald: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-    slate: { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700', dot: 'bg-slate-500' }
+  // Renk = etkinligin turu. Durum (tamamlandi / gelmedi) renk degil,
+  // soluklastirma ve ustu cizme ile gosterilir.
+  //
+  // Onceki haritada ayni renk birden fazla anahtarla duruyordu ve sinif
+  // talepleri 'violet' ile isaretlenirken haritada 'purple' yaziyordu;
+  // eslesme tutmadigi icin sinif talepleri ay gorunumunde gri cikiyordu.
+  const colorMap: Record<string, { bg: string; border: string; text: string; dot: string }> = {
+    blue:    { bg: 'bg-blue-50',    border: 'border-blue-200',    text: 'text-blue-700',    dot: 'bg-blue-500' },     // görüşme
+    emerald: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', dot: 'bg-emerald-500' },  // sınıf rehberliği
+    violet:  { bg: 'bg-violet-50',  border: 'border-violet-200',  text: 'text-violet-700',  dot: 'bg-violet-500' },   // sınıf talebi
+    amber:   { bg: 'bg-amber-50',   border: 'border-amber-200',   text: 'text-amber-700',   dot: 'bg-amber-500' },    // görev
+    teal:    { bg: 'bg-teal-50',    border: 'border-teal-200',    text: 'text-teal-700',    dot: 'bg-teal-500' },     // takip
+    slate:   { bg: 'bg-slate-50',   border: 'border-slate-200',   text: 'text-slate-700',   dot: 'bg-slate-500' },    // nötr
   };
 
   const getHeaderText = () => {
@@ -1694,7 +1697,7 @@ export default function TakvimPage() {
       return allTasks
         .filter((t: any) => !t.related_guidance_plan_id)
         .sort((a: any, b: any) => (a.status === 'completed' ? 1 : 0) - (b.status === 'completed' ? 1 : 0))
-        .map((t: any) => ({ id: t.id, date: t.due_date, title: t.title, type: 'task' as const, status: t.status, color: 'orange', data: t }));
+        .map((t: any) => ({ id: t.id, date: t.due_date, title: t.title, type: 'task' as const, status: t.status, color: 'amber', data: t }));
     }
     return getEventsForDate(currentDate).filter(
       (event) => event.type === "follow_up" || (event.type === "task" && !event.data.related_guidance_plan_id)
@@ -1710,7 +1713,7 @@ export default function TakvimPage() {
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
           <div className="absolute inset-0" onClick={() => setShowCrEditModal(false)} />
           <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white border border-slate-200 shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-purple-50 px-5 py-4">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-violet-50 px-5 py-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-violet-600">Planlama Güncelle</p>
                 <p className="text-sm font-bold text-slate-800 mt-0.5">{editingCr.class_display} — {getClassRequestCategoryLabel(editingCr)}</p>
@@ -1880,7 +1883,7 @@ export default function TakvimPage() {
                     return (
                       <div key={lesson} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-slate-300">
                         <div className="flex items-start gap-4">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-sm font-bold text-slate-700">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-bold text-slate-700">
                             {lesson}
                           </div>
                           <div className="min-w-0 flex-1 space-y-3">
@@ -1996,7 +1999,7 @@ export default function TakvimPage() {
                 return (
                 <div className="w-full max-w-sm space-y-4 justify-self-end">
                   <h3 className="font-bold text-slate-700 flex items-center gap-2 mb-2">
-                    <ListTodo className="h-4 w-4 text-orange-500"/> Diğer Görevler
+                    <ListTodo className="h-4 w-4 text-amber-500"/> Diğer Görevler
                   </h3>
                   <div className="flex h-full min-h-[300px] flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                     {dayTasks.length === 0 ? (
@@ -2056,9 +2059,9 @@ export default function TakvimPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
           <div className="absolute inset-0" onClick={closeTaskModal} aria-hidden="true" />
           <div className="relative z-10 w-full max-w-2xl overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-2xl">
-            <div className="flex items-center justify-between gap-4 border-b border-slate-100 bg-gradient-to-r from-green-50 via-white to-emerald-50 px-6 py-4">
+            <div className="flex items-center justify-between gap-4 border-b border-slate-100 bg-gradient-to-r from-emerald-50 via-white to-emerald-50 px-6 py-4">
               <div className="flex items-center gap-2">
-                <Plus className="h-5 w-5 text-green-600" />
+                <Plus className="h-5 w-5 text-emerald-600" />
                 <h2 className="text-lg font-bold text-slate-800">Yeni Görev Ekle</h2>
               </div>
               <button onClick={closeTaskModal} className="text-slate-400 hover:text-slate-700 transition-colors">
@@ -2082,7 +2085,7 @@ export default function TakvimPage() {
                     value={newTask.description}
                     onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
                     rows={2}
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                   />
                 </div>
                 <div>
@@ -2090,7 +2093,7 @@ export default function TakvimPage() {
                   <select
                     value={newTask.category}
                     onChange={(e) => setNewTask({ ...newTask, category: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                   >
                     {CATEGORIES.map(cat => (
                       <option key={cat.value} value={cat.value}>{cat.icon} {cat.label}</option>
@@ -2102,7 +2105,7 @@ export default function TakvimPage() {
                   <select
                     value={newTask.priority}
                     onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                   >
                     {PRIORITIES.map(pri => (
                       <option key={pri.value} value={pri.value}>{pri.label}</option>
@@ -2139,7 +2142,7 @@ export default function TakvimPage() {
               </div>
               <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
                 <Button variant="outline" onClick={closeTaskModal} className="h-10 rounded-xl px-5">İptal</Button>
-                <Button onClick={handleAddTask} disabled={taskSaving} className="h-10 rounded-xl bg-green-600 px-5 text-white hover:bg-green-700">
+                <Button onClick={handleAddTask} disabled={taskSaving} className="h-10 rounded-xl bg-emerald-600 px-5 text-white hover:bg-emerald-700">
                   {taskSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="mr-2 h-4 w-4" />}
                   Ekle
                 </Button>
@@ -2514,7 +2517,7 @@ export default function TakvimPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Button
               onClick={openAppointmentModal}
-              className="h-8 rounded-lg bg-green-600 px-3 text-sm text-white shadow-sm hover:bg-green-700"
+              className="h-8 rounded-lg bg-emerald-600 px-3 text-sm text-white shadow-sm hover:bg-emerald-700"
             >
               <Plus className="mr-1.5 h-3.5 w-3.5" /> Yeni Randevu
             </Button>
@@ -2610,12 +2613,25 @@ export default function TakvimPage() {
                 >
                   <div className={`text-xs font-semibold mb-1 ${isCurrentMonth ? 'text-slate-800' : 'text-slate-400'} ${isToday(date) ? 'text-teal-600' : ''}`}>{date.getDate()}</div>
                   <div className="space-y-0.5">
-                    {displayedEvs.map(e => (
-                      <div key={e.id} className={`text-[9px] px-1 py-0.5 rounded truncate ${colorMap[e.color]?.bg || 'bg-slate-50'} ${colorMap[e.color]?.text || 'text-slate-700'}`}>
-                        {e.time && <span className="font-bold">{normalizeLessonSlot(e.time)}.</span>}{' '}
-                        {getTimelineTitle(e)}
-                      </div>
-                    ))}
+                      {displayedEvs.map(e => {
+                        // Renk turu soyler; tamamlanmis ve gelinmemis kayitlar
+                        // soluk ve ustu cizili gorunur. Ay gorunumu onceden
+                        // durumu hic gostermiyordu.
+                        const done = isCompletedCalendarStatus(e.status);
+                        const missed = e.status === 'not_attended';
+                        const tone = colorMap[e.color] || colorMap.slate;
+                        return (
+                          <div
+                            key={e.id}
+                            className={`truncate rounded px-1 py-0.5 text-[9px] ${tone.bg} ${tone.text} ${
+                              done || missed ? 'line-through opacity-60' : ''
+                            }`}
+                          >
+                            {e.time && <span className="font-bold">{normalizeLessonSlot(e.time)}.</span>}{' '}
+                            {getTimelineTitle(e)}
+                          </div>
+                        );
+                      })}
                     {extraCount > 0 && (
                       <div className="text-[9px] text-slate-400 font-medium text-center">+{extraCount}</div>
                     )}
@@ -2684,31 +2700,35 @@ export default function TakvimPage() {
                                   <div className="space-y-1">
                                     {periodEvents.map(e => {
                                       const isAppointment = e.type === 'appointment';
-                                      const isClassReq = e.type === 'class_request';
-                                      const isCompleted = e.status === 'attended' || e.status === 'completed';
-                                      const cardBg = isAppointment
-                                        ? isCompleted ? 'border-slate-200 bg-slate-50' : 'border-sky-200 bg-sky-50'
-                                        : isClassReq ? 'border-violet-200 bg-violet-50' : 'border-amber-200 bg-amber-50';
+                                      const isCompleted = isCompletedCalendarStatus(e.status);
+                                      const isMissed = e.status === 'not_attended';
+                                      // Renk artik tek yerden geliyor. Onceden hafta gorunumu
+                                      // kendi mantigini kullaniyordu ve sinif rehberligini amber
+                                      // gosteriyordu; ay gorunumunde ise emerald cikiyordu.
+                                      const tone = colorMap[e.color] || colorMap.slate;
+                                      const cardBg = isCompleted || isMissed
+                                        ? 'border-slate-200 bg-slate-50'
+                                        : `${tone.border} ${tone.bg}`;
                                       const titleText = getTimelineTitle(e);
                                       const guidanceClass = e.data?.class_display || titleText;
                                       const guidanceTopic = e.data?.topic_title || e.data?.admin_category || e.data?.topic || '';
                                       const guidanceTeacher = e.data?.lesson_teacher || e.data?.teacher_name || '';
 
                                       return (
-                                        <div key={e.id} className={`min-h-[56px] w-full rounded-lg border p-1.5 ${cardBg} ${isCompleted ? 'opacity-60' : ''}`}>
+                                        <div key={e.id} className={`min-h-[56px] w-full rounded-lg border p-1.5 ${cardBg} ${isCompleted || isMissed ? 'opacity-60' : ''}`}>
                                           {isAppointment ? (
                                             <div className="flex h-full flex-col items-center justify-center text-center">
-                                              <p className={`text-[11px] font-bold leading-tight ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-800'}`} title={titleText}>
+                                              <p className={`text-[11px] font-bold leading-tight ${isCompleted || isMissed ? 'text-slate-400 line-through' : 'text-slate-800'}`} title={titleText}>
                                                 {titleText}
                                               </p>
                                             </div>
                                           ) : (
                                             <div className="flex h-full flex-col justify-center text-center">
-                                              <p className={`text-[12px] font-extrabold leading-tight ${isCompleted ? 'text-slate-400 line-through' : isClassReq ? 'text-violet-900' : 'text-amber-900'}`}>
+                                              <p className={`text-[12px] font-extrabold leading-tight ${isCompleted || isMissed ? 'text-slate-400 line-through' : tone.text}`}>
                                                 {guidanceClass}
                                               </p>
                                               {guidanceTopic && (
-                                                <p className={`text-[9px] mt-0.5 leading-tight truncate ${isCompleted ? 'text-slate-400' : isClassReq ? 'text-violet-600' : 'text-amber-700'}`} title={guidanceTopic}>
+                                                <p className={`text-[9px] mt-0.5 leading-tight truncate ${isCompleted || isMissed ? 'text-slate-400' : tone.text}`} title={guidanceTopic}>
                                                   {guidanceTopic}
                                                 </p>
                                               )}
@@ -2922,7 +2942,7 @@ export default function TakvimPage() {
                 <CardHeader className="border-b border-slate-100 bg-white px-3 py-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
-                      <ListTodo className="h-4 w-4 text-orange-500" />
+                      <ListTodo className="h-4 w-4 text-amber-500" />
                       <div className="flex rounded-md bg-slate-100 p-0.5">
                         <button
                           onClick={() => setTaskFilter('today')}
@@ -3074,8 +3094,8 @@ export default function TakvimPage() {
           <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100">
-                  <ListTodo className="h-5 w-5 text-orange-600" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100">
+                  <ListTodo className="h-5 w-5 text-amber-600" />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-800">Görev Detayı</h3>
@@ -3112,7 +3132,7 @@ export default function TakvimPage() {
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Durum</p>
                 <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                  selectedTaskDetail.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                  selectedTaskDetail.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                 }`}>
                   {selectedTaskDetail.status === 'completed' ? '✓ Tamamlandı' : '○ Bekliyor'}
                 </span>
