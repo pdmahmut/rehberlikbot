@@ -36,7 +36,6 @@ export const RESET_GROUPS: ResetGroup[] = [
       "individual_requests",
       "parent_meeting_requests",
       "student_incidents",
-      "discipline_records",
       "follow_ups",
     ],
   },
