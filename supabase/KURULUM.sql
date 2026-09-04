@@ -1373,7 +1373,12 @@ CREATE TABLE IF NOT EXISTS public.teacher_users (
   class_key       text,
   class_display   text,
   password_cipher text,
-  password_lookup text
+  password_lookup text,
+  -- Tarihsel kolon: eskiden sifre duz metin olarak burada tutuluyordu.
+  -- 023 numarali goc bu kolona kisit ekliyor, 026 ise kolonu tamamen
+  -- kaldirip yerine kor indeks + sifreli saklama getiriyor. Sirali kurulumun
+  -- calisabilmesi icin burada olusturulup sonra dusurulmesi gerekiyor.
+  password_hash text
 );
 
 -- Ayni sifre iki ogretmene verilemez: giris yalnizca sifreyle yapildigi icin
