@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { db as supabase } from "@/lib/dbClient";
-import { MessageSquare, Search, Loader2, Filter, Trash2, Plus, X, ChevronDown, Eye } from "lucide-react";
+import { MessageSquare, Search, Loader2, Filter, Trash2, Plus, X, ChevronDown, Eye, CalendarPlus } from "lucide-react";
 import { toast } from "sonner";
 import { AppointmentOutcomeModal, type AppointmentOutcomeChoice } from "@/components/AppointmentOutcomeModal";
 import {
@@ -158,7 +158,6 @@ export default function BasvurularPage() {
   const [incidents, setIncidents] = useState<StudentIncidentRecord[]>([]);
   const [requests, setRequests] = useState<ParentMeetingRequestRecord[]>([]);
   const [individualRequests, setIndividualRequests] = useState<IndividualRequestRecord[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   // Takipteki ogrencilerin sadelestirilmis adlari. Basvuru listesinde isim
   // yaninda rozet gostermek icin kullanilir.
@@ -166,7 +165,6 @@ export default function BasvurularPage() {
 
   // Modal state — tıklanan başvuru kaydı
   const [outcomeModalRecord, setOutcomeModalRecord] = useState<ApplicationRecord | null>(null);
-  const [statusChoiceRecord, setStatusChoiceRecord] = useState<ApplicationRecord | null>(null);
 
   // Görüşüldü badge tıklandı → modal aç
   const handleOpenOutcomeModal = (record: ApplicationRecord) => {
@@ -493,7 +491,6 @@ export default function BasvurularPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      setLoadError(null);
       const [referralResult, observationResult, incidentResult, requestResult, attendedResult, scheduledResult, individualRequestResult] = await Promise.all([
         supabase.from("referrals").select("*").order("created_at", { ascending: false }),
         supabase.from("observation_pool").select("*").order("created_at", { ascending: false }),
@@ -529,9 +526,7 @@ export default function BasvurularPage() {
         // rozetler olmadan devam
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Veri yüklenirken hata oluştu";
-      setLoadError(message);
-      toast.error(message);
+      toast.error(err instanceof Error ? err.message : "Veri yüklenirken hata oluştu");
     } finally {
       setLoading(false);
     }
@@ -872,13 +867,20 @@ export default function BasvurularPage() {
 
   const renderStatusCell = (item: ApplicationRecord) => {
     if (item.status === "Bekliyor") {
+      // Bekleyen bir basvurunun tek yolu vardir: randevu. Onceden burada uc
+      // secenekli bir pencere aciliyordu ama ikisi ise yaramiyordu:
+      // "Bekliyor" sadece pencereyi kapatiyordu, "Gorusuldu" ise randevusuz
+      // kapatma icindi ve boyle bir kullanim yok. Dogrudan randevu formuna
+      // gidiliyor.
       return (
         <button
           type="button"
-          onClick={() => setStatusChoiceRecord(item)}
-          className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-100"
+          onClick={() => handleOpenAppointmentForm(item)}
+          title="Randevu ver"
+          className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-100"
         >
-          Bekliyor ▾
+          Bekliyor
+          <CalendarPlus className="h-3 w-3" />
         </button>
       );
     }
@@ -967,21 +969,6 @@ export default function BasvurularPage() {
       if (!classMap.has(normalized)) classMap.set(normalized, item.class_display || item.class_key || normalized);
     });
     return Array.from(classMap.entries()).map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "tr-TR"));
-  }, [applicationRecordsWithOverrides]);
-
-  const applicationStatistics = useMemo(() => {
-    const totals = {
-      total: 0,
-      status: { "Görüşüldü": 0, "Randevu verildi": 0, "Bekliyor": 0 },
-      outcome: { "Tamamlandı": 0, "Aktif Takip": 0 }
-    };
-    applicationRecordsWithOverrides.forEach((item) => {
-      totals.total += 1;
-      totals.status[item.status] += 1;
-      if (item.outcome_label === "Tamamlandı") totals.outcome["Tamamlandı"] += 1;
-      else if (item.outcome_label === "Aktif Takip") totals.outcome["Aktif Takip"] += 1;
-    });
-    return totals;
   }, [applicationRecordsWithOverrides]);
 
   // Modal için fake appointment nesnesi (sadece UI için)
@@ -1476,63 +1463,6 @@ export default function BasvurularPage() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Durum Seçim Modalı */}
-      {statusChoiceRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-3 border-b bg-slate-50 px-4 py-4 sm:px-6">
-              <div>
-                <h2 className="text-base font-bold text-slate-800">{statusChoiceRecord.student_name}</h2>
-                <p className="text-xs text-slate-500 mt-0.5">{statusChoiceRecord.class_display || "-"} · {statusChoiceRecord.source}</p>
-              </div>
-              <button type="button" onClick={() => setStatusChoiceRecord(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="p-4 space-y-2">
-              <button
-                type="button"
-                onClick={() => handleOpenAppointmentForm(statusChoiceRecord)}
-                className="w-full flex items-center gap-3 rounded-xl border-2 border-blue-200 bg-blue-50 px-4 py-3 text-left text-sm font-semibold text-blue-700 hover:bg-blue-100 transition-all"
-              >
-                <span className="text-lg">📅</span>
-                <div>
-                  <div>Randevuya Dönüştür</div>
-                  <div className="text-xs font-normal text-blue-500">Randevu formu aç</div>
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusChoiceRecord(null)}
-                className="w-full flex items-center gap-3 rounded-xl border-2 border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm font-semibold text-amber-700 hover:bg-amber-100 transition-all"
-              >
-                <span className="text-lg">⏳</span>
-                <div>
-                  <div>Bekliyor</div>
-                  <div className="text-xs font-normal text-amber-500">Durumu değiştirme</div>
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  // Durum, sonuc penceresi kaydedildiginde veritabanina yazilir.
-                  // Pencere kapatilirsa basvuru "Bekliyor" olarak kalir.
-                  setStatusChoiceRecord(null);
-                  setTimeout(() => handleOpenOutcomeModal({ ...statusChoiceRecord, status: "Görüşüldü" }), 100);
-                }}
-                className="w-full flex items-center gap-3 rounded-xl border-2 border-emerald-200 bg-emerald-50 px-4 py-3 text-left text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition-all"
-              >
-                <span className="text-lg">✅</span>
-                <div>
-                  <div>Görüşüldü</div>
-                  <div className="text-xs font-normal text-emerald-500">Tamamlandı / Aktif Takip seç</div>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Görüşme Sonucu Modalı */}
       <AppointmentOutcomeModal
