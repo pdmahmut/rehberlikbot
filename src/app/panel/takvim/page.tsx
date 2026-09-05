@@ -808,6 +808,47 @@ export default function TakvimPage() {
     setShowAppointmentModal(true);
   };
 
+  // "Aktif Takip" isaretlendikten sonra sunulan "sıradaki görüşmeyi planla"
+  // teklifi buraya baglanir. Ogrenci, sinifi ve gorusme konusu doldurulmus
+  // halde randevu formu acilir.
+  //
+  // Eskiden bunun yerine sayfa /panel/takvim?studentName=...&purpose=...
+  // adresine yonlendiriliyordu. O adresi karsilayan kod formu acmak icin
+  // sourceId+sourceType ya da openAppointment=true bekliyor; bu uc parametre
+  // ikisine de uymadigi icin form hic acilmiyor, sayfa yalnizca bastan
+  // yukleniyordu. Zaten bu sayfada oldugumuz icin yonlendirmeye gerek yok.
+  const openFollowUpAppointmentForm = (
+    studentName: string,
+    classDisplay?: string | null,
+    purpose?: string | null
+  ) => {
+    setEditingAppointment(null);
+    resetAppointmentForm(getLocalDateString(currentDate));
+    // Kaynak basvurusu olmayan ogrenci randevusu; basvurulara "Rehberlik
+    // Istegi" olarak eklenir. Takip gorusmesini rehber ogretmen actigi icin
+    // dogru kaynak budur.
+    setAppointmentEntryContext("direct_program");
+
+    const normalizedDisplay = classDisplay ? normalizeClassValue(classDisplay) : "";
+    const matchedClass = classDisplay
+      ? classes.find((c) => c.text === classDisplay || normalizeClassValue(c.text) === normalizedDisplay)
+      : undefined;
+
+    setFormData((prev) => ({
+      ...prev,
+      participant_type: "student",
+      participant_name: studentName,
+      participant_class: matchedClass?.text || classDisplay || "",
+      // Takip gorusmesi ayni konunun devamidir; konu listesinde olmayan bir
+      // deger yazilirsa acilir liste bos gorunur.
+      purpose: purpose || "",
+    }));
+
+    if (matchedClass) setSelectedClass(matchedClass.value);
+    setSelectedStudentName(studentName);
+    setShowAppointmentModal(true);
+  };
+
   const openAppointmentModalForSlot = (date: string, startTime: string) => {
     setEditingAppointment(null);
     resetAppointmentForm(date);
@@ -1361,22 +1402,28 @@ export default function TakvimPage() {
         }
       }
 
-      toast.success(messages[choice]);
+      // Takibe alinan ogrenci icin siradaki gorusmeyi planlama teklifi.
+      // Eskiden burada tarayicinin confirm kutusu vardi: ekrani kilitliyor,
+      // uygulamanin tasariminin disinda duruyor ve "Tamam" hicbir ise
+      // yaramiyordu (bkz. openFollowUpAppointmentForm). Teklif artik
+      // bildirimin icinde; isinize devam edebilirsiniz, basarsaniz form acilir.
+      if (choice === "active_follow") {
+        const followUpName = attendanceChoiceAppointment.participant_name;
+        const followUpClass = attendanceChoiceAppointment.participant_class;
+        const followUpPurpose = attendanceChoiceAppointment.purpose;
+        toast.success(messages[choice], {
+          duration: 10000,
+          action: {
+            label: "Sıradaki görüşmeyi planla",
+            onClick: () => openFollowUpAppointmentForm(followUpName, followUpClass, followUpPurpose),
+          },
+        });
+      } else {
+        toast.success(messages[choice]);
+      }
+
       await loadData();
       closeAttendanceChoiceModal();
-
-      // Takibe alınan öğrenci için sıradaki görüşmeyi hemen planlama teklifi
-      if (choice === "active_follow") {
-        const params = new URLSearchParams();
-        params.set("studentName", attendanceChoiceAppointment.participant_name);
-        if (attendanceChoiceAppointment.participant_class) {
-          params.set("classDisplay", attendanceChoiceAppointment.participant_class);
-        }
-        params.set("purpose", "Takip görüşmesi");
-        if (confirm(`${attendanceChoiceAppointment.participant_name} takibe alındı.\n\nSıradaki görüşmeyi şimdi planlamak ister misiniz?`)) {
-          window.location.href = `/panel/takvim?${params.toString()}`;
-        }
-      }
     } catch {
       toast.error('Randevu durumu değiştirilirken hata oluştu');
     } finally {
