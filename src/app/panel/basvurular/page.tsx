@@ -20,6 +20,7 @@ import {
   IndividualRequestRecord
 } from "@/types";
 import {
+  absorbPendingIntoOpenAppointments,
   buildSourceRecordKey,
   findAppointmentForApplicationRecord,
   getObservationProxyMeta,
@@ -44,6 +45,9 @@ type ApplicationRecord = {
   matched_appointment_id?: string | null;
   last_activity_at?: string | null;
   event_timestamp: string;
+  // Kendi randevusu yok; ogrencinin bekleyen randevusuna dahil edildi.
+  // Bkz. applicationRecordsWithOverrides.
+  absorbed?: boolean;
 };
 
 type ApplicationStatus = ApplicationRecord["status"];
@@ -766,7 +770,19 @@ export default function BasvurularPage() {
   // Durum tek kaynaktan gelir: veritabani. Eskiden burada tarayici hafizasindaki
   // bir "override" katmani vardi; okuldaki bilgisayarda isaretlenen bir basvuru
   // baska bir cihazda hala "Bekliyor" gorunuyordu. Katman kaldirildi.
-  const applicationRecordsWithOverrides = applicationRecords;
+  // Randevusu olan ogrenciye sonradan gelen basvurular ayri randevu
+  // gerektirmez; mevcut randevuya dahil edilir. Kural ve gerekcesi
+  // absorbPendingIntoOpenAppointments icinde anlatiliyor.
+  const applicationRecordsWithOverrides: ApplicationRecord[] = useMemo(
+    () =>
+      absorbPendingIntoOpenAppointments(
+        applicationRecords,
+        // Ad + sinif: farkli siniflardaki adaslar ayni ogrenci sayilmasin.
+        (r) => `${followUpKey(r.student_name)}|${normalizeClassText(r.class_display || r.class_key)}`
+      ) as ApplicationRecord[],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [applicationRecords]
+  );
 
   const applicationReferrerOptions = useMemo(() => {
     const referrers = new Set<string>();
@@ -846,7 +862,13 @@ export default function BasvurularPage() {
         (a, b) => new Date(a.event_timestamp).getTime() - new Date(b.event_timestamp).getTime()
       )[0];
 
-      return { ...group, rank, latest, primary: group.records[0], actionRecord: owner || oldest };
+      // Randevu verildikten sonra gelen basvurular mevcut randevuya dahil
+      // edildi ama gozden kacmamali: ozet satirinda kucuk bir isaret birakilir.
+      // Isaret gorusme tamamlanana kadar durur; gorusmede konusulacak fazladan
+      // bir konu oldugunu hatirlatir.
+      const absorbedCount = group.records.filter((r) => r.absorbed).length;
+
+      return { ...group, rank, latest, absorbedCount, primary: group.records[0], actionRecord: owner || oldest };
     }).sort((a, b) => (a.rank - b.rank) || (b.latest - a.latest));
   }, [filteredApplications, scheduledAppointments, attendedAppointments]);
 
@@ -898,6 +920,21 @@ export default function BasvurularPage() {
         >
           Görüşüldü ▾
         </button>
+      );
+    }
+    // Yutulan basvurunun kendi randevusu yoktur; iptal dugmesi gosterilemez,
+    // cunku iptal edilecek bir randevu yok. Randevuyu tasiyan kayit uzerinden
+    // iptal edilir. (Grup satirinda zaten o kayit kullaniliyor; bu dal ancak
+    // filtre yuzunden kardes kayit listede gorunmedigi zaman devreye girer.)
+    if (item.absorbed) {
+      return (
+        <span
+          className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800"
+          title="Bu öğrencinin bekleyen bir randevusu var; bu başvuru da o görüşmede ele alınacak."
+        >
+          Randevu verildi
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+        </span>
       );
     }
     if (item.status === "Randevu verildi") {
@@ -1432,7 +1469,18 @@ export default function BasvurularPage() {
                               kapandigi icin durumu her satirda tekrarlamak yerine
                               burada bir kez gosterilir; islem de buradan yapilir. */}
                           <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                            {renderStatusCell(group.actionRecord)}
+                            <span className="inline-flex items-center gap-1.5">
+                              {renderStatusCell(group.actionRecord)}
+                              {group.absorbedCount > 0 && (
+                                <span
+                                  title={`Randevu verildikten sonra ${group.absorbedCount} yeni başvuru geldi. Ayrı randevu gerekmez; bu görüşmede birlikte ele alınır.`}
+                                  className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
+                                >
+                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+                                  {group.absorbedCount > 1 ? `${group.absorbedCount} yeni` : "yeni"}
+                                </span>
+                              )}
+                            </span>
                           </td>
                           <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                             {renderOutcomeCell(group.actionRecord)}
@@ -1446,6 +1494,7 @@ export default function BasvurularPage() {
                               <p className="mb-2 text-xs text-slate-500">
                                 Bu öğrenci {group.records.length} ayrı kanaldan geldi. Tek görüşmede
                                 hepsi kapanır; durum yukarıdaki tek kutudan yönetilir.
+                                {group.absorbedCount > 0 && " “yeni” işaretliler randevu verildikten sonra geldi."}
                               </p>
                               <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                                 <table className="min-w-full text-left text-sm">
@@ -1453,7 +1502,20 @@ export default function BasvurularPage() {
                                     {group.records.map((rec, i) => (
                                       <tr key={rec.id} className={i > 0 ? "border-t border-slate-100" : ""}>
                                         <td className="px-3 py-2.5 text-sm text-slate-600">{formatEventDate(rec.event_timestamp)}</td>
-                                        <td className="px-3 py-2.5">{renderChannelCell(rec)}</td>
+                                        <td className="px-3 py-2.5">
+                                          <span className="inline-flex items-center gap-1.5">
+                                            {renderChannelCell(rec)}
+                                            {rec.absorbed && (
+                                              <span
+                                                title="Randevu verildikten sonra geldi"
+                                                className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
+                                              >
+                                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+                                                yeni
+                                              </span>
+                                            )}
+                                          </span>
+                                        </td>
                                         <td className="px-3 py-2.5 text-slate-600">{rec.referrer || ""}</td>
                                         <td className="px-3 py-2.5 text-right">{renderDeleteCell(rec)}</td>
                                       </tr>

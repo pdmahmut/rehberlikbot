@@ -414,3 +414,42 @@ export async function upsertGuidanceApplicationRecord(payload: {
 
   return response.json();
 }
+
+/**
+ * Bir ogrenciye kanal fark etmeksizin tek randevu verilir. Randevu
+ * verildikten sonra ayni ogrenci icin baska bir kanaldan basvuru gelirse
+ * (ornegin ogretmen yonlendirmesi) o basvuru ayri bir randevu gerektirmez;
+ * mevcut randevuya dahil edilir ve "Randevu verildi" gorunur.
+ *
+ * Neden gerekli: aksi halde satir "Bekliyor" yazip kuyrugun basina cikiyor,
+ * ogrencinin zaten randevusu oldugu hicbir yerde gorunmuyordu. O dugmeye
+ * basildiginda ayni ogrenciye ikinci bir randevu aciliyordu.
+ *
+ * Guvenli olmasinin sebebi: randevu tamamlandiginda sunucu zaten o
+ * ogrencinin butun acik basvurularini birlikte kapatiyor
+ * (appointments/route.ts icindeki syncSiblingApplications). Yani burada
+ * gosterilen sey veritabaninin nasil olsa yapacagi sey.
+ *
+ * Sadece HENUZ YAPILMAMIS randevu ("Randevu verildi") yutar. Gorusme
+ * bittikten ("Gorusuldu") sonra gelen basvuru gercekten yeni bir istektir;
+ * kendi randevusunu almalidir, bu yuzden "Bekliyor" kalir.
+ *
+ * Yutulan kayit `absorbed: true` ile isaretlenir ki listede gozden kacmasin.
+ *
+ * @param records  Basvuru kayitlari.
+ * @param studentKey  Ayni ogrenciyi bulmak icin anahtar (ad + sinif).
+ */
+export function absorbPendingIntoOpenAppointments<
+  T extends { status: string }
+>(records: T[], studentKey: (record: T) => string): (T & { absorbed?: boolean })[] {
+  const withOpenAppointment = new Set(
+    records.filter((r) => r.status === "Randevu verildi").map(studentKey)
+  );
+  if (!withOpenAppointment.size) return records;
+
+  return records.map((r) =>
+    r.status === "Bekliyor" && withOpenAppointment.has(studentKey(r))
+      ? { ...r, status: "Randevu verildi", absorbed: true }
+      : r
+  );
+}
