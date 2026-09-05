@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { normalizeLessonSlot } from "@/lib/lessonSlots";
 import {
+  getPanelStatusLabel,
   getSourceTable,
   getStatusCandidatesForSource,
   normalizeSourceTypeOrNull,
@@ -182,13 +183,15 @@ const siblingNameKey = (value: unknown) =>
     .toLocaleUpperCase("tr-TR")
     .replace(/\s+/g, " ");
 
-const OPEN_STATUSES = new Set(["pending", "new", "bekliyor", "reviewing"]);
 
 const syncSiblingApplications = async (
   studentName: string | null | undefined,
   status: "scheduled" | "completed" | "active_follow" | "pending",
   actedType: string | null | undefined,
-  actedId: string | null | undefined
+  actedId: string | null | undefined,
+  // Yoklama isareti geri alindiginda kapanmis basvurular da geri acilir.
+  // Normalde ileri yonde kapanmis kayda dokunulmaz; bkz. asagidaki aciklama.
+  reopenClosed = false
 ) => {
   const key = siblingNameKey(studentName);
   if (!key) return;
@@ -212,11 +215,17 @@ const syncSiblingApplications = async (
         if (source.type === normalizedActedType && rowId === actedId) continue;
         if (siblingNameKey(row[source.nameColumn]) !== key) continue;
 
-        const current = String(row.status || "").toLocaleLowerCase("tr-TR");
+        // Ham kelime kanaldan kanala degisiyor ("converted", "reviewing",
+        // "closed"...). Anlamini kanalin kendi listesinden okuyoruz; eskiden
+        // burada kucuk bir kelime listesi vardi ve "converted"/"scheduled"
+        // gibi degerleri taniyamiyordu. Sonucu: randevusu olan bir kardes
+        // basvuru, gorusme tamamlandiginda kapanmadan kaliyordu.
+        const currentLabel = getPanelStatusLabel(source.type, String(row.status || ""));
+        const isClosed = currentLabel === "Görüşüldü";
 
         if (status === "pending") {
-          // Geri alma: zaten acik olan bir seyi geri almaya gerek yok.
-          if (OPEN_STATUSES.has(current)) continue;
+          // Geri alma: zaten bekliyorsa yapacak bir sey yok.
+          if (currentLabel === "Bekliyor") continue;
 
           // Kendi randevusu olan basvuru baska bir islemin sonucudur;
           // bu iptal onu ilgilendirmez.
@@ -227,10 +236,26 @@ const syncSiblingApplications = async (
             .neq("status", "cancelled")
             .limit(1);
           if ((own || []).length > 0) continue;
-        } else if (!OPEN_STATUSES.has(current)) {
-          // Ileri yonde yalnizca acik basvurular kapatilir; kapanmis bir
-          // kaydin durumu degistirilmez.
-          continue;
+        } else if (isClosed) {
+          // Ileri yonde kapanmis bir kaydin durumu degistirilmez. Yoksa
+          // Ekim.de gorusulup kapanmis bir basvuru, Mart.ta acilan yeni bir
+          // randevuyla tekrar acilirdi.
+          //
+          // Tek istisna yoklama isaretinin geri alinmasidir: o gorusme
+          // olmamis sayilir, dolayisiyla onunla birlikte kapanmis
+          // basvurular da geri acilmalidir. Randevu silindiginde zaten
+          // boyle davraniliyor; ikisi de "bu gorusme olmadi" demek.
+          if (!reopenClosed) continue;
+
+          // Kendi randevusu olan basvuru baska bir islemin sonucudur;
+          // bu geri alma onu ilgilendirmez.
+          const { data: own } = await supabase
+            .from("appointments")
+            .select("id")
+            .eq("source_application_id", rowId)
+            .neq("status", "cancelled")
+            .limit(1);
+          if ((own || []).length > 0) continue;
         }
 
         await syncApplicationStatus(source.type, rowId, status, null);
@@ -583,6 +608,27 @@ export async function PUT(request: NextRequest) {
     }
 
     const currentAppointmentData = currentAppointment.data;
+
+    // Yoklama isareti geri mi aliniyor? Ancak "isaretli bir randevu tekrar
+    // planlandi" durumunda dogrudur; randevunun tarihi/saati degistirilirken
+    // de status "planned" gelebiliyor, o bir geri alma degildir. Bu yuzden
+    // randevunun ONCEKI durumuna bakilir. Sorgu sadece bu ihtimalde yapilir,
+    // diger guncellemelere ek maliyet binmez.
+    const MARKED_STATUSES = ["attended", "not_attended", "completed"];
+    let isUndoingAttendance = false;
+    if (updateData.status === "planned" && source_application_status === "scheduled") {
+      let previousStatus = currentAppointmentData?.status ?? null;
+      if (previousStatus === null) {
+        const { data: previous } = await supabase
+          .from("appointments")
+          .select("status")
+          .eq("id", id)
+          .maybeSingle();
+        previousStatus = previous?.status ?? null;
+      }
+      isUndoingAttendance = MARKED_STATUSES.includes(String(previousStatus || ""));
+    }
+
     const nextAppointmentDate = updateData.appointment_date || currentAppointmentData?.appointment_date;
     const nextStartTime = updateData.start_time || currentAppointmentData?.start_time;
     const normalizedSlot = normalizeLessonSlot(nextStartTime);
@@ -723,7 +769,8 @@ export async function PUT(request: NextRequest) {
         data?.participant_name,
         source_application_status as "scheduled" | "completed" | "active_follow" | "pending",
         resolvedSourceApplicationType,
-        resolvedSourceApplicationId
+        resolvedSourceApplicationId,
+        isUndoingAttendance
       );
     }
 
