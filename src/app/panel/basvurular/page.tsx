@@ -503,7 +503,13 @@ export default function BasvurularPage() {
       const [referralResult, observationResult, incidentResult, requestResult, attendedResult, scheduledResult, individualRequestResult, followRes] = await Promise.all([
         supabase.from("referrals").select("*").order("created_at", { ascending: false }),
         supabase.from("observation_pool").select("*").order("created_at", { ascending: false }),
-        supabase.from("student_incidents").select("*").in("status", ["new", "reviewing"]).order("incident_date", { ascending: false }).order("created_at", { ascending: false }),
+        // Kapanmis bildirimler de cekilir. Eskiden burada
+        // .in("status", ["new", "reviewing"]) vardi: gorusme tamamlanip
+        // bildirimin durumu "resolved" olunca kayit ekrandan tamamen
+        // kayboluyordu. Diger dort kanalda boyle bir suzgec yok, onlar
+        // "Gorusuldu" olarak listede kaliyor. Takvim sayfasindaki ayni
+        // suzgec dogru; orasi zaten yalnizca bekleyen basvurulari istiyor.
+        supabase.from("student_incidents").select("*").order("incident_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("parent_meeting_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("appointments").select("*").eq("status", "attended").eq("participant_type", "student").order("appointment_date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("appointments").select("*").neq("status", "pending").neq("status", "attended").neq("status", "cancelled").eq("participant_type", "student").order("appointment_date", { ascending: false }).order("created_at", { ascending: false }),
@@ -624,10 +630,19 @@ export default function BasvurularPage() {
       const matchedScheduledApt = findAppointmentForApplicationRecord(scheduledAppointments, sharedRecord);
       const isAttended = !!matchedApt;
       const outcomeLabel = isAttended ? getOutcomeLabel(matchedApt?.outcome_decision) : null;
+      // Her kanal kendi tablosunda ayni durumu farkli kelimeyle yaziyor:
+      // veli talebi kapaninca "closed", ogrenci bildirimi "resolved",
+      // bireysel basvuru "completed" oluyor. Ucu de "gorusme bitti"
+      // demektir. Eksik olan karsiliklar buraya dusup "Bekliyor" gorunuyordu.
       const statusMap: Record<string, string> = {
         pending: "Bekliyor",
+        new: "Bekliyor",
         scheduled: "Randevu verildi",
         completed: "Görüşüldü",
+        closed: "Görüşüldü",
+        resolved: "Görüşüldü",
+        active_follow: "Görüşüldü",
+        regular_meeting: "Görüşüldü",
         cancelled: "İptal",
         "Bekliyor": "Bekliyor",
         "Randevu verildi": "Randevu verildi",
@@ -866,9 +881,29 @@ export default function BasvurularPage() {
       // edildi ama gozden kacmamali: ozet satirinda kucuk bir isaret birakilir.
       // Isaret gorusme tamamlanana kadar durur; gorusmede konusulacak fazladan
       // bir konu oldugunu hatirlatir.
-      const absorbedCount = group.records.filter((r) => r.absorbed).length;
+      const absorbedCount = urgent.filter((r) => r.absorbed).length;
 
-      return { ...group, rank, latest, absorbedCount, primary: group.records[0], actionRecord: owner || oldest };
+      // Ozet satiri ACIK ISI anlatir. Daha once gorusulup kapanmis basvurular
+      // gecmistir: sayilmazlar, kanal ikonlari arasinda da gorunmezler. Aksi
+      // halde satir "3 basvuru" deyip uc kanal ikonu gosteriyor, ucunun de
+      // acik oldugu izlenimi veriyordu; oysa ikisi coktan kapanmisti.
+      // Gecmis kaybolmaz, satir acilinca kendi durumuyla birlikte gorunur.
+      const history = group.records.filter((r) => (STATUS_RANK[r.status] ?? 3) !== rank);
+      const activeChannels = [...new Set(urgent.map((r) => r.source))];
+      const displayDate = Math.max(...urgent.map((r) => new Date(r.event_timestamp).getTime()));
+
+      return {
+        ...group,
+        rank,
+        latest,
+        displayDate,
+        absorbedCount,
+        activeCount: urgent.length,
+        historyCount: history.length,
+        activeChannels,
+        primary: group.records[0],
+        actionRecord: owner || oldest,
+      };
     }).sort((a, b) => (a.rank - b.rank) || (b.latest - a.latest));
   }, [filteredApplications, scheduledAppointments, attendedAppointments]);
 
@@ -890,6 +925,28 @@ export default function BasvurularPage() {
       {CHANNEL_SHORT_LABELS[item.source] || item.source}
     </span>
   );
+
+  // Grup acildiginda her basvurunun kendi durumu gorunur. Burasi salt okunur:
+  // islem her zaman ozet satirindaki tek kutudan yapilir, cunku bir basvuruyu
+  // islemek ogrencinin butun acik basvurularini birlikte kapatir.
+  const renderStatusBadge = (item: ApplicationRecord) => {
+    const tone =
+      item.status === "Görüşüldü"
+        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+        : item.status === "Randevu verildi"
+          ? "border-blue-200 bg-blue-50 text-blue-800"
+          : "border-amber-200 bg-amber-50 text-amber-800";
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${tone}`}>
+          {item.status}
+        </span>
+        {item.outcome_label && item.status === "Görüşüldü" && (
+          <span className="text-[11px] text-slate-500">{item.outcome_label}</span>
+        )}
+      </span>
+    );
+  };
 
   const renderStatusCell = (item: ApplicationRecord) => {
     if (item.status === "Bekliyor") {
@@ -1444,20 +1501,32 @@ export default function BasvurularPage() {
                           onClick={() => toggleGroup(group.key)}
                           className={`cursor-pointer border-b border-slate-100 transition-colors hover:bg-slate-50 ${open ? "bg-slate-50" : ""}`}
                         >
-                          <td className="px-4 py-3 text-sm text-slate-600">{formatEventDate(new Date(group.latest).toISOString())}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{formatEventDate(new Date(group.displayDate).toISOString())}</td>
                           <td className="px-4 py-3 font-medium text-slate-800">
                             <span className="inline-flex items-center gap-1.5">
                               <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${open ? "" : "-rotate-90"}`} />
                               {nameCell}
-                              <span className="rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600">
-                                {group.records.length} başvuru
+                              <span
+                                className="rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
+                                title={
+                                  group.historyCount > 0
+                                    ? `${group.activeCount} açık başvuru, ${group.historyCount} tanesi daha önce görüşüldü`
+                                    : undefined
+                                }
+                              >
+                                {group.activeCount} başvuru
                               </span>
+                              {group.historyCount > 0 && (
+                                <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] text-slate-500">
+                                  +{group.historyCount} geçmiş
+                                </span>
+                              )}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-slate-600">{formatClassDisplay(item.class_display)}</td>
                           <td className="px-4 py-3">
                             <span className="inline-flex items-center gap-1">
-                              {[...new Set(group.records.map((r) => r.source))].map((src) => (
+                              {group.activeChannels.map((src) => (
                                 <span key={src} title={CHANNEL_SHORT_LABELS[src] || src}>
                                   {ENTRY_CHANNELS.find((c) => c.source === src)?.icon}
                                 </span>
@@ -1492,8 +1561,9 @@ export default function BasvurularPage() {
                           <tr className="border-b border-slate-100 bg-slate-50/70">
                             <td colSpan={colCount} className="px-4 py-3">
                               <p className="mb-2 text-xs text-slate-500">
-                                Bu öğrenci {group.records.length} ayrı kanaldan geldi. Tek görüşmede
-                                hepsi kapanır; durum yukarıdaki tek kutudan yönetilir.
+                                {group.historyCount > 0
+                                  ? `Açık ${group.activeCount} başvuru var; ${group.historyCount} başvuru daha önce görüşülüp kapandı. Kapanmış olanlar üstteki satırda sayılmaz, geçmiş olarak burada durur.`
+                                  : `Bu öğrenci ${group.activeCount} ayrı kanaldan geldi. Tek görüşmede hepsi kapanır; durum yukarıdaki tek kutudan yönetilir.`}
                                 {group.absorbedCount > 0 && " “yeni” işaretliler randevu verildikten sonra geldi."}
                               </p>
                               <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -1517,6 +1587,7 @@ export default function BasvurularPage() {
                                           </span>
                                         </td>
                                         <td className="px-3 py-2.5 text-slate-600">{rec.referrer || ""}</td>
+                                        <td className="px-3 py-2.5">{renderStatusBadge(rec)}</td>
                                         <td className="px-3 py-2.5 text-right">{renderDeleteCell(rec)}</td>
                                       </tr>
                                     ))}
