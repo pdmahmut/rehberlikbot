@@ -856,18 +856,17 @@ export default function BasvurularPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applicationRecordsWithOverrides, studentStatuses, applicationsSearchQuery, applicationsClassFilter, applicationsSourceFilter, applicationsReferrerFilter, applicationsStatusFilter, applicationsOutcomeFilter]);
 
-  // Sayaclar OGRENCI sayar, basvuru degil. Her ogrenci tam olarak bir
-  // sayacta gorunur, dolayisiyla ucunun toplami ogrenci sayisini verir.
+  // Filtre acikken "kacta kaci gosteriliyor" satiri icin toplam.
   //
-  // Sayaclar filtrelerden etkilenmez: ekranda ne filtrelenmis olursa olsun,
-  // toplam is yukunu gormek gerekir.
-  const statusCounts = useMemo(() => {
-    const counts = { "Bekliyor": 0, "Randevu verildi": 0, "Görüşüldü": 0 };
-    studentStatuses.forEach((status) => {
-      if (status in counts) counts[status as keyof typeof counts]++;
-    });
-    return { ...counts, toplam: applicationRecordsWithOverrides.length, ogrenci: studentStatuses.size };
-  }, [studentStatuses, applicationRecordsWithOverrides]);
+  // Burada uc durum sayaci vardi (Bekliyor / Randevu verildi / Gorusuldu).
+  // Kaldirildi: sayfa bir is kuyrugu, kuyrukta ne oldugu zaten listede
+  // gorunuyor. Sayaclar ise yaramadigi gibi yaniltiyordu da -- "Gorusuldu"
+  // ogrenci sayardi, oysa ayni ogrenciyle yil icinde defalarca gorusulur;
+  // ogrenciye yeni bir basvuru geldiginde yapilmis gorusme sayimdan
+  // tamamen dusuyordu. Yapilan isi olcen bir sayi gerekirse dogru kaynagi
+  // randevu kayitlaridir (tamamlanmis randevu = bir gorusme) ve yeri de
+  // bu kuyruk ekrani degil, donem dokumudur.
+  const totalApplications = applicationRecordsWithOverrides.length;
 
   // --- Ogrenci bazli gruplama --------------------------------------------
   // Ayni ogrenci icin birden fazla basvuru gelebilir (ornegin hem veli hem
@@ -1077,12 +1076,14 @@ export default function BasvurularPage() {
 
   // Katlanmis panelde hangi filtrelerin acik oldugu gorunmedigi icin sayilir.
   const activeFilterCount =
+    (applicationsStatusFilter !== "all" ? 1 : 0) +
     (applicationsClassFilter ? 1 : 0) +
     (applicationsSourceFilter !== "all" ? 1 : 0) +
     (applicationsOutcomeFilter !== "all" ? 1 : 0) +
     (applicationsReferrerFilter ? 1 : 0);
 
   const clearFilters = () => {
+    setApplicationsStatusFilter("all");
     setApplicationsClassFilter("");
     setApplicationsSourceFilter("all");
     setApplicationsOutcomeFilter("all");
@@ -1124,7 +1125,7 @@ export default function BasvurularPage() {
   return (
     <div className="space-y-6">
       {/* Başlık — dekoratif banner yerine calisma basligi:
-          solda ne oldugu, ortada is yuku, sagda tek eylem. */}
+          solda ne oldugu, sagda tek eylem. */}
       <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -1159,45 +1160,6 @@ export default function BasvurularPage() {
                 </div>
               </>
             )}
-          </div>
-        </div>
-
-        {/* Is yuku ozeti: kac OGRENCI hangi durumda. Tiklayinca o duruma
-            filtreler; ayni sayaca tekrar tiklayinca filtre kalkar. */}
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
-          {([
-            { key: "Bekliyor", label: "Bekliyor", count: statusCounts["Bekliyor"], tone: "amber", hint: "Randevu bekleyen öğrenci" },
-            { key: "Randevu verildi", label: "Randevu verildi", count: statusCounts["Randevu verildi"], tone: "blue", hint: "Randevusu olan öğrenci" },
-            { key: "Görüşüldü", label: "Görüşüldü", count: statusCounts["Görüşüldü"], tone: "emerald", hint: "Görüşmesi tamamlanan öğrenci" },
-          ] as const).map((s) => {
-            const active = applicationsStatusFilter === s.key;
-            const tones: Record<string, string> = {
-              amber: active ? "border-amber-400 bg-amber-50 text-amber-800" : "border-slate-200 text-slate-600 hover:border-amber-300",
-              blue: active ? "border-blue-400 bg-blue-50 text-blue-800" : "border-slate-200 text-slate-600 hover:border-blue-300",
-              emerald: active ? "border-emerald-400 bg-emerald-50 text-emerald-800" : "border-slate-200 text-slate-600 hover:border-emerald-300",
-            };
-            return (
-              <button
-                key={s.key}
-                type="button"
-                onClick={() => setApplicationsStatusFilter(active ? "all" : s.key)}
-                title={`${s.hint} sayısı`}
-                className={`flex items-baseline gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${tones[s.tone]}`}
-              >
-                <span className="text-base font-semibold tabular-nums">{loading ? "–" : s.count}</span>
-                <span>{s.label}</span>
-              </button>
-            );
-          })}
-          <div className="ml-auto flex items-center text-sm text-slate-400">
-            {/* Soldaki uc sayacin toplami buradaki ogrenci sayisidir. Basvuru
-                sayisi daha fazla olabilir: ayni ogrenci birden fazla kanaldan
-                gelmis olabilir ve hepsi tek satirda toplanir. */}
-            {loading
-              ? "yükleniyor…"
-              : statusCounts.ogrenci === statusCounts.toplam
-                ? `toplam ${statusCounts.toplam} başvuru`
-                : `${statusCounts.ogrenci} öğrenci · ${statusCounts.toplam} başvuru`}
           </div>
         </div>
       </div>
@@ -1335,8 +1297,7 @@ export default function BasvurularPage() {
           tasimasi gereksiz tekrardi, kaldirildi. */}
       <Card className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <CardContent className="space-y-4 p-4 sm:p-5">
-          {/* Filtreler — arama her zaman acik, gerisi katlanir.
-              Durum filtresi yok: ustteki sayaclar onu daha gorunur yapiyor. */}
+          {/* Filtreler — arama her zaman acik, gerisi katlanir. */}
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative min-w-[220px] flex-1">
@@ -1381,6 +1342,24 @@ export default function BasvurularPage() {
 
             {showFilters && (
               <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2 lg:grid-cols-4">
+                {/* Durum, ogrencinin durumudur (satirdaki tek kutuyla ayni).
+                    Onceden sayfanin ustundeki sayaclara tiklanarak
+                    filtreleniyordu; sayaclar kaldirilinca filtre buraya
+                    tasindi, diger filtrelerle ayni yerde. */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-600">Durum</Label>
+                  <select
+                    value={applicationsStatusFilter}
+                    onChange={(e) => setApplicationsStatusFilter(e.target.value as typeof applicationsStatusFilter)}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                  >
+                    <option value="all">Tümü</option>
+                    <option value="Bekliyor">Bekliyor</option>
+                    <option value="Randevu verildi">Randevu verildi</option>
+                    <option value="Görüşüldü">Görüşüldü</option>
+                  </select>
+                </div>
+
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-slate-600">Sınıf</Label>
                   <select
@@ -1438,9 +1417,9 @@ export default function BasvurularPage() {
               </div>
             )}
 
-            {filteredApplications.length !== statusCounts.toplam && (
+            {filteredApplications.length !== totalApplications && (
               <div className="text-sm text-slate-500">
-                {statusCounts.toplam} başvurudan {filteredApplications.length} tanesi gösteriliyor
+                {totalApplications} başvurudan {filteredApplications.length} tanesi gösteriliyor
               </div>
             )}
           </div>
