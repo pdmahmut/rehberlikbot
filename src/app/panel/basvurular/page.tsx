@@ -61,6 +61,12 @@ const STATUS_RANK: Record<string, number> = {
   "Görüşüldü": 2,
 };
 
+const STATUS_BY_RANK: Record<number, ApplicationStatus> = {
+  0: "Bekliyor",
+  1: "Randevu verildi",
+  2: "Görüşüldü",
+};
+
 const CHANNEL_SHORT_LABELS: Record<string, string> = {
   "Öğretmen Yönlendirmeleri": "Öğretmen",
   "Veli Talepleri": "Veli",
@@ -496,6 +502,13 @@ export default function BasvurularPage() {
       .toLocaleUpperCase("tr-TR")
       .replace(/\s+/g, " ");
 
+  // Ad + sinif: farkli siniflardaki adaslar ayni ogrenci sayilmasin.
+  const studentGroupKey = (record: {
+    student_name: string;
+    class_display?: string | null;
+    class_key?: string | null;
+  }) => `${followUpKey(record.student_name)}|${normalizeClassText(record.class_display || record.class_key)}`;
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -792,13 +805,41 @@ export default function BasvurularPage() {
     return Array.from(referrers).sort((a, b) => a.localeCompare(b, "tr-TR"));
   }, [applicationRecordsWithOverrides]);
 
+  // Ayni ogrencinin butun basvurulari tek satirda toplanir; dolayisiyla
+  // ogrencinin TEK bir durumu vardir, en acil olani. Sayaclar ve durum
+  // filtresi bunu kullanir.
+  //
+  // Eskiden ikisi de basvuru sayardi ve liste ile celisirlerdi: dort
+  // kanaldan gelmis tek ogrenci icin "4 Gorusuldu" yaziyordu, sanki dort
+  // ayri ogrenciyle gorusulmus gibi. Oysa hepsi tek gorusmede kapanan tek
+  // istir ve listede de tek satir gorunur.
+  const studentStatuses = useMemo(() => {
+    const ranks = new Map<string, number>();
+    for (const item of applicationRecordsWithOverrides) {
+      const key = studentGroupKey(item);
+      const rank = STATUS_RANK[item.status] ?? 3;
+      const current = ranks.get(key);
+      if (current === undefined || rank < current) ranks.set(key, rank);
+    }
+
+    const statuses = new Map<string, ApplicationStatus>();
+    ranks.forEach((rank, key) => statuses.set(key, STATUS_BY_RANK[rank] || "Bekliyor"));
+    return statuses;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applicationRecordsWithOverrides]);
+
   const filteredApplications = useMemo(() => {
     const filtered = applicationRecordsWithOverrides.filter((item) => {
       const matchesSearch = !applicationsSearchQuery || normalizeStudentName(item.student_name).includes(normalizeStudentName(applicationsSearchQuery));
       const matchesClass = !applicationsClassFilter || normalizeClassText(item.class_display) === applicationsClassFilter || normalizeClassText(item.class_key) === applicationsClassFilter;
       const matchesSource = applicationsSourceFilter === "all" || item.source === applicationsSourceFilter;
       const matchesReferrer = !applicationsReferrerFilter || (item.referrer && normalizeText(item.referrer).includes(normalizeText(applicationsReferrerFilter)));
-      const matchesStatus = applicationsStatusFilter === "all" || item.status === applicationsStatusFilter;
+      // Durum ogrencinin durumudur: sayaca tiklayinca o durumdaki ogrenciler
+      // gelir ve satir gecmisiyle birlikte butun olarak kalir. Kayit bazinda
+      // suzulseydi grup parcalanir, sayacla listedeki satir sayisi tutmazdi.
+      const matchesStatus =
+        applicationsStatusFilter === "all" ||
+        studentStatuses.get(studentGroupKey(item)) === applicationsStatusFilter;
       const matchesOutcome = applicationsOutcomeFilter === "all" || item.outcome_label === applicationsOutcomeFilter;
       return matchesSearch && matchesClass && matchesSource && matchesReferrer && matchesStatus && matchesOutcome;
     });
@@ -812,17 +853,21 @@ export default function BasvurularPage() {
     });
 
     return filtered;
-  }, [applicationRecordsWithOverrides, applicationsSearchQuery, applicationsClassFilter, applicationsSourceFilter, applicationsReferrerFilter, applicationsStatusFilter, applicationsOutcomeFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applicationRecordsWithOverrides, studentStatuses, applicationsSearchQuery, applicationsClassFilter, applicationsSourceFilter, applicationsReferrerFilter, applicationsStatusFilter, applicationsOutcomeFilter]);
 
-  // Durum sayaclari filtrelerden etkilenmez: ekranda ne filtrelenmis olursa
-  // olsun, toplam is yukunu gormek gerekir.
+  // Sayaclar OGRENCI sayar, basvuru degil. Her ogrenci tam olarak bir
+  // sayacta gorunur, dolayisiyla ucunun toplami ogrenci sayisini verir.
+  //
+  // Sayaclar filtrelerden etkilenmez: ekranda ne filtrelenmis olursa olsun,
+  // toplam is yukunu gormek gerekir.
   const statusCounts = useMemo(() => {
     const counts = { "Bekliyor": 0, "Randevu verildi": 0, "Görüşüldü": 0 };
-    for (const item of applicationRecordsWithOverrides) {
-      if (item.status in counts) counts[item.status as keyof typeof counts]++;
-    }
-    return { ...counts, toplam: applicationRecordsWithOverrides.length };
-  }, [applicationRecordsWithOverrides]);
+    studentStatuses.forEach((status) => {
+      if (status in counts) counts[status as keyof typeof counts]++;
+    });
+    return { ...counts, toplam: applicationRecordsWithOverrides.length, ogrenci: studentStatuses.size };
+  }, [studentStatuses, applicationRecordsWithOverrides]);
 
   // --- Ogrenci bazli gruplama --------------------------------------------
   // Ayni ogrenci icin birden fazla basvuru gelebilir (ornegin hem veli hem
@@ -832,8 +877,7 @@ export default function BasvurularPage() {
   const applicationGroups = useMemo(() => {
     const groups = new Map<string, { key: string; records: ApplicationRecord[] }>();
     for (const record of filteredApplications) {
-      // Ad + sinif: farkli siniflardaki adaslar ayni gruba dusmesin.
-      const key = `${followUpKey(record.student_name)}|${normalizeClassText(record.class_display || record.class_key)}`;
+      const key = studentGroupKey(record);
       const existing = groups.get(key);
       if (existing) existing.records.push(record);
       else groups.set(key, { key, records: [record] });
@@ -1118,13 +1162,13 @@ export default function BasvurularPage() {
           </div>
         </div>
 
-        {/* Is yuku ozeti. Tiklayinca o duruma filtreler; ayni sayaca tekrar
-            tiklayinca filtre kalkar. */}
+        {/* Is yuku ozeti: kac OGRENCI hangi durumda. Tiklayinca o duruma
+            filtreler; ayni sayaca tekrar tiklayinca filtre kalkar. */}
         <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
           {([
-            { key: "Bekliyor", label: "Bekliyor", count: statusCounts["Bekliyor"], tone: "amber" },
-            { key: "Randevu verildi", label: "Randevu verildi", count: statusCounts["Randevu verildi"], tone: "blue" },
-            { key: "Görüşüldü", label: "Görüşüldü", count: statusCounts["Görüşüldü"], tone: "emerald" },
+            { key: "Bekliyor", label: "Bekliyor", count: statusCounts["Bekliyor"], tone: "amber", hint: "Randevu bekleyen öğrenci" },
+            { key: "Randevu verildi", label: "Randevu verildi", count: statusCounts["Randevu verildi"], tone: "blue", hint: "Randevusu olan öğrenci" },
+            { key: "Görüşüldü", label: "Görüşüldü", count: statusCounts["Görüşüldü"], tone: "emerald", hint: "Görüşmesi tamamlanan öğrenci" },
           ] as const).map((s) => {
             const active = applicationsStatusFilter === s.key;
             const tones: Record<string, string> = {
@@ -1137,6 +1181,7 @@ export default function BasvurularPage() {
                 key={s.key}
                 type="button"
                 onClick={() => setApplicationsStatusFilter(active ? "all" : s.key)}
+                title={`${s.hint} sayısı`}
                 className={`flex items-baseline gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${tones[s.tone]}`}
               >
                 <span className="text-base font-semibold tabular-nums">{loading ? "–" : s.count}</span>
@@ -1145,13 +1190,14 @@ export default function BasvurularPage() {
             );
           })}
           <div className="ml-auto flex items-center text-sm text-slate-400">
-            {/* Satir sayisi ogrenci sayisidir; basvuru sayisindan az olabilir,
-                cunku ayni ogrencinin basvurulari tek satirda toplanir. */}
+            {/* Soldaki uc sayacin toplami buradaki ogrenci sayisidir. Basvuru
+                sayisi daha fazla olabilir: ayni ogrenci birden fazla kanaldan
+                gelmis olabilir ve hepsi tek satirda toplanir. */}
             {loading
               ? "yükleniyor…"
-              : applicationGroups.length === statusCounts.toplam
+              : statusCounts.ogrenci === statusCounts.toplam
                 ? `toplam ${statusCounts.toplam} başvuru`
-                : `${statusCounts.toplam} başvuru · ${applicationGroups.length} öğrenci`}
+                : `${statusCounts.ogrenci} öğrenci · ${statusCounts.toplam} başvuru`}
           </div>
         </div>
       </div>
