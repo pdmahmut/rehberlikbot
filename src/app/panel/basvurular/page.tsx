@@ -25,6 +25,7 @@ import {
   findAppointmentForApplicationRecord,
   getObservationProxyMeta,
   getPanelSourceLabel,
+  getPanelStatusLabel,
   getSourceTypeFromPanelLabel,
 } from "@/lib/guidanceApplications";
 
@@ -630,25 +631,11 @@ export default function BasvurularPage() {
       const matchedScheduledApt = findAppointmentForApplicationRecord(scheduledAppointments, sharedRecord);
       const isAttended = !!matchedApt;
       const outcomeLabel = isAttended ? getOutcomeLabel(matchedApt?.outcome_decision) : null;
-      // Her kanal kendi tablosunda ayni durumu farkli kelimeyle yaziyor:
-      // veli talebi kapaninca "closed", ogrenci bildirimi "resolved",
-      // bireysel basvuru "completed" oluyor. Ucu de "gorusme bitti"
-      // demektir. Eksik olan karsiliklar buraya dusup "Bekliyor" gorunuyordu.
-      const statusMap: Record<string, string> = {
-        pending: "Bekliyor",
-        new: "Bekliyor",
-        scheduled: "Randevu verildi",
-        completed: "Görüşüldü",
-        closed: "Görüşüldü",
-        resolved: "Görüşüldü",
-        active_follow: "Görüşüldü",
-        regular_meeting: "Görüşüldü",
-        cancelled: "İptal",
-        "Bekliyor": "Bekliyor",
-        "Randevu verildi": "Randevu verildi",
-        "Görüşüldü": "Görüşüldü"
-      };
-      let status: ApplicationRecord["status"] = (statusMap[record.status] || "Bekliyor") as ApplicationRecord["status"];
+      // Kanal tablolari ayni durumu farkli kelimelerle yaziyor ("converted",
+      // "reviewing", "closed", "resolved"...). Karsiliklari getPanelStatusLabel
+      // iciden okunur; burada elle tutulan eksik bir liste vardi.
+      let status: ApplicationRecord["status"] =
+        getPanelStatusLabel(source_type, record.status) as ApplicationRecord["status"];
       const recordDate = (record.created_at || date).slice(0, 10);
       if (matchedScheduledApt && matchedScheduledApt.appointment_date >= recordDate) {
         status = "Randevu verildi";

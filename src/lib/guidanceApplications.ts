@@ -453,3 +453,52 @@ export function absorbPendingIntoOpenAppointments<
       : r
   );
 }
+
+export type PanelStatusLabel = "Bekliyor" | "Randevu verildi" | "Görüşüldü" | "İptal";
+
+const PANEL_STATUS_BY_APPLICATION_STATUS: Record<ApplicationStatus, PanelStatusLabel> = {
+  pending: "Bekliyor",
+  scheduled: "Randevu verildi",
+  active_follow: "Görüşüldü",
+  completed: "Görüşüldü",
+};
+
+/**
+ * Bes kanalin tablolari ayni durumu farkli kelimelerle yaziyor. Ornegin
+ * "randevu verildi" hali: rehberlik isteginde "converted", ogrenci
+ * bildiriminde "reviewing", veli talebinde "scheduled". Kapanmis hali ise
+ * "closed", "resolved", "completed" olabiliyor.
+ *
+ * Basvurular ekrani bu kelimeleri elle yazilmis kucuk bir tabloyla
+ * cozuyordu ve tablo eksikti: taninmayan her kelime "Bekliyor" gorunuyordu.
+ * Kapanmis bir basvuru "Bekliyor" gorununce hem sayaclar yanlis cikiyor hem
+ * de ekran ogrenciyi tekrar randevu bekliyormus gibi gosteriyordu.
+ *
+ * Artik kelime listesi tek yerden, getStatusCandidatesForSource'tan
+ * okunuyor -- yazarken kullanilan liste ile okurken kullanilan liste ayni.
+ *
+ * Bir kelime birden fazla kovaya yaziliysa (ornegin veli talebinde
+ * "reviewing" hem scheduled hem active_follow listesinde) sirayla ilk
+ * eslesen kazanir: pending -> scheduled -> active_follow -> completed.
+ * Son ikisi zaten ayni sonucu ("Gorusuldu") verdigi icin belirsizlik
+ * yalnizca "acik mi kapali mi" sorusunda onemli ve o siralamayla dogru
+ * cevaplaniyor.
+ */
+export function getPanelStatusLabel(
+  sourceType: ApplicationSourceType,
+  rawStatus?: string | null
+): PanelStatusLabel {
+  const value = normalizeText(rawStatus);
+  if (!value) return "Bekliyor";
+  if (value === "cancelled" || value === "iptal") return "İptal";
+
+  const order: ApplicationStatus[] = ["pending", "scheduled", "active_follow", "completed"];
+  for (const status of order) {
+    const found = getStatusCandidatesForSource(sourceType, status)
+      .some((candidate) => normalizeText(candidate) === value);
+    if (found) return PANEL_STATUS_BY_APPLICATION_STATUS[status];
+  }
+
+  // Listelerde hic gecmeyen bir kelime cikarsa genel kurala dusulur.
+  return PANEL_STATUS_BY_APPLICATION_STATUS[normalizeApplicationStatus(rawStatus)];
+}
